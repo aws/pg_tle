@@ -1,0 +1,18 @@
+# directory (string)
+# default_version (string)
+# comment (string)
+# encoding (string)
+# module_pathname (string)
+# requires (string)
+# schema (string)
+# superuser (boolean)
+# trusted (boolean)
+# relocatable (boolean)
+
+# case-insensitive comparison(s)
+comment = 'case insensitive comparison operators for PostgreSQL'
+default_version = '1.0'
+module_pathname = '$libdir/ci'
+superuser = false
+trusted = true
+requires = 'plrust'
