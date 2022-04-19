@@ -55,7 +55,7 @@ EXPLAIN SELECT * FROM names WHERE name < 'foo';
 --  Index Cond: (name < 'foo'::text)
 
 -- The following query uses idx2 because the query compares using
--- the == operator and that operator is suported by the rust_opclass2
+-- the == operator and that operator is supported by the rust_opclass2
 -- operator class
 
 EXPLAIN SELECT * FROM names WHERE name == 'foo';
