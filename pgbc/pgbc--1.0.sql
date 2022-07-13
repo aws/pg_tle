@@ -1,4 +1,9 @@
-/* contrib/pgbc/pgbc--1.0.sql */
+/* 
+* contrib/pgbc/pgbc--1.0.sql 
+*
+* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+* SPDX-License-Identifier: Apache-2.0
+*/
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pgbc" to load this file. \quit
