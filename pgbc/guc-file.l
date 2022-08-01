@@ -5,6 +5,8 @@
  * Copyright (c) 2000-2022, PostgreSQL Global Development Group
  *
  * copied from src/backend/utils/misc/guc-file.l and modified to suit
+ *
+ * Modifications Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  */
 
 %{
