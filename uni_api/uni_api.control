@@ -1,0 +1,3 @@
+default_version = '0.1'
+trusted = false
+superuser = false
