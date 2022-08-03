@@ -16,7 +16,7 @@
 PG_MODULE_MAGIC;
 #endif
 
-void _PG_init(void);
+void passcheck_init(void);
 
 // static bool enable_password_check = false;
 static check_password_hook_type next_check_password_hook = NULL;
@@ -59,7 +59,7 @@ static int enable_passcheck_feature = FEATURE_OFF;
 
 
 // TODO: Update with proper name later
-static const char* extension_name = "passcheck";
+static const char* extension_name = "uni_api";
 static const char* password_check_feature = "passcheck";
 static const char* schema_name = "bc";
 static const char* feature_table_name = "feature_info";
@@ -69,7 +69,7 @@ char* pass_types[3] = {"PASSWORD_TYPE_PLAINTEXT", "PASSWORD_TYPE_MD5", "PASSWORD
 
 static void check_valid_name(char *val);
 
-void _PG_init(void)
+void passcheck_init(void)
 {
 
 	// We always load password check hook to avoid restarts
