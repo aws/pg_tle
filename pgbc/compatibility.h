@@ -99,6 +99,19 @@ _PU_HOOK;
 #define PG_ANALYZE_AND_REWRITE		pg_analyze_and_rewrite
 #endif
 
+/*
+ * PostgreSQL 15 introduces the ability to assign permissions to adjust server
+ * variables. This adds the call for the new function in previous PostgreSQL
+ * versions.
+ */
+#if PG_VERSION_NUM < 150000
+#define set_config_option_ext(name, value, context, source, srole, action, changeVal, \
+															elevel, is_reload) \
+	set_config_option(name, value, context, source, action, changeVal, elevel, \
+										is_reload)
+#endif
+
+
 #if PG_VERSION_NUM < 140000
 #define GETOBJECTDESCRIPTION(a)		getObjectDescription(a)
 #else
