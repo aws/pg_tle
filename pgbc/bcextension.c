@@ -11,7 +11,7 @@
  * The extension control string is parsed with the same parser we use for
  * postgresql.conf.  An extension also has an installation script string,
  * containing SQL commands to create the extension's objects.
- * 
+ *
  * Copied from src/backend/commands/extension.c and modified to suit
  *
  * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
@@ -1176,14 +1176,15 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	save_nestlevel = NewGUCNestLevel();
 
 	if (client_min_messages < WARNING)
-		(void) set_config_option("client_min_messages", "warning",
+		(void) set_config_option_ext("client_min_messages", "warning",
 								 PGC_USERSET, PGC_S_SESSION,
+								 GetUserId(),
 								 GUC_ACTION_SAVE, true, 0, false);
 	if (log_min_messages < WARNING)
- 		(void) set_config_option_ext("log_min_messages", "warning",
- 									 PGC_SUSET, PGC_S_SESSION,
- 									 BOOTSTRAP_SUPERUSERID,
- 									 GUC_ACTION_SAVE, true, 0, false);
+		(void) set_config_option_ext("log_min_messages", "warning",
+								 PGC_SUSET, PGC_S_SESSION,
+								 BOOTSTRAP_SUPERUSERID,
+								 GUC_ACTION_SAVE, true, 0, false);
 
 	/*
 	 * Similarly disable check_function_bodies, to ensure that SQL functions
