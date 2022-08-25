@@ -499,13 +499,21 @@ check_valid_version_name(const char *versionname)
 /*
  * Utility functions to handle extension-related path names
  */
-static bool
-is_extension_control_filename(const char *filename)
+#if PG_VERSION_NUM >= 150000
+static bool is_extension_control_filename(const char *filename)
 {
 	const char *extension = strrchr(filename, '.');
 
 	return (extension != NULL) && (strcmp(extension, ".control") == 0);
 }
+#else
+bool is_extension_control_filename(const char *filename)
+{
+	const char *extension = strrchr(filename, '.');
+
+	return (extension != NULL) && (strcmp(extension, ".control") == 0);
+}
+#endif
 
 static bool
 is_extension_script_filename(const char *filename)
@@ -515,6 +523,7 @@ is_extension_script_filename(const char *filename)
 	return (extension != NULL) && (strcmp(extension, ".sql") == 0);
 }
 
+#if PG_VERSION_NUM >= 150000
 static char *
 get_extension_control_directory(void)
 {
@@ -527,6 +536,19 @@ get_extension_control_directory(void)
 
 	return result;
 }
+#else
+char * get_extension_control_directory(void)
+{
+	char		sharepath[MAXPGPATH];
+	char	   *result;
+
+	get_share_path(my_exec_path, sharepath);
+	result = (char *) palloc(MAXPGPATH);
+	snprintf(result, MAXPGPATH, "%s/extension", sharepath);
+
+	return result;
+}
+#endif
 
 static char *
 get_extension_control_filename(const char *extname)
