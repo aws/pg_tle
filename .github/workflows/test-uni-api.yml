@@ -12,13 +12,13 @@ jobs:
       run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build bison flex
     - name: build and install postgresql 13.3
       run:  >
-        git clone https://github.com/postgres/postgres.git && \
-        cd postgres && \
-        git checkout REL_13_3 && \
-        ./configure --without-zlib && \
-        make clean && \
-        make -j && \
-        sudo make install && \
+        git clone https://github.com/postgres/postgres.git &&
+        cd postgres &&
+        git checkout REL_13_3 &&
+        ./configure --without-zlib &&
+        make clean &&
+        make -j &&
+        sudo make install &&
         cd ..
     - name: initialize postgresql database
       run:  >
