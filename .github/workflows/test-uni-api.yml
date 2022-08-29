@@ -36,6 +36,7 @@ jobs:
     - name: install uni_api extension
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
+        cd uni_api &&
         sudo USE_PGXS=1 PATH=$PATH make install
     - name: add uni_api to shared_preload_libraries
       run:  >
@@ -45,4 +46,5 @@ jobs:
     - name: run uni_api sql tests
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
+        cd uni_api &&
         USE_PGXS=1 make installcheck
