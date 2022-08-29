@@ -12,31 +12,37 @@ jobs:
       run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build bison flex
     - name: build and install postgresql 13.3
       run:  >
-        git clone https://github.com/postgres/postgres.git &&
-        cd postgres &&
-        git checkout REL_13_3 &&
-        ./configure --without-zlib &&
-        make clean &&
-        make -j &&
-        sudo make install &&
+        git clone https://github.com/postgres/postgres.git && \
+        cd postgres && \
+        git checkout REL_13_3 && \
+        ./configure --without-zlib && \
+        make clean && \
+        make -j && \
+        sudo make install && \
         cd ..
     - name: initialize postgresql database
       run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
         mkdir ~/data &&
         chmod -R 700 ~/data &&
-        export PATH=/usr/local/pgsql/bin:$PATH &&
         initdb -D ~/data &&
         pg_ctl -D ~/data -l ~/logfile start
     - uses: actions/checkout@v3
     - name: compile uni_api extension
       run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
         cd uni_api &&
         USE_PGXS=1 make
     - name: install uni_api extension
-      run:  sudo USE_PGXS=1 PATH=$PATH make install
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        sudo USE_PGXS=1 PATH=$PATH make install
     - name: add uni_api to shared_preload_libraries
       run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
         echo "shared_preload_libraries = 'uni_api'" >> ~/data/postgresql.conf &&
         pg_ctl -D ~/data -l ~/logfile restart
     - name: run uni_api sql tests
-      run:  USE_PGXS=1 make installcheck
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        USE_PGXS=1 make installcheck
