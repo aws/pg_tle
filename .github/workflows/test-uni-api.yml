@@ -7,13 +7,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: install postgresql from ubuntu repository
-      run: sudo apt-get install postgresql postgresql-server-dev-all -y
+      run:  sudo apt-get install postgresql postgresql-server-dev-all -y
     - name: print postgresql server version
-      run: pg_config --version
+      run:  pg_config --version
     - uses: actions/checkout@v3
     - name: cd uni_api
-      run: cd uni_api
+      run:  cd uni_api
     - name: install uni_api extension
-      run: sudo USE_PGXS=1 make install
+      run:  sudo USE_PGXS=1 make install
     - name: run uni_api sql tests
-      run: USE_PGXS=1 make installcheck
+      run:  USE_PGXS=1 make installcheck
