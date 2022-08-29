@@ -6,10 +6,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: import ubuntu postgresql repository key
-      run: apt install curl ca-certificates gnupg && curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null && sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-    - name: update package lists and install postgresql 14
-      run: apt update && apt install postgresql-14
+    - name: install postgresql from apt repository
+      run: sudo apt install postgresql-common && sudo sh /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
     - uses: actions/checkout@v3
     - name: cd uni-api
       run: cd uni-api
