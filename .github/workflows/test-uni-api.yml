@@ -6,8 +6,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: install postgresql from apt repository
-      run: sudo apt install postgresql-common && sudo sh /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+    - name: install postgresql from ubuntu repository
+      run: sudo apt-install postgresql
+    - name: echo postgresql server version
+      run: pg_config --version
     - uses: actions/checkout@v3
     - name: cd uni-api
       run: cd uni-api
