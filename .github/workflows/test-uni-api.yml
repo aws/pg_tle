@@ -26,7 +26,7 @@ jobs:
         mkdir ~/data &&
         chmod -R 700 ~/data &&
         initdb -D ~/data &&
-        pg_ctl -D ~/data -l ~/logfile start
+        pg_ctl -D ~/data start
     - uses: actions/checkout@v3
     - name: compile uni_api extension
       run:  >
@@ -41,7 +41,7 @@ jobs:
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
         echo "shared_preload_libraries = 'uni_api'" >> ~/data/postgresql.conf &&
-        pg_ctl -D ~/data -l ~/logfile restart
+        pg_ctl -D ~/data restart
     - name: run uni_api sql tests
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
