@@ -11,10 +11,10 @@ jobs:
     - name: pg_config --version
       run: pg_config --version
     - uses: actions/checkout@v3
-    - name: pwd && ls -a
-      run: pwd && ls -a
     - name: cd uni_api
       run: cd uni_api
+    - name: export USE_PGXS=1
+      run: export USE_PGXS=1
     - name: make install
       run: make install
     - name: make installcheck
