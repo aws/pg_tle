@@ -6,18 +6,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    # - name: install postgresql from ubuntu repository
-    #   run:  sudo apt-get install postgresql-12 postgresql-server-dev-12 -y
-    - name: start postgresql service
-      run:  sudo systemctl start postgresql.service
-    - name: print postgresql server version
-      run:  pg_config --version
+    - name: install build dependencies for postgresql
+      run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build bison flex
+    - name: build postgresql 13.3
+      run:  >
+        git clone https://github.com/postgres/postgres.git &&
+        cd postgres &&
+        git checkout REL_13_3 &&
+        ./configure --without-zlib &&
+        make clean &&
+        make -j &&
+        sudo make install &&
+        cd ..
+    - name: initialize postgresql database
+      run:  >
+        mkdir ~/data &&
+        chmod -R 700 ~/data &&
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        initdb -D ~/data &&
+        echo "shared_preload_libraries = 'uni_api'" >> ~/data/postgresql.conf &&
+        pg_ctl -D ~/data -l ~/logfile start
     - uses: actions/checkout@v3
-    - name: cd uni_api
-      run:  cd uni_api
     - name: compile uni_api extension
-      run:  USE_PGXS=1 make
+      run:  >
+        cd uni_api &&
+        USE_PGXS=1 make
     - name: install uni_api extension
-      run:  sudo USE_PGXS=1 make install
+      run:  sudo USE_PGXS=1 PATH=$PATH make install
     - name: run uni_api sql tests
       run:  USE_PGXS=1 make installcheck
