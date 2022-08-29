@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: install postgresql from ubuntu repository
-      run: sudo apt-get install postgresql -y
+      run: sudo apt-get install postgresql postgresql-server-dev-all -y
     - name: print postgresql server version
       run: pg_config --version
     - uses: actions/checkout@v3
