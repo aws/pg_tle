@@ -10,7 +10,7 @@ jobs:
       run: sudo apt-get install postgresql -y
     - name: print postgresql server version
       run: pg_config --version
-    - uses: checkout backcountry repository
+    - uses: actions/checkout@v3
     - name: cd uni_api
       run: cd uni_api
     - name: install uni_api extension
