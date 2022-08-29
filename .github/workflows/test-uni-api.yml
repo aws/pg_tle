@@ -10,9 +10,9 @@ jobs:
       run: sudo apt-get install postgresql -y
     - name: pg_config --version
       run: pg_config --version
-    - name: pwd && ls
-      run: pwd && ls
     - uses: actions/checkout@v3
+    - name: pwd && ls -a
+      run: pwd && ls -a
     - name: cd uni-api
       run: cd uni-api
     - name: make install
