@@ -8,8 +8,10 @@ jobs:
     steps:
     - name: install postgresql from ubuntu repository
       run: sudo apt-get install postgresql -y
-    - name: echo postgresql server version
+    - name: pg_config --version
       run: pg_config --version
+    - name: pwd && ls
+      run: pwd && ls
     - uses: actions/checkout@v3
     - name: cd uni-api
       run: cd uni-api
