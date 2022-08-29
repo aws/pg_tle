@@ -6,8 +6,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: install postgresql from ubuntu repository
-      run:  sudo apt-get install postgresql-12 postgresql-server-dev-12 -y
+    # - name: install postgresql from ubuntu repository
+    #   run:  sudo apt-get install postgresql-12 postgresql-server-dev-12 -y
     - name: start postgresql service
       run:  sudo systemctl start postgresql.service
     - name: print postgresql server version
