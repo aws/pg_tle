@@ -500,7 +500,7 @@ check_valid_version_name(const char *versionname)
  * Utility functions to handle extension-related path names
  */
 static bool
-is_extension_control_filename(const char *filename)
+pgbc_is_extension_control_filename(const char *filename)
 {
 	const char *extension = strrchr(filename, '.');
 
@@ -516,7 +516,7 @@ is_extension_script_filename(const char *filename)
 }
 
 static char *
-get_extension_control_directory(void)
+pgbc_get_extension_control_directory(void)
 {
 	char		sharepath[MAXPGPATH];
 	char	   *result;
@@ -562,7 +562,7 @@ get_extension_script_directory(ExtensionControlFile *control)
 	 * installation's share directory.
 	 */
 	if (!control->directory)
-		return get_extension_control_directory();
+		return pgbc_get_extension_control_directory();
 
 	if (is_absolute_path(control->directory))
 		return pstrdup(control->directory);
@@ -2206,7 +2206,7 @@ bc_available_extensions(PG_FUNCTION_ARGS)
 			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
 											 SPI_tuptable->tupdesc, 1);
 
-			if (!is_extension_control_filename(fname))
+			if (!pgbc_is_extension_control_filename(fname))
 				continue;
 
 			/* extract extension name from 'name.control' filename */
@@ -2301,7 +2301,7 @@ bc_available_extension_versions(PG_FUNCTION_ARGS)
 			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
 											 SPI_tuptable->tupdesc, 1);
 
-			if (!is_extension_control_filename(fname))
+			if (!pgbc_is_extension_control_filename(fname))
 				continue;
 
 			/* extract extension name from 'name.control' filename */
