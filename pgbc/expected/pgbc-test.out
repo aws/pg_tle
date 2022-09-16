@@ -3,33 +3,30 @@
 * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
 */
-
 \pset pager off
 CREATE EXTENSION pgbc;
-
 -- create semi-privileged role to manipulate pgbc artifacts
 CREATE ROLE dbadmin;
 GRANT pgbc_admin TO dbadmin;
-
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
 GRANT pgbc_staff TO dbstaff;
-
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
 GRANT pgbc_staff TO dbstaff2;
-
 -- create completely unprivileged role
 CREATE ROLE dbguest;
-
 GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_admin;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_staff;
-
 SET search_path TO pgbc,public;
-
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
 SELECT pgbc.install_extension
 (
  'test123',
@@ -51,40 +48,119 @@ $_bcd_$
   )$$ LANGUAGE sql;
 $_bcd_$
 );
+ install_extension 
+-------------------
+ OK
+(1 row)
+
+SELECT pgbc.install_extension
+(
+ 'testsuonlycreate',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgbc_string'
+relocatable = false
+superuser = true
+trusted = false
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION testsuonlycreate_func()
+  RETURNS INT AS $$
+  (
+    SELECT 101
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ install_extension 
+-------------------
+ OK
+(1 row)
 
 SET search_path TO public;
+-- superuser can create extensions that are not trusted and require superuser privilege
+RESET SESSION AUTHORIZATION;
+CREATE EXTENSION testsuonlycreate;
+SELECT testsuonlycreate_func();
+ testsuonlycreate_func 
+-----------------------
+                   101
+(1 row)
 
+DROP EXTENSION testsuonlycreate;
 -- unprivileged role can create and use trusted extension
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
 CREATE EXTENSION test123;
 SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
 
+-- unprivileged role can't create extensions that are not trusted and require superuser privilege
+-- fails
+CREATE EXTENSION testsuonlycreate;
+ERROR:  permission denied to create extension "testsuonlycreate"
+HINT:  Must be superuser to create this extension.
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff2
+(1 row)
+
 -- fails
 DROP EXTENSION test123;
+ERROR:  must be owner of extension test123
 -- suceeds
 SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
+
 -- fails
 DROP FUNCTION test123_func();
-
+ERROR:  must be owner of function test123_func
 -- switch to dbguest
 SET SESSION AUTHORIZATION dbguest;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbguest
+(1 row)
+
 -- fails
 DROP EXTENSION test123;
+ERROR:  must be owner of extension test123
 -- suceeds
 SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
+
 -- fails
 DROP FUNCTION test123_func();
-
+ERROR:  must be owner of function test123_func
 SET search_path TO pgbc, public;
-
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
 SELECT pgbc.install_extension
 (
  'test123',
@@ -111,6 +187,10 @@ $_bcd_$
   )$$ LANGUAGE sql;
 $_bcd_$
 );
+ install_extension 
+-------------------
+ OK
+(1 row)
 
 SELECT pgbc.install_upgrade_path
 (
@@ -125,22 +205,61 @@ $_bcd_$
   )$$ LANGUAGE sql;
 $_bcd_$
 );
+ install_upgrade_path 
+----------------------
+ OK
+(1 row)
 
 SET search_path TO public;
-
 -- unprivileged role can modify and use trusted extension
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
 ALTER EXTENSION test123 UPDATE TO '1.1';
 SELECT test123_func_2();
-SELECT * FROM pgbc.extension_update_paths('test123');
-SELECT * FROM pgbc.available_extensions();
-SELECT * FROM pgbc.available_extension_versions();
-DROP EXTENSION test123;
+ test123_func_2 
+----------------
+         424242
+(1 row)
 
+SELECT * FROM pgbc.extension_update_paths('test123');
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+SELECT * FROM pgbc.available_extensions() ORDER BY name;
+       name       | default_version |            comment            
+------------------+-----------------+-------------------------------
+ pgbc             | 1.0             | provide bc PoC for PostgreSQL
+ plpgsql          | 1.0             | PL/pgSQL procedural language
+ test123          | 1.1             | Test BC Functions
+ testsuonlycreate | 1.0             | Test BC Functions
+(4 rows)
+
+SELECT * FROM pgbc.available_extension_versions() ORDER BY name;
+       name       | version | superuser | trusted | relocatable |   schema   | requires |            comment            
+------------------+---------+-----------+---------+-------------+------------+----------+-------------------------------
+ pgbc             | 1.0     | t         | f       | f           | pgbc       |          | provide bc PoC for PostgreSQL
+ plpgsql          | 1.0     | t         | t       | f           | pg_catalog |          | PL/pgSQL procedural language
+ test123          | 1.0     | f         | t       | f           |            |          | Test BC Functions
+ test123          | 1.1     | f         | t       | f           |            |          | Test BC Functions
+ testsuonlycreate | 1.0     | t         | f       | f           |            |          | Test BC Functions
+(5 rows)
+
+DROP EXTENSION test123;
 -- negative tests, run as superuser
 RESET SESSION AUTHORIZATION;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ root
+(1 row)
 
 -- should fail
 -- attempt to create a function in pgbc directly
@@ -148,20 +267,18 @@ CREATE OR REPLACE FUNCTION pgbc.foo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
-
+ERROR:  pgbc schema reserved for pgbc functions
 -- create a function in public and then attempt alter to pgbc
 -- this works
 CREATE OR REPLACE FUNCTION public.pgbcfoo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
-
 -- but this should fail
 ALTER FUNCTION public.pgbcfoo() SET SCHEMA pgbc;
-
+ERROR:  pgbc schema reserved for pgbc functions
 -- clean up, should work
 DROP FUNCTION public.pgbcfoo();
-
 -- attempt to shadow existing file-based extension
 -- fail
 SELECT pgbc.install_extension
@@ -185,7 +302,7 @@ $_bcd_$
   )$$ LANGUAGE sql;
 $_bcd_$
 );
-
+ERROR:  control file already exists for the plpgsql extension
 -- attempt to alter a pgbc extension function
 -- fail
 ALTER FUNCTION pgbc.install_extension
@@ -197,12 +314,27 @@ ALTER FUNCTION pgbc.install_extension
   sql_str text
 )
 SET search_path TO 'public';
-
+ERROR:  altering pgbc functions in pgbc schema not allowed
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
 SELECT pgbc.uninstall_extension('test123');
+ uninstall_extension 
+---------------------
+ OK
+(1 row)
+
+SELECT pgbc.uninstall_extension('testsuonlycreate');
+ uninstall_extension 
+---------------------
+ OK
+(1 row)
 
 -- clean up
 RESET SESSION AUTHORIZATION;
@@ -216,7 +348,3 @@ REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_staff;
 DROP ROLE pgbc_staff;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_admin;
 DROP ROLE pgbc_admin;
-
-/* does mix of bc ext cascade to std ext work? */
-/* does mix of std ext cascade to bc ext work? */
-/* TODO: other forms of ALTER (ADD, DROP, etc) */

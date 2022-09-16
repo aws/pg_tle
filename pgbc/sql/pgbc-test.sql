@@ -52,13 +52,45 @@ $_bcd_$
 $_bcd_$
 );
 
+SELECT pgbc.install_extension
+(
+ 'testsuonlycreate',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgbc_string'
+relocatable = false
+superuser = true
+trusted = false
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION testsuonlycreate_func()
+  RETURNS INT AS $$
+  (
+    SELECT 101
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+
 SET search_path TO public;
+
+-- superuser can create extensions that are not trusted and require superuser privilege
+RESET SESSION AUTHORIZATION;
+CREATE EXTENSION testsuonlycreate;
+SELECT testsuonlycreate_func();
+DROP EXTENSION testsuonlycreate;
 
 -- unprivileged role can create and use trusted extension
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 CREATE EXTENSION test123;
 SELECT test123_func();
+
+-- unprivileged role can't create extensions that are not trusted and require superuser privilege
+-- fails
+CREATE EXTENSION testsuonlycreate;
 
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
@@ -134,8 +166,8 @@ SELECT CURRENT_USER;
 ALTER EXTENSION test123 UPDATE TO '1.1';
 SELECT test123_func_2();
 SELECT * FROM pgbc.extension_update_paths('test123');
-SELECT * FROM pgbc.available_extensions();
-SELECT * FROM pgbc.available_extension_versions();
+SELECT * FROM pgbc.available_extensions() ORDER BY name;
+SELECT * FROM pgbc.available_extension_versions() ORDER BY name;
 DROP EXTENSION test123;
 
 -- negative tests, run as superuser
@@ -203,6 +235,7 @@ SET search_path TO 'public';
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
 SELECT pgbc.uninstall_extension('test123');
+SELECT pgbc.uninstall_extension('testsuonlycreate');
 
 -- clean up
 RESET SESSION AUTHORIZATION;
@@ -216,7 +249,3 @@ REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_staff;
 DROP ROLE pgbc_staff;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_admin;
 DROP ROLE pgbc_admin;
-
-/* does mix of bc ext cascade to std ext work? */
-/* does mix of std ext cascade to bc ext work? */
-/* TODO: other forms of ALTER (ADD, DROP, etc) */
