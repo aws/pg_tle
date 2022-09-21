@@ -2170,70 +2170,9 @@ Datum
 bc_available_extensions(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	char	   *location;
-	DIR		   *dir;
-	struct dirent *de;
 
 	/* Build tuplestore to hold the result rows */
 	SetSingleFuncCall(fcinfo, 0);
-
-	/* first grab conventional extensions */
-	location = pgbc_get_extension_control_directory();
-	dir = AllocateDir(location);
-
-	/*
-	 * If the control directory doesn't exist, we want to silently return an
-	 * empty set.  Any other error will be reported by ReadDir.
-	 */
-	if (dir == NULL && errno == ENOENT)
-	{
-		/* do nothing */
-	}
-	else
-	{
-		while ((de = ReadDir(dir, location)) != NULL)
-		{
-			ExtensionControlFile *control;
-			char	   *extname;
-			Datum		values[3];
-			bool		nulls[3];
-
-			if (!pgbc_is_extension_control_filename(de->d_name))
-				continue;
-
-			/* extract extension name from 'name.control' filename */
-			extname = pstrdup(de->d_name);
-			*strrchr(extname, '.') = '\0';
-
-			/* ignore it if it's an auxiliary control file */
-			if (strstr(extname, "--"))
-				continue;
-
-			control = read_extension_control_file(extname);
-
-			memset(values, 0, sizeof(values));
-			memset(nulls, 0, sizeof(nulls));
-
-			/* name */
-			values[0] = DirectFunctionCall1(namein,
-											CStringGetDatum(control->name));
-			/* default_version */
-			if (control->default_version == NULL)
-				nulls[1] = true;
-			else
-				values[1] = CStringGetTextDatum(control->default_version);
-			/* comment */
-			if (control->comment == NULL)
-				nulls[2] = true;
-			else
-				values[2] = CStringGetTextDatum(control->comment);
-
-			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
-								 values, nulls);
-		}
-
-		FreeDir(dir);
-	}
 
 	/* now grab pgbc extensions */
 	SET_BCEXT;
@@ -2328,53 +2267,9 @@ Datum
 bc_available_extension_versions(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	char	   *location;
-	DIR		   *dir;
-	struct dirent *de;
 
 	/* Build tuplestore to hold the result rows */
 	SetSingleFuncCall(fcinfo, 0);
-
-	/* first grab conventional extensions */
-	location = pgbc_get_extension_control_directory();
-	dir = AllocateDir(location);
-
-	/*
-	 * If the control directory doesn't exist, we want to silently return an
-	 * empty set.  Any other error will be reported by ReadDir.
-	 */
-	if (dir == NULL && errno == ENOENT)
-	{
-		/* do nothing */
-	}
-	else
-	{
-		while ((de = ReadDir(dir, location)) != NULL)
-		{
-			ExtensionControlFile *control;
-			char	   *extname;
-
-			if (!pgbc_is_extension_control_filename(de->d_name))
-				continue;
-
-			/* extract extension name from 'name.control' filename */
-			extname = pstrdup(de->d_name);
-			*strrchr(extname, '.') = '\0';
-
-			/* ignore it if it's an auxiliary control file */
-			if (strstr(extname, "--"))
-				continue;
-
-			/* read the control file */
-			control = read_extension_control_file(extname);
-
-			/* scan extension's script directory for install scripts */
-			get_available_versions_for_extension(control, rsinfo->setResult,
-												 rsinfo->setDesc);
-		}
-
-		FreeDir(dir);
-	}
 
 	/* now grab pgbc extensions */
 	SET_BCEXT;
