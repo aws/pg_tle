@@ -3742,7 +3742,7 @@ pgbc_xact_callback(XactEvent event, void *arg)
 }
 
 void
-_PG_init(void)
+bcextension_init(void)
 {
 	/* Be sure we do initialization only once */
 	static bool inited = false;
@@ -3768,7 +3768,7 @@ _PG_init(void)
 }
 
 void
-_PG_fini(void)
+bcextension_fini(void)
 {
 	ProcessUtility_hook = prev_hook;
 }
