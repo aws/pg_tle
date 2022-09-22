@@ -65,3 +65,10 @@ ALTER ROLE testuser with password '123456789';
 TRUNCATE bc.feature_info;
 INSERT INTO bc.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
+
+-- Clean up
+ALTER SYSTEM SET bc.enable_password_check = 'off';
+SELECT pg_reload_conf();
+TRUNCATE bc.feature_info;
+DROP ROLE testuser;
+DROP EXTENSION uni_api CASCADE;
