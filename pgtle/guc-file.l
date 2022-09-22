@@ -341,7 +341,7 @@ bcParseConfigFp(FILE *fp, const char *config_file, int depth, int elevel,
 			if (cf)
 				item->filename = pstrdup(cf);
 			else
-				item->filename = pstrdup("pgbc_string");
+				item->filename = pstrdup("pgtle_string");
 			item->sourceline = ConfigFileLineno - 1;
 			item->ignore = false;
 			item->applied = false;

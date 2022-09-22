@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * bcextension.h
+ * tlextension.h
  *		Extension management commands (create/drop extension), sans files.
  *
  * Copied from src/include/commands/extension.h and modified to suit
@@ -18,9 +18,9 @@
 #include "parser/parse_node.h"
 #include "utils/guc.h"
 
-#define PGBC_MAGIC					"pgbc_6ToRc5wJtKWTHWMn"
-#define PGBC_NSPNAME				"pgbc"
-#define PGBC_EXTNAME				"pgbc"
+#define PGTLE_MAGIC					"pgtle_6ToRc5wJtKWTHWMn"
+#define PGTLE_NSPNAME				"pgtle"
+#define PGTLE_EXTNAME				"pgtle"
 
 /*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER

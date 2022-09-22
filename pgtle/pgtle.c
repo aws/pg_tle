@@ -1,5 +1,5 @@
 /*
- * pgbc.c
+ * pgtle.c
  *
  * PoC for BC
  *
@@ -13,7 +13,7 @@
 #include "fmgr.h"
 #include "utils/builtins.h"
 
-#include "bcextension.h"
+#include "tlextension.h"
 
 PG_MODULE_MAGIC;
 

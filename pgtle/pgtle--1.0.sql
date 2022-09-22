@@ -1,12 +1,12 @@
 /* 
-* contrib/pgbc/pgbc--1.0.sql 
+* contrib/pgtle/pgtle--1.0.sql 
 *
 * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 * SPDX-License-Identifier: Apache-2.0
 */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION pgbc" to load this file. \quit
+\echo Use "CREATE EXTENSION pgtle" to load this file. \quit
 
 CREATE OR REPLACE FUNCTION install_extension
 (
@@ -17,7 +17,7 @@ CREATE OR REPLACE FUNCTION install_extension
   sql_str text
 )
 RETURNS TEXT
-SET search_path TO 'pgbc'
+SET search_path TO 'pgtle'
 AS 'MODULE_PATHNAME', 'bc_install_extension'
 LANGUAGE C STRICT;
 
@@ -29,20 +29,20 @@ CREATE OR REPLACE FUNCTION install_upgrade_path
   sql_str text
 )
 RETURNS TEXT
-SET search_path TO 'pgbc'
+SET search_path TO 'pgtle'
 AS 'MODULE_PATHNAME', 'bc_install_upgrade_path'
 LANGUAGE C STRICT;
 
 CREATE OR REPLACE FUNCTION uninstall_extension(extname text)
 RETURNS TEXT
-SET search_path TO 'pgbc'
-AS $_pgbcie_$
+SET search_path TO 'pgtle'
+AS $_pgtleie_$
   DECLARE
     ctrpattern text;
     sqlpattern text;
     searchsql  text;
     dropsql    text;
-    pgbcnsp    text := 'pgbc';
+    pgtlensp    text := 'pgtle';
     func       text;
   BEGIN
 
@@ -50,19 +50,19 @@ AS $_pgbcie_$
     sqlpattern := format('%s%%.sql', extname);
     searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
 
-    FOR func IN EXECUTE searchsql USING ctrpattern, pgbcnsp LOOP 
+    FOR func IN EXECUTE searchsql USING ctrpattern, pgtlensp LOOP 
       dropsql := format('DROP FUNCTION %I()', func);
       EXECUTE dropsql;
     END LOOP;
 
-    FOR func IN EXECUTE searchsql USING sqlpattern, pgbcnsp LOOP 
+    FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP 
       dropsql := format('DROP FUNCTION %I()', func);
       EXECUTE dropsql;
     END LOOP;
 
     RETURN 'OK';
   END;
-$_pgbcie_$
+$_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
 CREATE FUNCTION extension_update_paths
@@ -129,16 +129,16 @@ $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'pgbc_admin') THEN
+      WHERE  rolname = 'pgtle_admin') THEN
 
-      RAISE NOTICE 'Role "pgbc_admin" already exists. Skipping.';
+      RAISE NOTICE 'Role "pgtle_admin" already exists. Skipping.';
    ELSE
-      CREATE ROLE pgbc_admin NOLOGIN;
+      CREATE ROLE pgtle_admin NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE, CREATE ON SCHEMA pgbc TO pgbc_admin;
+GRANT USAGE, CREATE ON SCHEMA pgtle TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION install_extension
 (
@@ -147,7 +147,7 @@ GRANT EXECUTE ON FUNCTION install_extension
   ctr_str text,
   ctr_alt bool,
   sql_str text
-) TO pgbc_admin;
+) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION install_upgrade_path
 (
@@ -155,25 +155,25 @@ GRANT EXECUTE ON FUNCTION install_upgrade_path
   fmvers text,
   tovers text,
   sql_str text
-) TO pgbc_admin;
+) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION uninstall_extension
 (
   extname text
-) TO pgbc_admin;
+) TO pgtle_admin;
 
 DO
 $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'pgbc_staff') THEN
+      WHERE  rolname = 'pgtle_staff') THEN
 
-      RAISE NOTICE 'Role "pgbc_staff" already exists. Skipping.';
+      RAISE NOTICE 'Role "pgtle_staff" already exists. Skipping.';
    ELSE
-      CREATE ROLE pgbc_staff NOLOGIN;
+      CREATE ROLE pgtle_staff NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE ON SCHEMA pgbc TO pgbc_staff;
+GRANT USAGE ON SCHEMA pgtle TO pgtle_staff;
