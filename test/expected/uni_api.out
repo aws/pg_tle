@@ -14,7 +14,7 @@
 -- Expect password to go through since we haven't enabled the feature
 CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
-ALTER SYSTEM SET bc.enable_password_check = 'off';
+ALTER SYSTEM SET backcountry.enable_password_check = 'off';
 SELECT pg_reload_conf();
  pg_reload_conf 
 ----------------
@@ -22,7 +22,7 @@ SELECT pg_reload_conf();
 (1 row)
 
 ALTER ROLE testuser with password 'pass';
-ALTER SYSTEM SET bc.enable_password_check = 'on';
+ALTER SYSTEM SET backcountry.enable_password_check = 'on';
 SELECT pg_reload_conf();
  pg_reload_conf 
 ----------------
@@ -34,7 +34,7 @@ ALTER ROLE testuser with password 'pass';
 CREATE EXTENSION backcountry;
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
-ALTER SYSTEM SET bc.enable_password_check = 'require';
+ALTER SYSTEM SET backcountry.enable_password_check = 'require';
 SELECT pg_reload_conf();
  pg_reload_conf 
 ----------------
@@ -97,3 +97,14 @@ INSERT INTO backcountry.feature_info VALUES ('passcheck', 'public', 'test_foo;se
 ALTER ROLE testuser with password '123456789';
 ERROR:  passcheck feature does not support calling out to functions/schemas that contain ';'
 HINT:  Check the backcountry.feature_info table does not contain ';' in it's entry.
+DROP ROLE testuser;
+ALTER SYSTEM RESET backcountry.enable_password_check;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+DROP FUNCTION password_check_length_greater_than_8;
+DROP FUNCTION password_check_only_nums;
+DROP EXTENSION backcountry;

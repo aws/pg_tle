@@ -18,9 +18,9 @@
 #include "parser/parse_node.h"
 #include "utils/guc.h"
 
-#define PGBC_MAGIC					"pgbc_6ToRc5wJtKWTHWMn"
-#define PGBC_NSPNAME				"pgbc"
-#define PGBC_EXTNAME				"pgbc"
+#define PGBC_MAGIC					"backcountry_6ToRc5wJtKWTHWMn"
+#define PGBC_NSPNAME				"backcountry"
+#define PGBC_EXTNAME				"backcountry"
 
 /*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER

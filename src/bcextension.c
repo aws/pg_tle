@@ -3804,7 +3804,7 @@ _PU_HOOK
 					 * belong here
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("%s schema reserved for pgbc functions", PGBC_NSPNAME)));
+						errmsg("%s schema reserved for backcountry functions", PGBC_NSPNAME)));
 				}
 			}
 
@@ -3853,7 +3853,7 @@ _PU_HOOK
 					 * do not allow it
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("altering pgbc functions in %s schema not allowed", PGBC_NSPNAME)));
+						errmsg("altering backcountry functions in %s schema not allowed", PGBC_NSPNAME)));
 				}
 			}
 
@@ -3894,7 +3894,7 @@ _PU_HOOK
 					 * belong here
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("%s schema reserved for pgbc functions", PGBC_NSPNAME)));
+						errmsg("%s schema reserved for backcountry functions", PGBC_NSPNAME)));
 				}
 			}
 
@@ -3979,12 +3979,12 @@ bc_install_extension(PG_FUNCTION_ARGS)
 	/* create the control function */
 	spi_rc = SPI_exec(ctlsql->data, 0);
 	if (spi_rc != SPI_OK_UTILITY)
-		elog(ERROR, "failed to install pgbc extension, %s, control string", extname);
+		elog(ERROR, "failed to install backcountry extension, %s, control string", extname);
 
 	/* create the sql function */
 	spi_rc = SPI_exec(sqlsql->data, 0);
 	if (spi_rc != SPI_OK_UTILITY)
-		elog(ERROR, "failed to install pgbc extension, %s, sql string", extname);
+		elog(ERROR, "failed to install backcountry extension, %s, sql string", extname);
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");

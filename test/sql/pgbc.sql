@@ -5,39 +5,39 @@
 */
 
 \pset pager off
-CREATE EXTENSION pgbc;
+CREATE EXTENSION backcountry;
 
--- create semi-privileged role to manipulate pgbc artifacts
+-- create semi-privileged role to manipulate backcountry artifacts
 CREATE ROLE dbadmin;
-GRANT pgbc_admin TO dbadmin;
+GRANT backcountry_admin TO dbadmin;
 
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT pgbc_staff TO dbstaff;
+GRANT backcountry_staff TO dbstaff;
 
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT pgbc_staff TO dbstaff2;
+GRANT backcountry_staff TO dbstaff2;
 
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_staff;
 
-SET search_path TO pgbc,public;
+SET search_path TO backcountry,public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
-SELECT pgbc.install_extension
+SELECT backcountry.install_extension
 (
  'test123',
  '1.0',
 $_bcd_$
 comment = 'Test BC Functions'
 default_version = '1.0'
-module_pathname = 'pgbc_string'
+module_pathname = 'backcountry_string'
 relocatable = false
 superuser = false
 trusted = true
@@ -52,14 +52,14 @@ $_bcd_$
 $_bcd_$
 );
 
-SELECT pgbc.install_extension
+SELECT backcountry.install_extension
 (
  'testsuonlycreate',
  '1.0',
 $_bcd_$
 comment = 'Test BC Functions'
 default_version = '1.0'
-module_pathname = 'pgbc_string'
+module_pathname = 'backcountry_string'
 relocatable = false
 superuser = true
 trusted = false
@@ -112,19 +112,19 @@ SELECT test123_func();
 -- fails
 DROP FUNCTION test123_func();
 
-SET search_path TO pgbc, public;
+SET search_path TO backcountry, public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
-SELECT pgbc.install_extension
+SELECT backcountry.install_extension
 (
  'test123',
  '1.1',
 $_bcd_$
 comment = 'Test BC Functions'
 default_version = '1.1'
-module_pathname = 'pgbc_string'
+module_pathname = 'backcountry_string'
 relocatable = false
 superuser = false
 trusted = true
@@ -144,7 +144,7 @@ $_bcd_$
 $_bcd_$
 );
 
-SELECT pgbc.install_upgrade_path
+SELECT backcountry.install_upgrade_path
 (
  'test123',
  '1.0',
@@ -165,45 +165,44 @@ SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 ALTER EXTENSION test123 UPDATE TO '1.1';
 SELECT test123_func_2();
-SELECT * FROM pgbc.extension_update_paths('test123');
-SELECT * FROM pgbc.available_extensions() ORDER BY name;
-SELECT * FROM pgbc.available_extension_versions() ORDER BY name;
+SELECT * FROM backcountry.extension_update_paths('test123');
+SELECT * FROM backcountry.available_extensions() ORDER BY name;
+SELECT * FROM backcountry.available_extension_versions() ORDER BY name;
 DROP EXTENSION test123;
 
 -- negative tests, run as superuser
 RESET SESSION AUTHORIZATION;
-SELECT CURRENT_USER;
 
 -- should fail
--- attempt to create a function in pgbc directly
-CREATE OR REPLACE FUNCTION pgbc.foo()
+-- attempt to create a function in backcountry directly
+CREATE OR REPLACE FUNCTION backcountry.foo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
 
--- create a function in public and then attempt alter to pgbc
+-- create a function in public and then attempt alter to backcountry
 -- this works
-CREATE OR REPLACE FUNCTION public.pgbcfoo()
+CREATE OR REPLACE FUNCTION public.backcountryfoo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
 
 -- but this should fail
-ALTER FUNCTION public.pgbcfoo() SET SCHEMA pgbc;
+ALTER FUNCTION public.backcountryfoo() SET SCHEMA backcountry;
 
 -- clean up, should work
-DROP FUNCTION public.pgbcfoo();
+DROP FUNCTION public.backcountryfoo();
 
 -- attempt to shadow existing file-based extension
 -- fail
-SELECT pgbc.install_extension
+SELECT backcountry.install_extension
 (
  'plpgsql',
  '1.0',
 $_bcd_$
 comment = 'Test BC Functions'
 default_version = '1.0'
-module_pathname = 'pgbc_string'
+module_pathname = 'backcountry_string'
 relocatable = false
 superuser = false
 trusted = true
@@ -218,9 +217,9 @@ $_bcd_$
 $_bcd_$
 );
 
--- attempt to alter a pgbc extension function
+-- attempt to alter a backcountry extension function
 -- fail
-ALTER FUNCTION pgbc.install_extension
+ALTER FUNCTION backcountry.install_extension
 (
   extname text,
   extvers text,
@@ -234,8 +233,8 @@ SET search_path TO 'public';
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
-SELECT pgbc.uninstall_extension('test123');
-SELECT pgbc.uninstall_extension('testsuonlycreate');
+SELECT backcountry.uninstall_extension('test123');
+SELECT backcountry.uninstall_extension('testsuonlycreate');
 
 -- clean up
 RESET SESSION AUTHORIZATION;
@@ -243,9 +242,9 @@ DROP ROLE dbadmin;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
-DROP EXTENSION pgbc;
-DROP SCHEMA pgbc;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_staff;
-DROP ROLE pgbc_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_admin;
-DROP ROLE pgbc_admin;
+DROP EXTENSION backcountry;
+DROP SCHEMA backcountry;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM backcountry_staff;
+DROP ROLE backcountry_staff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM backcountry_admin;
+DROP ROLE backcountry_admin;

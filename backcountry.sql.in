@@ -138,16 +138,16 @@ $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'pgbc_admin') THEN
+      WHERE  rolname = 'backcountry_admin') THEN
 
-      RAISE NOTICE 'Role "pgbc_admin" already exists. Skipping.';
+      RAISE NOTICE 'Role "backcountry_admin" already exists. Skipping.';
    ELSE
-      CREATE ROLE pgbc_admin NOLOGIN;
+      CREATE ROLE backcountry_admin NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO pgbc_admin;
+GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO backcountry_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
@@ -156,7 +156,7 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   ctr_str text,
   ctr_alt bool,
   sql_str text
-) TO pgbc_admin;
+) TO backcountry_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
 (
@@ -164,28 +164,28 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
   fmvers text,
   tovers text,
   sql_str text
-) TO pgbc_admin;
+) TO backcountry_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
 (
   extname text
-) TO pgbc_admin;
+) TO backcountry_admin;
 
 DO
 $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'pgbc_staff') THEN
+      WHERE  rolname = 'backcountry_staff') THEN
 
-      RAISE NOTICE 'Role "pgbc_staff" already exists. Skipping.';
+      RAISE NOTICE 'Role "backcountry_staff" already exists. Skipping.';
    ELSE
-      CREATE ROLE pgbc_staff NOLOGIN;
+      CREATE ROLE backcountry_staff NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE ON SCHEMA EXTSCHEMA TO pgbc_staff;
+GRANT USAGE ON SCHEMA EXTSCHEMA TO backcountry_staff;
 
 CREATE TYPE EXTSCHEMA.bc_features as ENUM ('passcheck');
 CREATE TYPE EXTSCHEMA.password_types as ENUM ('PASSWORD_TYPE_PLAINTEXT', 'PASSWORD_TYPE_MD5', 'PASSWORD_TYPE_SCRAM_SHA_256');

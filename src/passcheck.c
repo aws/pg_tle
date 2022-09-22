@@ -89,7 +89,7 @@ passcheck_init(void)
 	next_check_password_hook = check_password_hook;
 	check_password_hook = passcheck_check_password_hook;
 
-	DefineCustomEnumVariable("bc.enable_password_check",
+	DefineCustomEnumVariable("backcountry.enable_password_check",
 							 "Sets the behavior for interacting with passcheck feature.",
 							 NULL,
 							 &enable_passcheck_feature,

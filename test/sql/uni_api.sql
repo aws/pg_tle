@@ -15,17 +15,17 @@
 -- Expect password to go through since we haven't enabled the feature
 CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
-ALTER SYSTEM SET bc.enable_password_check = 'off';
+ALTER SYSTEM SET backcountry.enable_password_check = 'off';
 SELECT pg_reload_conf();
 ALTER ROLE testuser with password 'pass';
-ALTER SYSTEM SET bc.enable_password_check = 'on';
+ALTER SYSTEM SET backcountry.enable_password_check = 'on';
 SELECT pg_reload_conf();
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
 CREATE EXTENSION backcountry;
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
-ALTER SYSTEM SET bc.enable_password_check = 'require';
+ALTER SYSTEM SET backcountry.enable_password_check = 'require';
 SELECT pg_reload_conf();
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
@@ -65,3 +65,9 @@ ALTER ROLE testuser with password '123456789';
 TRUNCATE backcountry.feature_info;
 INSERT INTO backcountry.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
+DROP ROLE testuser;
+ALTER SYSTEM RESET backcountry.enable_password_check;
+SELECT pg_reload_conf();
+DROP FUNCTION password_check_length_greater_than_8;
+DROP FUNCTION password_check_only_nums;
+DROP EXTENSION backcountry;

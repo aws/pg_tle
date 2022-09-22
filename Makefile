@@ -9,7 +9,7 @@ OBJS = src/bcextension.o src/guc-file.o src/passcheck.o src/uni_api.o
 EXTRA_CLEAN	= src/guc-file.c backcountry.control backcountry--$(EXTVERSION).sql
 DATA_built = backcountry.control backcountry--$(EXTVERSION).sql
 
-REGRESS = uni_api
+REGRESS = uni_api pgbc
 
 REGRESS_OPTS = --inputdir=test --temp-config ./regress.conf
 
