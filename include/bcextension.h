@@ -46,7 +46,7 @@ extern ObjectAddress bcExecAlterExtensionContentsStmt(AlterExtensionContentsStmt
 extern ObjectAddress bcAlterExtensionNamespace(const char *extensionName, const char *newschema,
 											 Oid *oldschema);
 
-extern void _PG_init(void);
-extern void _PG_fini(void);
+void bcextension_init(void);
+void bcextension_fini(void);
 
 #endif							/* BCEXTENSION_H */

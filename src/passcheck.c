@@ -71,9 +71,9 @@ static int	enable_passcheck_feature = FEATURE_OFF;
 
 
 /*  TODO: Update with proper name later */
-static const char *extension_name = "uni_api";
+static const char *extension_name = "backcountry";
 static const char *password_check_feature = "passcheck";
-static const char *schema_name = "bc";
+static const char *schema_name = "backcountry";
 static const char *feature_table_name = "feature_info";
 
 /*  This should match crypt.h */
