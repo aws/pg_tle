@@ -22,6 +22,10 @@ GRANT pgtle_staff TO dbstaff2;
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_staff;
+
+SET search_path TO pgtle,public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -48,11 +52,45 @@ $_bcd_$
 $_bcd_$
 );
 
+SELECT pgtle.install_extension
+(
+ 'testsuonlycreate',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgtle_string'
+relocatable = false
+superuser = true
+trusted = false
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION testsuonlycreate_func()
+  RETURNS INT AS $$
+  (
+    SELECT 101
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+
+SET search_path TO public;
+
+-- superuser can create extensions that are not trusted and require superuser privilege
+RESET SESSION AUTHORIZATION;
+CREATE EXTENSION testsuonlycreate;
+SELECT testsuonlycreate_func();
+DROP EXTENSION testsuonlycreate;
+
 -- unprivileged role can create and use trusted extension
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 CREATE EXTENSION test123;
 SELECT test123_func();
+
+-- unprivileged role can't create extensions that are not trusted and require superuser privilege
+-- fails
+CREATE EXTENSION testsuonlycreate;
 
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
@@ -74,6 +112,7 @@ SELECT test123_func();
 -- fails
 DROP FUNCTION test123_func();
 
+SET search_path TO pgtle, public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -119,14 +158,16 @@ $_bcd_$
 $_bcd_$
 );
 
+SET search_path TO public;
+
 -- unprivileged role can modify and use trusted extension
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 ALTER EXTENSION test123 UPDATE TO '1.1';
 SELECT test123_func_2();
 SELECT * FROM pgtle.extension_update_paths('test123');
-SELECT * FROM pgtle.available_extensions();
-SELECT * FROM pgtle.available_extension_versions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
+SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
 DROP EXTENSION test123;
 
 -- negative tests, run as superuser
@@ -154,6 +195,7 @@ ALTER FUNCTION public.pgtlefoo() SET SCHEMA pgtle;
 DROP FUNCTION public.pgtlefoo();
 
 -- attempt to shadow existing file-based extension
+-- fail
 SELECT pgtle.install_extension
 (
  'plpgsql',
@@ -177,6 +219,7 @@ $_bcd_$
 );
 
 -- attempt to alter a pgtle extension function
+-- fail
 ALTER FUNCTION pgtle.install_extension
 (
   extname text,
@@ -192,6 +235,7 @@ SET search_path TO 'public';
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
 SELECT pgtle.uninstall_extension('test123');
+SELECT pgtle.uninstall_extension('testsuonlycreate');
 
 -- clean up
 RESET SESSION AUTHORIZATION;
@@ -201,9 +245,7 @@ DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pgtle;
 DROP SCHEMA pgtle;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
 DROP ROLE pgtle_staff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE pgtle_admin;
-
-/* does mix of bc ext cascade to std ext work? */
-/* does mix of std ext cascade to bc ext work? */
-/* TODO: other forms of ALTER (ADD, DROP, etc) */

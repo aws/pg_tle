@@ -1,0 +1,350 @@
+/* 
+*
+* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+*/
+\pset pager off
+CREATE EXTENSION pgtle;
+-- create semi-privileged role to manipulate pgtle artifacts
+CREATE ROLE dbadmin;
+GRANT pgtle_admin TO dbadmin;
+-- create unprivileged role to create trusted extensions
+CREATE ROLE dbstaff;
+GRANT pgtle_staff TO dbstaff;
+-- create alt unprivileged role to create trusted extensions
+CREATE ROLE dbstaff2;
+GRANT pgtle_staff TO dbstaff2;
+-- create completely unprivileged role
+CREATE ROLE dbguest;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_staff;
+SET search_path TO pgtle,public;
+-- installation of artifacts requires semi-privileged role
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+SELECT pgtle.install_extension
+(
+ 'test123',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgtle_string'
+relocatable = false
+superuser = false
+trusted = true
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION test123_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ install_extension 
+-------------------
+ OK
+(1 row)
+
+SELECT pgtle.install_extension
+(
+ 'testsuonlycreate',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgtle_string'
+relocatable = false
+superuser = true
+trusted = false
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION testsuonlycreate_func()
+  RETURNS INT AS $$
+  (
+    SELECT 101
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ install_extension 
+-------------------
+ OK
+(1 row)
+
+SET search_path TO public;
+-- superuser can create extensions that are not trusted and require superuser privilege
+RESET SESSION AUTHORIZATION;
+CREATE EXTENSION testsuonlycreate;
+SELECT testsuonlycreate_func();
+ testsuonlycreate_func 
+-----------------------
+                   101
+(1 row)
+
+DROP EXTENSION testsuonlycreate;
+-- unprivileged role can create and use trusted extension
+SET SESSION AUTHORIZATION dbstaff;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
+CREATE EXTENSION test123;
+SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
+
+-- unprivileged role can't create extensions that are not trusted and require superuser privilege
+-- fails
+CREATE EXTENSION testsuonlycreate;
+ERROR:  permission denied to create extension "testsuonlycreate"
+HINT:  Must be superuser to create this extension.
+-- switch to dbstaff2
+SET SESSION AUTHORIZATION dbstaff2;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff2
+(1 row)
+
+-- fails
+DROP EXTENSION test123;
+ERROR:  must be owner of extension test123
+-- suceeds
+SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
+
+-- fails
+DROP FUNCTION test123_func();
+ERROR:  must be owner of function test123_func
+-- switch to dbguest
+SET SESSION AUTHORIZATION dbguest;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbguest
+(1 row)
+
+-- fails
+DROP EXTENSION test123;
+ERROR:  must be owner of extension test123
+-- suceeds
+SELECT test123_func();
+ test123_func 
+--------------
+           42
+(1 row)
+
+-- fails
+DROP FUNCTION test123_func();
+ERROR:  must be owner of function test123_func
+SET search_path TO pgtle, public;
+-- installation of artifacts requires semi-privileged role
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+SELECT pgtle.install_extension
+(
+ 'test123',
+ '1.1',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.1'
+module_pathname = 'pgtle_string'
+relocatable = false
+superuser = false
+trusted = true
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION test123_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+  CREATE OR REPLACE FUNCTION test123_func_2()
+  RETURNS INT AS $$
+  (
+    SELECT 424242
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ install_extension 
+-------------------
+ OK
+(1 row)
+
+SELECT pgtle.install_upgrade_path
+(
+ 'test123',
+ '1.0',
+ '1.1',
+$_bcd_$
+  CREATE OR REPLACE FUNCTION test123_func_2()
+  RETURNS INT AS $$
+  (
+    SELECT 424242
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ install_upgrade_path 
+----------------------
+ OK
+(1 row)
+
+SET search_path TO public;
+-- unprivileged role can modify and use trusted extension
+SET SESSION AUTHORIZATION dbstaff;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
+ALTER EXTENSION test123 UPDATE TO '1.1';
+SELECT test123_func_2();
+ test123_func_2 
+----------------
+         424242
+(1 row)
+
+SELECT * FROM pgtle.extension_update_paths('test123');
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
+       name       | default_version |            comment            
+------------------+-----------------+-------------------------------
+ pgtle             | 1.0             | provide bc PoC for PostgreSQL
+ plpgsql          | 1.0             | PL/pgSQL procedural language
+ test123          | 1.1             | Test BC Functions
+ testsuonlycreate | 1.0             | Test BC Functions
+(4 rows)
+
+SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
+       name       | version | superuser | trusted | relocatable |   schema   | requires |            comment            
+------------------+---------+-----------+---------+-------------+------------+----------+-------------------------------
+ pgtle             | 1.0     | t         | f       | f           | pgtle       |          | provide bc PoC for PostgreSQL
+ plpgsql          | 1.0     | t         | t       | f           | pg_catalog |          | PL/pgSQL procedural language
+ test123          | 1.0     | f         | t       | f           |            |          | Test BC Functions
+ test123          | 1.1     | f         | t       | f           |            |          | Test BC Functions
+ testsuonlycreate | 1.0     | t         | f       | f           |            |          | Test BC Functions
+(5 rows)
+
+DROP EXTENSION test123;
+-- negative tests, run as superuser
+RESET SESSION AUTHORIZATION;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ root
+(1 row)
+
+-- should fail
+-- attempt to create a function in pgtle directly
+CREATE OR REPLACE FUNCTION pgtle.foo()
+RETURNS TEXT AS $$
+SELECT 'ok'
+$$ LANGUAGE sql;
+ERROR:  pgtle schema reserved for pgtle functions
+-- create a function in public and then attempt alter to pgtle
+-- this works
+CREATE OR REPLACE FUNCTION public.pgtlefoo()
+RETURNS TEXT AS $$
+SELECT 'ok'
+$$ LANGUAGE sql;
+-- but this should fail
+ALTER FUNCTION public.pgtlefoo() SET SCHEMA pgtle;
+ERROR:  pgtle schema reserved for pgtle functions
+-- clean up, should work
+DROP FUNCTION public.pgtlefoo();
+-- attempt to shadow existing file-based extension
+-- fail
+SELECT pgtle.install_extension
+(
+ 'plpgsql',
+ '1.0',
+$_bcd_$
+comment = 'Test BC Functions'
+default_version = '1.0'
+module_pathname = 'pgtle_string'
+relocatable = false
+superuser = false
+trusted = true
+$_bcd_$,
+  false,
+$_bcd_$
+  CREATE OR REPLACE FUNCTION test123_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_bcd_$
+);
+ERROR:  control file already exists for the plpgsql extension
+-- attempt to alter a pgtle extension function
+-- fail
+ALTER FUNCTION pgtle.install_extension
+(
+  extname text,
+  extvers text,
+  ctl_str text,
+  ctl_alt bool,
+  sql_str text
+)
+SET search_path TO 'public';
+ERROR:  altering pgtle functions in pgtle schema not allowed
+-- back to our regular program: these should work
+-- removal of artifacts requires semi-privileged role
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+SELECT pgtle.uninstall_extension('test123');
+ uninstall_extension 
+---------------------
+ OK
+(1 row)
+
+SELECT pgtle.uninstall_extension('testsuonlycreate');
+ uninstall_extension 
+---------------------
+ OK
+(1 row)
+
+-- clean up
+RESET SESSION AUTHORIZATION;
+DROP ROLE dbadmin;
+DROP ROLE dbstaff;
+DROP ROLE dbstaff2;
+DROP ROLE dbguest;
+DROP EXTENSION pgtle;
+DROP SCHEMA pgtle;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
+DROP ROLE pgtle_staff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
+DROP ROLE pgtle_admin;
