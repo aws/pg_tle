@@ -7,6 +7,9 @@
 \pset pager off
 CREATE EXTENSION pgtle;
 
+-- Query pg_availavle_extension for pgtle
+SELECT * FROM pg_available_extensions WHERE name = 'pgtle';
+
 -- create semi-privileged role to manipulate pgtle artifacts
 CREATE ROLE dbadmin;
 GRANT pgtle_admin TO dbadmin;
@@ -244,6 +247,10 @@ DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pgtle;
+
+-- Query pg_availavle_extension for pgtle
+SELECT * FROM pg_available_extensions WHERE name = 'pgtle';
+
 DROP SCHEMA pgtle;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
 DROP ROLE pgtle_staff;

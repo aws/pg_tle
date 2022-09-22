@@ -5,6 +5,13 @@
 */
 \pset pager off
 CREATE EXTENSION pgtle;
+-- Query pg_availavle_extension for pgtle
+SELECT * FROM pg_available_extensions WHERE name = 'pgtle';
+ name  | default_version | installed_version |          comment           
+-------+-----------------+-------------------+----------------------------
+ pgtle | 1.0             | 1.0               | Trusted Language Extension
+(1 row)
+
 -- create semi-privileged role to manipulate pgtle artifacts
 CREATE ROLE dbadmin;
 GRANT pgtle_admin TO dbadmin;
@@ -234,23 +241,19 @@ SELECT * FROM pgtle.extension_update_paths('test123');
 (2 rows)
 
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-       name       | default_version |            comment            
-------------------+-----------------+-------------------------------
- pgtle             | 1.0             | provide bc PoC for PostgreSQL
- plpgsql          | 1.0             | PL/pgSQL procedural language
+       name       | default_version |      comment      
+------------------+-----------------+-------------------
  test123          | 1.1             | Test BC Functions
  testsuonlycreate | 1.0             | Test BC Functions
-(4 rows)
+(2 rows)
 
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
-       name       | version | superuser | trusted | relocatable |   schema   | requires |            comment            
-------------------+---------+-----------+---------+-------------+------------+----------+-------------------------------
- pgtle             | 1.0     | t         | f       | f           | pgtle       |          | provide bc PoC for PostgreSQL
- plpgsql          | 1.0     | t         | t       | f           | pg_catalog |          | PL/pgSQL procedural language
- test123          | 1.0     | f         | t       | f           |            |          | Test BC Functions
- test123          | 1.1     | f         | t       | f           |            |          | Test BC Functions
- testsuonlycreate | 1.0     | t         | f       | f           |            |          | Test BC Functions
-(5 rows)
+       name       | version | superuser | trusted | relocatable | schema | requires |      comment      
+------------------+---------+-----------+---------+-------------+--------+----------+-------------------
+ test123          | 1.0     | f         | t       | f           |        |          | Test BC Functions
+ test123          | 1.1     | f         | t       | f           |        |          | Test BC Functions
+ testsuonlycreate | 1.0     | t         | f       | f           |        |          | Test BC Functions
+(3 rows)
 
 DROP EXTENSION test123;
 -- negative tests, run as superuser
@@ -258,7 +261,7 @@ RESET SESSION AUTHORIZATION;
 SELECT CURRENT_USER;
  current_user 
 --------------
- root
+ sharyogi
 (1 row)
 
 -- should fail
@@ -343,8 +346,19 @@ DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pgtle;
+-- Query pg_availavle_extension for pgtle
+SELECT * FROM pg_available_extensions WHERE name = 'pgtle';
+ name  | default_version | installed_version |          comment           
+-------+-----------------+-------------------+----------------------------
+ pgtle | 1.0             |                   | Trusted Language Extension
+(1 row)
+
 DROP SCHEMA pgtle;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
 DROP ROLE pgtle_staff;
+ERROR:  role "pgtle_staff" cannot be dropped because some objects depend on it
+DETAIL:  1 object in database postgres
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE pgtle_admin;
+ERROR:  role "pgtle_admin" cannot be dropped because some objects depend on it
+DETAIL:  4 objects in database postgres

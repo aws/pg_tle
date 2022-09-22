@@ -1,5 +1,5 @@
 # pgtle extension
-comment = 'provide bc PoC for PostgreSQL'
+comment = 'Trusted Language Extension'
 default_version = '1.0'
 module_pathname = '$libdir/pgtle'
 relocatable = false
