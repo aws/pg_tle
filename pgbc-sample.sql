@@ -1,4 +1,4 @@
-/* 
+/*
 *
 * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -9,23 +9,23 @@ CREATE EXTENSION backcountry;
 
 -- create semi-privileged role to manipulate backcountry artifacts
 CREATE ROLE dbadmin;
-GRANT pgbc_admin TO dbadmin;
+GRANT backcountry_admin TO dbadmin;
 
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT pgbc_staff TO dbstaff;
+GRANT backcountry_staff TO dbstaff;
 
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT pgbc_staff TO dbstaff2;
+GRANT backcountry_staff TO dbstaff2;
 
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgbc_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_staff;
 
-SET search_path TO pgbc,public;
+SET search_path TO backcountry,public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -37,7 +37,7 @@ SELECT backcountry.install_extension
 $_bcd_$
 comment = 'Test BC Functions'
 default_version = '1.0'
-module_pathname = 'pgbc_string'
+module_pathname = 'backcountry_string'
 relocatable = false
 superuser = false
 trusted = true
@@ -80,7 +80,7 @@ SELECT test123_func();
 -- fails
 DROP FUNCTION test123_func();
 
-SET search_path TO pgbc, public;
+SET search_path TO backcountry, public;
 
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -211,9 +211,9 @@ DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION backcountry;
-DROP ROLE pgbc_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgbc_admin;
-DROP ROLE pgbc_admin;
+DROP ROLE backcountry_staff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM backcountry_admin;
+DROP ROLE backcountry_admin;
 
 /* does mix of bc ext cascade to std ext work? */
 /* does mix of std ext cascade to bc ext work? */
