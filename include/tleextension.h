@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * bcextension.h
+ * tleextension.h
  *		Extension management commands (create/drop extension), sans files.
  *
  * Copied from src/include/commands/extension.h and modified to suit
@@ -11,16 +11,16 @@
  * Modifications Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *-------------------------------------------------------------------------
  */
-#ifndef BCEXTENSION_H
-#define BCEXTENSION_H
+#ifndef TLEEXTENSION_H
+#define TLEEXTENSION_H
 
 #include "catalog/objectaddress.h"
 #include "parser/parse_node.h"
 #include "utils/guc.h"
 
-#define PGBC_MAGIC					"pgbc_6ToRc5wJtKWTHWMn"
-#define PGBC_NSPNAME				"pgbc"
-#define PGBC_EXTNAME				"pgbc"
+#define PG_TLE_MAGIC					"pg_tle_6ToRc5wJtKWTHWMn"
+#define PG_TLE_NSPNAME				"pgtle"
+#define PG_TLE_EXTNAME				"pg_tle"
 
 /*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER
@@ -34,19 +34,19 @@
 extern PGDLLIMPORT bool creating_extension;
 extern PGDLLIMPORT Oid CurrentExtensionObject;
 
-extern ObjectAddress bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt);
+extern ObjectAddress tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt);
 
-extern void bcRemoveExtensionById(Oid extId);
+extern void tleRemoveExtensionById(Oid extId);
 
-extern ObjectAddress bcExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt);
+extern ObjectAddress tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt);
 
-extern ObjectAddress bcExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt,
+extern ObjectAddress tleExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt,
 													ObjectAddress *objAddr);
 
-extern ObjectAddress bcAlterExtensionNamespace(const char *extensionName, const char *newschema,
+extern ObjectAddress tleAlterExtensionNamespace(const char *extensionName, const char *newschema,
 											 Oid *oldschema);
 
-extern void _PG_init(void);
-extern void _PG_fini(void);
+void pg_tle_init(void);
+void pg_tle_fini(void);
 
-#endif							/* BCEXTENSION_H */
+#endif							/* TLEEXTENSION_H */

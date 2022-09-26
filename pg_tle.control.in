@@ -1,0 +1,6 @@
+# EXTNAME extension
+comment = 'An extension framework'
+default_version = 'EXTVERSION'
+module_pathname = '$libdir/EXTNAME'
+relocatable = false
+schema = 'SCHEMA'

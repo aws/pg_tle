@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * bcextension.c
+ * tleextension.c
  *	  Commands to manipulate extensions (create/drop extension), sans files.
  *
  * Extensions in PostgreSQL allow management of collections of SQL objects.
@@ -77,10 +77,10 @@
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
-#include "bcextension.h"
+#include "tleextension.h"
 #include "compatibility.h"
 
-extern bool bcParseConfigFp(FILE *fp, const char *config_file,
+extern bool tleParseConfigFp(FILE *fp, const char *config_file,
 							int depth, int elevel, ConfigVariable **head_p,
 							ConfigVariable **tail_p);
 
@@ -117,48 +117,48 @@ typedef struct ExtensionVersionInfo
 	struct ExtensionVersionInfo *previous;	/* current best predecessor */
 } ExtensionVersionInfo;
 
-/* custom GUC parameter to allow trusted pgbc extensions if desired */
+/* custom GUC parameter to allow trusted pg_tle extensions if desired */
 bool trusted_enabled = false;
 
 /* callback to cleanup on abort */
 bool	cb_registered = false;
 
-/* global indicator we are manipulating pgbc artifacts */
-bool	bcart = false;
-#define SET_BCART \
+/* global indicator we are manipulating pg_tle artifacts */
+bool	tleart = false;
+#define SET_TLEART \
 	do { \
 		if (!cb_registered) \
 		{ \
-			RegisterXactCallback(pgbc_xact_callback, NULL); \
+			RegisterXactCallback(pg_tle_xact_callback, NULL); \
 			cb_registered = true; \
 		} \
-		bcart = true; \
+		tleart = true; \
 	} while (0)
-#define UNSET_BCART \
+#define UNSET_TLEART \
 	do { \
-		bcart = false; \
+		tleart = false; \
 	} while (0)
 
-/* global indicator to use bc strings rather than files */
-bool	bcext = false;
-#define SET_BCEXT \
+/* global indicator to use tle strings rather than files */
+bool	tleext = false;
+#define SET_TLEEXT \
 	do { \
 		if (!cb_registered) \
 		{ \
-			RegisterXactCallback(pgbc_xact_callback, NULL); \
+			RegisterXactCallback(pg_tle_xact_callback, NULL); \
 			cb_registered = true; \
 		} \
-		bcext = true; \
+		tleext = true; \
 	} while (0)
-#define UNSET_BCEXT \
+#define UNSET_TLEEXT \
 	do { \
-		bcext = false; \
+		tleext = false; \
 	} while (0)
 
 static ProcessUtility_hook_type prev_hook = NULL;
 
 /* Local functions */
-static void bcerrorConflictingDefElem(DefElem *defel, ParseState *pstate);
+static void tleerrorConflictingDefElem(DefElem *defel, ParseState *pstate);
 static char *exec_scalar_text_sql_func(const char *funcname);
 static bool filestat(char *filename);
 static bool funcstat(char *procedureName);
@@ -186,7 +186,7 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 								  bool cascade,
 								  bool is_create);
 static char *read_whole_file(const char *filename, int *length);
-static void pgbc_xact_callback(XactEvent event, void *arg);
+static void pg_tle_xact_callback(XactEvent event, void *arg);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -260,7 +260,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 #endif		/* PG_VERSION_NUM < 150000 */
 
 static void
-bcerrorConflictingDefElem(DefElem *defel, ParseState *pstate)
+tleerrorConflictingDefElem(DefElem *defel, ParseState *pstate)
 {
 	if (defel && pstate)
 #if PG_VERSION_NUM < 120000
@@ -298,7 +298,7 @@ exec_scalar_text_sql_func(const char *funcname)
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
 
-	appendStringInfo(sql, "SELECT %s.\"%s\"()", PGBC_NSPNAME, funcname);
+	appendStringInfo(sql, "SELECT %s.\"%s\"()", PG_TLE_NSPNAME, funcname);
 
 	/* execute scalar text returning function */
 	spi_rc = SPI_exec(sql->data, 0);
@@ -338,13 +338,13 @@ filestat(char *filename)
 }
 
 /*
- * Check existence of pgbc function by function name
+ * Check existence of pg_tle function by function name
  */
 static bool
 funcstat(char *procedureName)
 {
 	oidvector  *parameterTypes = buildoidvector(NULL, 0);
-	Oid			procNamespace = LookupExplicitNamespace(PGBC_NSPNAME, false);
+	Oid			procNamespace = LookupExplicitNamespace(PG_TLE_NSPNAME, false);
 	HeapTuple	oldtup;
 	bool		found = false;
 
@@ -500,7 +500,7 @@ check_valid_version_name(const char *versionname)
  * Utility functions to handle extension-related path names
  */
 static bool
-pgbc_is_extension_control_filename(const char *filename)
+pg_tle_is_extension_control_filename(const char *filename)
 {
 	const char *extension = strrchr(filename, '.');
 
@@ -516,7 +516,7 @@ is_extension_script_filename(const char *filename)
 }
 
 static char *
-pgbc_get_extension_control_directory(void)
+pg_tle_get_extension_control_directory(void)
 {
 	char		sharepath[MAXPGPATH];
 	char	   *result;
@@ -533,7 +533,7 @@ get_extension_control_filename(const char *extname)
 {
 	char	   *result;
 
-	if (!bcext)
+	if (!tleext)
 	{
 		char		sharepath[MAXPGPATH];
 
@@ -562,7 +562,7 @@ get_extension_script_directory(ExtensionControlFile *control)
 	 * installation's share directory.
 	 */
 	if (!control->directory)
-		return pgbc_get_extension_control_directory();
+		return pg_tle_get_extension_control_directory();
 
 	if (is_absolute_path(control->directory))
 		return pstrdup(control->directory);
@@ -580,7 +580,7 @@ get_extension_aux_control_filename(ExtensionControlFile *control,
 {
 	char	   *result;
 
-	if (!bcext)
+	if (!tleext)
 	{
 		char	   *scriptdir;
 
@@ -607,7 +607,7 @@ get_extension_script_filename(ExtensionControlFile *control,
 							  const char *from_version, const char *version)
 {
 	char	   *result;
-	if (!bcext)
+	if (!tleext)
 	{
 		char	   *scriptdir;
 
@@ -659,7 +659,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 	/*
 	 * Locate the file to read. Auxiliary files are optional.
-	 * Note that for a pgbc extension this represents the name
+	 * Note that for a pg_tle extension this represents the name
 	 * used to locate the string representing the file contents.
 	 */
 	if (version)
@@ -667,7 +667,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 	else
 		filename = get_extension_control_filename(control->name);
 
-	if (!bcext)		/* Normal extension file case */
+	if (!tleext)		/* Normal extension file case */
 	{
 		if ((file = AllocateFile(filename, "r")) == NULL)
 		{
@@ -698,11 +698,11 @@ parse_extension_control_file(ExtensionControlFile *control,
 		 * Parse the file content, using GUC's file parsing code.  We need not
 		 * check the return value since any errors will be thrown at ERROR level.
 		 */
-		(void) bcParseConfigFp(file, filename, 0, ERROR, &head, &tail);
+		(void) tleParseConfigFp(file, filename, 0, ERROR, &head, &tail);
 
 		FreeFile(file);
 	}
-	else		/* pgbc case */
+	else		/* pg_tle case */
 	{
 		char	   *fstr;
 
@@ -738,7 +738,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 		 * Parse the string content, using GUC's file parsing code.  We need not
 		 * check the return value since any errors will be thrown at ERROR level.
 		 */
-		(void) bcParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
+		(void) tleParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
 	}
 
 	/*
@@ -907,9 +907,9 @@ read_extension_script_file(const ExtensionControlFile *control,
 	char	   *dest_str;
 	int			len;
 
-	if (!bcext)		/* normal extension */
+	if (!tleext)		/* normal extension */
 		src_str = read_whole_file(filename, &len);
-	else			/* pgbc extension */
+	else			/* pg_tle extension */
 	{
 		src_str = exec_scalar_text_sql_func(filename);
 		if (src_str)
@@ -1127,7 +1127,7 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 						 errmsg("permission denied to create extension \"%s\"",
 								control->name),
 						 errhint("Trusted %s extensions are disabled.",
-								 PGBC_EXTNAME)));
+								 PG_TLE_EXTNAME)));
 		}
 		else if (from_version == NULL)
 			ereport(ERROR,
@@ -1399,7 +1399,7 @@ get_ext_ver_list(ExtensionControlFile *control)
 	ListCell   *fn;
 	int			extnamelen = strlen(control->name);
 
-	if (!bcext)		/* regular case */
+	if (!tleext)		/* regular case */
 	{
 		char	   *location;
 		DIR		   *dir;
@@ -1413,12 +1413,12 @@ get_ext_ver_list(ExtensionControlFile *control)
 
 		FreeDir(dir);
 	}
-	else			/* pgbc extension */
+	else			/* pg_tle extension */
 	{
 		int				spi_rc;
 		StringInfo		sql = makeStringInfo();
 		int				i;
-		Oid				schemaOid = get_namespace_oid(PGBC_NSPNAME, false);
+		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
@@ -1744,12 +1744,12 @@ CreateExtensionInternal(char *extensionName,
 	 * will get us there.
 	 */
 	filename = get_extension_script_filename(pcontrol, NULL, versionName);
-	if (!bcext && stat(filename, &fst) == 0)
+	if (!tleext && stat(filename, &fst) == 0)
 	{
 		/* Easy, no extra scripts */
 		updateVersions = NIL;
 	}
-	else if (bcext && funcstat(filename))
+	else if (tleext && funcstat(filename))
 	{
 		/* Also easy, no extra scripts */
 		updateVersions = NIL;
@@ -2010,7 +2010,7 @@ get_required_extension(char *reqExtensionName,
  * CREATE EXTENSION
  */
 ObjectAddress
-bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
+tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 {
 	DefElem		   *d_schema = NULL;
 	DefElem		   *d_new_version = NULL;
@@ -2021,9 +2021,9 @@ bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	ListCell	   *lc;
 	ObjectAddress	retobj;
 
-	/* Determine if this is a pgbc extnsion rather than a "real" extension */
-	if (strcmp(pstate->p_sourcetext, PGBC_MAGIC) == 0)
-		SET_BCEXT;
+	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
+	if (strcmp(pstate->p_sourcetext, PG_TLE_MAGIC) == 0)
+		SET_TLEEXT;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -2068,21 +2068,21 @@ bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 		if (strcmp(defel->defname, "schema") == 0)
 		{
 			if (d_schema)
-				bcerrorConflictingDefElem(defel, pstate);
+				tleerrorConflictingDefElem(defel, pstate);
 			d_schema = defel;
 			schemaName = defGetString(d_schema);
 		}
 		else if (strcmp(defel->defname, "new_version") == 0)
 		{
 			if (d_new_version)
-				bcerrorConflictingDefElem(defel, pstate);
+				tleerrorConflictingDefElem(defel, pstate);
 			d_new_version = defel;
 			versionName = defGetString(d_new_version);
 		}
 		else if (strcmp(defel->defname, "cascade") == 0)
 		{
 			if (d_cascade)
-				bcerrorConflictingDefElem(defel, pstate);
+				tleerrorConflictingDefElem(defel, pstate);
 			d_cascade = defel;
 			cascade = defGetBoolean(d_cascade);
 		}
@@ -2098,8 +2098,8 @@ bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 									 NIL,
 									 true);
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 
 	return retobj;
 }
@@ -2111,7 +2111,7 @@ bcCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
  * else is taken care of by the dependency infrastructure.
  */
 void
-bcRemoveExtensionById(Oid extId)
+tleRemoveExtensionById(Oid extId)
 {
 	Relation	rel;
 	SysScanDesc scandesc;
@@ -2164,79 +2164,18 @@ bcRemoveExtensionById(Oid extId)
  * SRF, adding information about whether the extensions are installed in the
  * current DB.
  */
-Datum bc_available_extensions(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(bc_available_extensions);
+Datum pg_tle_available_extensions(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_available_extensions);
 Datum
-bc_available_extensions(PG_FUNCTION_ARGS)
+pg_tle_available_extensions(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	char	   *location;
-	DIR		   *dir;
-	struct dirent *de;
 
 	/* Build tuplestore to hold the result rows */
 	SetSingleFuncCall(fcinfo, 0);
 
-	/* first grab conventional extensions */
-	location = pgbc_get_extension_control_directory();
-	dir = AllocateDir(location);
-
-	/*
-	 * If the control directory doesn't exist, we want to silently return an
-	 * empty set.  Any other error will be reported by ReadDir.
-	 */
-	if (dir == NULL && errno == ENOENT)
-	{
-		/* do nothing */
-	}
-	else
-	{
-		while ((de = ReadDir(dir, location)) != NULL)
-		{
-			ExtensionControlFile *control;
-			char	   *extname;
-			Datum		values[3];
-			bool		nulls[3];
-
-			if (!pgbc_is_extension_control_filename(de->d_name))
-				continue;
-
-			/* extract extension name from 'name.control' filename */
-			extname = pstrdup(de->d_name);
-			*strrchr(extname, '.') = '\0';
-
-			/* ignore it if it's an auxiliary control file */
-			if (strstr(extname, "--"))
-				continue;
-
-			control = read_extension_control_file(extname);
-
-			memset(values, 0, sizeof(values));
-			memset(nulls, 0, sizeof(nulls));
-
-			/* name */
-			values[0] = DirectFunctionCall1(namein,
-											CStringGetDatum(control->name));
-			/* default_version */
-			if (control->default_version == NULL)
-				nulls[1] = true;
-			else
-				values[1] = CStringGetTextDatum(control->default_version);
-			/* comment */
-			if (control->comment == NULL)
-				nulls[2] = true;
-			else
-				values[2] = CStringGetTextDatum(control->comment);
-
-			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
-								 values, nulls);
-		}
-
-		FreeDir(dir);
-	}
-
-	/* now grab pgbc extensions */
-	SET_BCEXT;
+	/* now grab pg_tle extensions */
+	SET_TLEEXT;
 
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
@@ -2245,7 +2184,7 @@ bc_available_extensions(PG_FUNCTION_ARGS)
 		int				spi_rc;
 		StringInfo		sql = makeStringInfo();
 		int				i;
-		Oid				schemaOid = get_namespace_oid(PGBC_NSPNAME, false);
+		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
@@ -2267,7 +2206,7 @@ bc_available_extensions(PG_FUNCTION_ARGS)
 			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
 											 SPI_tuptable->tupdesc, 1);
 
-			if (!pgbc_is_extension_control_filename(fname))
+			if (!pg_tle_is_extension_control_filename(fname))
 				continue;
 
 			/* extract extension name from 'name.control' filename */
@@ -2307,8 +2246,8 @@ bc_available_extensions(PG_FUNCTION_ARGS)
 			elog(ERROR, "SPI_finish failed");
 	}
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 
 	return (Datum) 0;
 }
@@ -2322,62 +2261,18 @@ bc_available_extensions(PG_FUNCTION_ARGS)
  * to this SRF, adding information about which versions are installed in the
  * current DB.
  */
-Datum bc_available_extension_versions(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(bc_available_extension_versions);
+Datum pg_tle_available_extension_versions(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_available_extension_versions);
 Datum
-bc_available_extension_versions(PG_FUNCTION_ARGS)
+pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	char	   *location;
-	DIR		   *dir;
-	struct dirent *de;
 
 	/* Build tuplestore to hold the result rows */
 	SetSingleFuncCall(fcinfo, 0);
 
-	/* first grab conventional extensions */
-	location = pgbc_get_extension_control_directory();
-	dir = AllocateDir(location);
-
-	/*
-	 * If the control directory doesn't exist, we want to silently return an
-	 * empty set.  Any other error will be reported by ReadDir.
-	 */
-	if (dir == NULL && errno == ENOENT)
-	{
-		/* do nothing */
-	}
-	else
-	{
-		while ((de = ReadDir(dir, location)) != NULL)
-		{
-			ExtensionControlFile *control;
-			char	   *extname;
-
-			if (!pgbc_is_extension_control_filename(de->d_name))
-				continue;
-
-			/* extract extension name from 'name.control' filename */
-			extname = pstrdup(de->d_name);
-			*strrchr(extname, '.') = '\0';
-
-			/* ignore it if it's an auxiliary control file */
-			if (strstr(extname, "--"))
-				continue;
-
-			/* read the control file */
-			control = read_extension_control_file(extname);
-
-			/* scan extension's script directory for install scripts */
-			get_available_versions_for_extension(control, rsinfo->setResult,
-												 rsinfo->setDesc);
-		}
-
-		FreeDir(dir);
-	}
-
-	/* now grab pgbc extensions */
-	SET_BCEXT;
+	/* now grab pg_tle extensions */
+	SET_TLEEXT;
 
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
@@ -2386,7 +2281,7 @@ bc_available_extension_versions(PG_FUNCTION_ARGS)
 		int				spi_rc;
 		StringInfo		sql = makeStringInfo();
 		int				i;
-		Oid				schemaOid = get_namespace_oid(PGBC_NSPNAME, false);
+		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
@@ -2406,7 +2301,7 @@ bc_available_extension_versions(PG_FUNCTION_ARGS)
 			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
 											 SPI_tuptable->tupdesc, 1);
 
-			if (!pgbc_is_extension_control_filename(fname))
+			if (!pg_tle_is_extension_control_filename(fname))
 				continue;
 
 			/* extract extension name from 'name.control' filename */
@@ -2430,8 +2325,8 @@ bc_available_extension_versions(PG_FUNCTION_ARGS)
 			elog(ERROR, "SPI_finish failed");
 	}
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 
 	return (Datum) 0;
 }
@@ -2577,10 +2472,10 @@ convert_requires_to_datum(List *requires)
  * This function reports the version update paths that exist for the
  * specified extension.
  */
-Datum bc_extension_update_paths(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(bc_extension_update_paths);
+Datum pg_tle_extension_update_paths(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_extension_update_paths);
 Datum
-bc_extension_update_paths(PG_FUNCTION_ARGS)
+pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 {
 	Name		extname = PG_GETARG_NAME(0);
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
@@ -2588,8 +2483,8 @@ bc_extension_update_paths(PG_FUNCTION_ARGS)
 	ExtensionControlFile *control;
 	ListCell   *lc1;
 
-	/* flag that this is pgbc created extension */
-	SET_BCEXT;
+	/* flag that this is pg_tle created extension */
+	SET_TLEEXT;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(NameStr(*extname));
@@ -2657,8 +2552,8 @@ bc_extension_update_paths(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 
 	return (Datum) 0;
 }
@@ -3027,7 +2922,7 @@ extension_config_remove(Oid extensionoid, Oid tableoid)
  * Execute ALTER EXTENSION SET SCHEMA
  */
 ObjectAddress
-bcAlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *oldschema)
+tleAlterExtensionNamespace(const char *extensionName, const char *newschema, Oid *oldschema)
 {
 	Oid			extensionOid;
 	Oid			nspOid;
@@ -3209,7 +3104,7 @@ bcAlterExtensionNamespace(const char *extensionName, const char *newschema, Oid 
  * Execute ALTER EXTENSION UPDATE
  */
 ObjectAddress
-bcExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
+tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 {
 	DefElem    *d_new_version = NULL;
 	char	   *versionName;
@@ -3280,8 +3175,8 @@ bcExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_EXTENSION,
 					   stmt->extname);
 
-	/* now grab pgbc extensions */
-	SET_BCEXT;
+	/* now grab pg_tle extensions */
+	SET_TLEEXT;
 
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
@@ -3300,7 +3195,7 @@ bcExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 		if (strcmp(defel->defname, "new_version") == 0)
 		{
 			if (d_new_version)
-				bcerrorConflictingDefElem(defel, pstate);
+				tleerrorConflictingDefElem(defel, pstate);
 			d_new_version = defel;
 		}
 		else
@@ -3351,8 +3246,8 @@ bcExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 
 	ObjectAddressSet(address, ExtensionRelationId, extensionOid);
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 
 	return address;
 }
@@ -3524,7 +3419,7 @@ ApplyExtensionUpdates(Oid extensionOid,
  * the added/dropped object.
  */
 ObjectAddress
-bcExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt,
+tleExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt,
 							   ObjectAddress *objAddr)
 {
 	ObjectAddress extension;
@@ -3729,20 +3624,20 @@ read_whole_file(const char *filename, int *length)
 }
 
 /*
- * pgbc_xact_callback --- cleanup at main-transaction end.
+ * pg_tle_xact_callback --- cleanup at main-transaction end.
  */
 static void
-pgbc_xact_callback(XactEvent event, void *arg)
+pg_tle_xact_callback(XactEvent event, void *arg)
 {
-	/* end pgbc artifacts */
-	UNSET_BCART;
+	/* end pg_tle artifacts */
+	UNSET_TLEART;
 
-	/* end pgbc extensions */
-	UNSET_BCEXT;
+	/* end pg_tle extensions */
+	UNSET_TLEEXT;
 }
 
 void
-_PG_init(void)
+pg_tle_init(void)
 {
 	/* Be sure we do initialization only once */
 	static bool inited = false;
@@ -3753,9 +3648,9 @@ _PG_init(void)
 	/* Must be loaded with shared_preload_libraries */
 	if (!process_shared_preload_libraries_in_progress)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("pgbc must be loaded via shared_preload_libraries")));
+						errmsg("pg_tle must be loaded via shared_preload_libraries")));
 
-	DefineCustomBoolVariable("pgbc.trusted_enabled",
+	DefineCustomBoolVariable("pg_tle.trusted_enabled",
 							 "True if creation of trusted extensions is enabled",
 							 NULL, &trusted_enabled, false, PGC_POSTMASTER,
 							 0, NULL, NULL, NULL);
@@ -3768,7 +3663,7 @@ _PG_init(void)
 }
 
 void
-_PG_fini(void)
+pg_tle_fini(void)
 {
 	ProcessUtility_hook = prev_hook;
 }
@@ -3793,28 +3688,28 @@ _PU_HOOK
 			/*
 			 * First look for a regular file-based extension with
 			 * the target extension name. We don't want to allow
-			 * a pgbc extension to shadow a file-based one.
+			 * a pg_tle extension to shadow a file-based one.
 			 */
 			filename = get_extension_control_filename(n->extname);
 			if (!filestat(filename))
 			{
 				char   *funcname;
 				/*
-				 * Now look for installed pgbc extension by this name.
+				 * Now look for installed pg_tle extension by this name.
 				 */
-				SET_BCEXT;
+				SET_TLEEXT;
 				funcname = get_extension_control_filename(n->extname);
-				UNSET_BCEXT;
+				UNSET_TLEEXT;
 
 				if (funcstat(funcname))
 				{
 					ParseState			   *pstate;
 
-					/* Set up dummy pstate and mark it as pgbc */
+					/* Set up dummy pstate and mark it as pg_tle */
 					pstate = make_parsestate(NULL);
-					pstate->p_sourcetext = pstrdup(PGBC_MAGIC);
+					pstate->p_sourcetext = pstrdup(PG_TLE_MAGIC);
 
-					bcCreateExtension(pstate, n);
+					tleCreateExtension(pstate, n);
 
 					cmd_done = true;
 				}
@@ -3830,28 +3725,28 @@ _PU_HOOK
 			/*
 			 * First look for a regular file-based extension with
 			 * the target extension name. We don't want to allow
-			 * a pgbc extension to shadow a file-based one.
+			 * a pg_tle extension to shadow a file-based one.
 			 */
 			filename = get_extension_control_filename(n->extname);
 			if (!filestat(filename))
 			{
 				char   *funcname;
 				/*
-				 * Now look for installed pgbc extension by this name.
+				 * Now look for installed pg_tle extension by this name.
 				 */
-				SET_BCEXT;
+				SET_TLEEXT;
 				funcname = get_extension_control_filename(n->extname);
-				UNSET_BCEXT;
+				UNSET_TLEEXT;
 
 				if (funcstat(funcname))
 				{
 					ParseState			   *pstate;
 
-					/* Set up dummy pstate and mark it as pgbc */
+					/* Set up dummy pstate and mark it as pg_tle */
 					pstate = make_parsestate(NULL);
-					pstate->p_sourcetext = pstrdup(PGBC_MAGIC);
+					pstate->p_sourcetext = pstrdup(PG_TLE_MAGIC);
 
-					bcExecAlterExtensionStmt(pstate, n);
+					tleExecAlterExtensionStmt(pstate, n);
 
 					cmd_done = true;
 				}
@@ -3881,35 +3776,35 @@ _PU_HOOK
 
 			/*
 			 * We only care about functions being created in the
-			 * private pgbc schema which are not under the control
-			 * of the pgbc artifact manipulation functions.
+			 * private pg_tle schema which are not under the control
+			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(nspname, PGBC_NSPNAME) == 0) &&
-				!bcart)
+			if ((strcmp(nspname, PG_TLE_NSPNAME) == 0) &&
+				!tleart)
 			{
 				if (creating_extension &&
 					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PGBC_EXTNAME) == 0))
+											   PG_TLE_EXTNAME) == 0))
 				{
 					/*
-					 * This is the pgbc extension itself, so it had better
+					 * This is the pg_tle extension itself, so it had better
 					 * be a standard file-based extension
 					 */
 					char   *filename;
 
-					filename = get_extension_control_filename(PGBC_EXTNAME);
+					filename = get_extension_control_filename(PG_TLE_EXTNAME);
 					if (!filestat(filename))
 						ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("control file not found for the %s extension", PGBC_EXTNAME)));
+							errmsg("control file not found for the %s extension", PG_TLE_EXTNAME)));
 				}
 				else
 				{
 					/*
-					 * This is not a pgbc extension artifact, so it does not
+					 * This is not a pg_tle extension artifact, so it does not
 					 * belong here
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("%s schema reserved for pgbc functions", PGBC_NSPNAME)));
+						errmsg("%s schema reserved for pg_tle functions", PG_TLE_NSPNAME)));
 				}
 			}
 
@@ -3930,35 +3825,35 @@ _PU_HOOK
 
 			/*
 			 * We only care about functions being altered in the
-			 * private pgbc schema which are not under the control
-			 * of the pgbc artifact manipulation functions.
+			 * private pg_tle schema which are not under the control
+			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(nspname, PGBC_NSPNAME) == 0) &&
-				!bcart)
+			if ((strcmp(nspname, PG_TLE_NSPNAME) == 0) &&
+				!tleart)
 			{
 				if (creating_extension &&
 					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PGBC_EXTNAME) == 0))
+											   PG_TLE_EXTNAME) == 0))
 				{
 					/*
-					 * This is the pgbc extension itself, so it had better
+					 * This is the pg_tle extension itself, so it had better
 					 * be a standard file-based extension
 					 */
 					char   *filename;
 
-					filename = get_extension_control_filename(PGBC_EXTNAME);
+					filename = get_extension_control_filename(PG_TLE_EXTNAME);
 					if (!filestat(filename))
 						ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("control file not found for the %s extension", PGBC_EXTNAME)));
+							errmsg("control file not found for the %s extension", PG_TLE_EXTNAME)));
 				}
 				else
 				{
 					/*
-					 * This is not a pgbc extension artifact manipulation, so
+					 * This is not a pg_tle extension artifact manipulation, so
 					 * do not allow it
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("altering pgbc functions in %s schema not allowed", PGBC_NSPNAME)));
+						errmsg("altering pg_tle functions in %s schema not allowed", PG_TLE_NSPNAME)));
 				}
 			}
 
@@ -3971,35 +3866,35 @@ _PU_HOOK
 
 			/*
 			 * We only care about functions being moved into the
-			 * private pgbc schema which are not under the control
-			 * of the pgbc artifact manipulation functions.
+			 * private pg_tle schema which are not under the control
+			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(n->newschema, PGBC_NSPNAME) == 0) &&
-				!bcart)
+			if ((strcmp(n->newschema, PG_TLE_NSPNAME) == 0) &&
+				!tleart)
 			{
 				if (creating_extension &&
 					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PGBC_EXTNAME) == 0))
+											   PG_TLE_EXTNAME) == 0))
 				{
 					/*
-					 * This is the pgbc extension itself, so it had better
+					 * This is the pg_tle extension itself, so it had better
 					 * be a standard file-based extension
 					 */
 					char   *filename;
 
-					filename = get_extension_control_filename(PGBC_EXTNAME);
+					filename = get_extension_control_filename(PG_TLE_EXTNAME);
 					if (!filestat(filename))
 						ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("control file not found for the %s extension", PGBC_EXTNAME)));
+							errmsg("control file not found for the %s extension", PG_TLE_EXTNAME)));
 				}
 				else
 				{
 					/*
-					 * This is not a pgbc extension artifact, so it does not
+					 * This is not a pg_tle extension artifact, so it does not
 					 * belong here
 					 */
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("%s schema reserved for pgbc functions", PGBC_NSPNAME)));
+						errmsg("%s schema reserved for pg_tle functions", PG_TLE_NSPNAME)));
 				}
 			}
 
@@ -4029,10 +3924,10 @@ _PU_HOOK
 	}
 }
 
-Datum bc_install_extension(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(bc_install_extension);
+Datum pg_tle_install_extension(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_install_extension);
 Datum
-bc_install_extension(PG_FUNCTION_ARGS)
+pg_tle_install_extension(PG_FUNCTION_ARGS)
 {
 	int				spi_rc;
 	char		   *extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4067,16 +3962,16 @@ bc_install_extension(PG_FUNCTION_ARGS)
 
 	/* Create the control and sql string returning function */
 	appendStringInfo(ctlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_bco_$"
-					 "SELECT $_bci_$%s$_bci_$$_bco_$ LANGUAGE SQL",
-					 PGBC_NSPNAME, ctlname->data, ctl_str);
+					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
+					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
+					 PG_TLE_NSPNAME, ctlname->data, ctl_str);
 	appendStringInfo(sqlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_bco_$"
-					 "SELECT $_bci_$%s$_bci_$$_bco_$ LANGUAGE SQL",
-					 PGBC_NSPNAME, sqlname->data, sql_str);
+					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
+					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
+					 PG_TLE_NSPNAME, sqlname->data, sql_str);
 
-	/* flag that we are manipulating pgbc artifacts */
-	SET_BCART;
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
 
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
@@ -4084,26 +3979,26 @@ bc_install_extension(PG_FUNCTION_ARGS)
 	/* create the control function */
 	spi_rc = SPI_exec(ctlsql->data, 0);
 	if (spi_rc != SPI_OK_UTILITY)
-		elog(ERROR, "failed to install pgbc extension, %s, control string", extname);
+		elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
 
 	/* create the sql function */
 	spi_rc = SPI_exec(sqlsql->data, 0);
 	if (spi_rc != SPI_OK_UTILITY)
-		elog(ERROR, "failed to install pgbc extension, %s, sql string", extname);
+		elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");
 
-	/* done manipulating pgbc artifacts */
-	UNSET_BCART;
+	/* done manipulating pg_tle artifacts */
+	UNSET_TLEART;
 
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 }
 
-Datum bc_install_upgrade_path(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(bc_install_upgrade_path);
+Datum pg_tle_install_upgrade_path(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_install_upgrade_path);
 Datum
-bc_install_upgrade_path(PG_FUNCTION_ARGS)
+pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 {
 	int				spi_rc;
 	char		   *extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4125,12 +4020,12 @@ bc_install_upgrade_path(PG_FUNCTION_ARGS)
 
 	appendStringInfo(sqlname, "%s--%s--%s.sql", extname, fmvers, tovers);
 	appendStringInfo(sqlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_bco_$"
-					 "SELECT $_bci_$%s$_bci_$$_bco_$ LANGUAGE SQL",
-					 PGBC_NSPNAME, sqlname->data, sql_str);
+					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_$"
+					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_$ LANGUAGE SQL",
+					 PG_TLE_NSPNAME, sqlname->data, sql_str);
 
-	/* flag that we are manipulating pgbc artifacts */
-	SET_BCART;
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
 
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
@@ -4138,13 +4033,13 @@ bc_install_upgrade_path(PG_FUNCTION_ARGS)
 	/* create the sql function */
 	spi_rc = SPI_exec(sqlsql->data, 0);
 	if (spi_rc != SPI_OK_UTILITY)
-		elog(ERROR, "failed to install pgbc extension, %s, upgrade sql string", extname);
+		elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");
 
-	/* done manipulating pgbc artifacts */
-	UNSET_BCART;
+	/* done manipulating pg_tle artifacts */
+	UNSET_TLEART;
 
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 }
