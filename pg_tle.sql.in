@@ -27,7 +27,7 @@ CREATE FUNCTION EXTSCHEMA.install_extension
 )
 RETURNS TEXT
 SET search_path TO 'EXTSCHEMA'
-AS 'MODULE_PATHNAME', 'bc_install_extension'
+AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
 LANGUAGE C STRICT;
 
 CREATE FUNCTION EXTSCHEMA.install_upgrade_path
@@ -39,19 +39,19 @@ CREATE FUNCTION EXTSCHEMA.install_upgrade_path
 )
 RETURNS TEXT
 SET search_path TO 'EXTSCHEMA'
-AS 'MODULE_PATHNAME', 'bc_install_upgrade_path'
+AS 'MODULE_PATHNAME', 'pg_tle_install_upgrade_path'
 LANGUAGE C STRICT;
 
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text)
 RETURNS TEXT
 SET search_path TO 'EXTSCHEMA'
-AS $_pgbcie_$
+AS $_pgtleie_$
   DECLARE
     ctrpattern text;
     sqlpattern text;
     searchsql  text;
     dropsql    text;
-    pgbcnsp    text := 'EXTSCHEMA';
+    pgtlensp    text := 'EXTSCHEMA';
     func       text;
   BEGIN
 
@@ -59,19 +59,19 @@ AS $_pgbcie_$
     sqlpattern := format('%s%%.sql', extname);
     searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
 
-    FOR func IN EXECUTE searchsql USING ctrpattern, pgbcnsp LOOP 
+    FOR func IN EXECUTE searchsql USING ctrpattern, pgtlensp LOOP
       dropsql := format('DROP FUNCTION %I()', func);
       EXECUTE dropsql;
     END LOOP;
 
-    FOR func IN EXECUTE searchsql USING sqlpattern, pgbcnsp LOOP 
+    FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
       dropsql := format('DROP FUNCTION %I()', func);
       EXECUTE dropsql;
     END LOOP;
 
     RETURN 'OK';
   END;
-$_pgbcie_$
+$_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
 CREATE FUNCTION EXTSCHEMA.extension_update_paths
@@ -82,7 +82,7 @@ CREATE FUNCTION EXTSCHEMA.extension_update_paths
   OUT path text
 )
 RETURNS SETOF RECORD
-AS 'MODULE_PATHNAME', 'bc_extension_update_paths'
+AS 'MODULE_PATHNAME', 'pg_tle_extension_update_paths'
 LANGUAGE C STABLE STRICT;
 
 CREATE FUNCTION EXTSCHEMA.available_extensions
@@ -92,7 +92,7 @@ CREATE FUNCTION EXTSCHEMA.available_extensions
   OUT comment text
 )
 RETURNS SETOF RECORD
-AS 'MODULE_PATHNAME', 'bc_available_extensions'
+AS 'MODULE_PATHNAME', 'pg_tle_available_extensions'
 LANGUAGE C STABLE STRICT;
 
 CREATE FUNCTION EXTSCHEMA.available_extension_versions
@@ -107,7 +107,7 @@ CREATE FUNCTION EXTSCHEMA.available_extension_versions
   OUT comment text
 )
 RETURNS SETOF RECORD
-AS 'MODULE_PATHNAME', 'bc_available_extension_versions'
+AS 'MODULE_PATHNAME', 'pg_tle_available_extension_versions'
 LANGUAGE C STABLE STRICT;
 
 -- Revoke privs from PUBLIC
@@ -138,16 +138,16 @@ $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'backcountry_admin') THEN
+      WHERE  rolname = 'pgtle_admin') THEN
 
-      RAISE NOTICE 'Role "backcountry_admin" already exists. Skipping.';
+      RAISE NOTICE 'Role "pgtle_admin" already exists. Skipping.';
    ELSE
-      CREATE ROLE backcountry_admin NOLOGIN;
+      CREATE ROLE pgtle_admin NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO backcountry_admin;
+GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
@@ -156,7 +156,7 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   ctr_str text,
   ctr_alt bool,
   sql_str text
-) TO backcountry_admin;
+) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
 (
@@ -164,34 +164,34 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
   fmvers text,
   tovers text,
   sql_str text
-) TO backcountry_admin;
+) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
 (
   extname text
-) TO backcountry_admin;
+) TO pgtle_admin;
 
 DO
 $_do_$
 BEGIN
    IF EXISTS (
       SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = 'backcountry_staff') THEN
+      WHERE  rolname = 'pgtle_staff') THEN
 
-      RAISE NOTICE 'Role "backcountry_staff" already exists. Skipping.';
+      RAISE NOTICE 'Role "pgtle_staff" already exists. Skipping.';
    ELSE
-      CREATE ROLE backcountry_staff NOLOGIN;
+      CREATE ROLE pgtle_staff NOLOGIN;
    END IF;
 END
 $_do_$;
 
-GRANT USAGE ON SCHEMA EXTSCHEMA TO backcountry_staff;
+GRANT USAGE ON SCHEMA EXTSCHEMA TO pgtle_staff;
 
-CREATE TYPE EXTSCHEMA.bc_features as ENUM ('passcheck');
+CREATE TYPE EXTSCHEMA.pg_tle_features as ENUM ('passcheck');
 CREATE TYPE EXTSCHEMA.password_types as ENUM ('PASSWORD_TYPE_PLAINTEXT', 'PASSWORD_TYPE_MD5', 'PASSWORD_TYPE_SCRAM_SHA_256');
 
 CREATE TABLE EXTSCHEMA.feature_info(
-	feature EXTSCHEMA.bc_features,
+	feature EXTSCHEMA.pg_tle_features,
 	schema_name text,
 	proname text,
 	obj_identity text);
@@ -201,7 +201,7 @@ CREATE INDEX feature_info_idx ON EXTSCHEMA.feature_info(feature);
 GRANT SELECT on EXTSCHEMA.feature_info TO PUBLIC;
 
 -- Helper function to insert into table
-CREATE FUNCTION EXTSCHEMA.bc_feature_info_sql_insert(proc regproc, feature EXTSCHEMA.bc_features)
+CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_insert(proc regproc, feature EXTSCHEMA.pg_tle_features)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -233,7 +233,7 @@ $$;
 
 
 -- Prevent function from being dropped if referenced in table
-CREATE FUNCTION EXTSCHEMA.bc_feature_info_sql_drop()
+CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop()
 RETURNS event_trigger
 LANGUAGE plpgsql
 AS $$
@@ -259,9 +259,9 @@ BEGIN
 END;
 $$;
 
-CREATE EVENT TRIGGER bc_event_trigger_for_drop_function
+CREATE EVENT TRIGGER pg_tle_event_trigger_for_drop_function
    ON sql_drop
-   EXECUTE FUNCTION EXTSCHEMA.bc_feature_info_sql_drop();
+   EXECUTE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop();
 
 REVOKE ALL on SCHEMA EXTSCHEMA FROM public;
 GRANT USAGE on SCHEMA EXTSCHEMA TO public;

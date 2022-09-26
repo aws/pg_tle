@@ -62,7 +62,7 @@ static char *DeescapeQuotedString(const char *s);
 #endif
 static int guc_name_compare(const char *namea, const char *nameb);
 
-bool bcParseConfigFp(FILE *fp, const char *config_file,
+bool tleParseConfigFp(FILE *fp, const char *config_file,
 					 int depth, int elevel, ConfigVariable **head_p,
 					 ConfigVariable **tail_p);
 
@@ -197,7 +197,7 @@ GUC_flex_fatal(const char *msg)
  * GUCs specifically.
  */
 bool
-bcParseConfigFp(FILE *fp, const char *config_file, int depth, int elevel,
+tleParseConfigFp(FILE *fp, const char *config_file, int depth, int elevel,
 			  ConfigVariable **head_p, ConfigVariable **tail_p)
 {
 	volatile bool OK = true;
@@ -341,7 +341,7 @@ bcParseConfigFp(FILE *fp, const char *config_file, int depth, int elevel,
 			if (cf)
 				item->filename = pstrdup(cf);
 			else
-				item->filename = pstrdup("backcountry_string");
+				item->filename = pstrdup("pg_tle_string");
 			item->sourceline = ConfigFileLineno - 1;
 			item->ignore = false;
 			item->applied = false;
