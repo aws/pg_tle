@@ -15,7 +15,7 @@
  */
 #include "postgres.h"
 
-#include "bcextension.h"
+#include "tleextension.h"
 #include "passcheck.h"
 #include "fmgr.h"
 
@@ -27,12 +27,12 @@ void		_PG_fini(void);
 void
 _PG_init(void)
 {
-    bcextension_init();
+    pg_tle_init();
 	passcheck_init();
 }
 
 void
 _PG_fini(void)
 {
-    bcextension_fini();
+    pg_tle_fini();
 }

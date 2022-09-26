@@ -1,24 +1,24 @@
-/* 
+/*
 *
 * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
 */
 \pset pager off
-CREATE EXTENSION backcountry;
--- create semi-privileged role to manipulate backcountry artifacts
+CREATE EXTENSION pg_tle;
+-- create semi-privileged role to manipulate pg_tle artifacts
 CREATE ROLE dbadmin;
-GRANT backcountry_admin TO dbadmin;
+GRANT pgtle_admin TO dbadmin;
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT backcountry_staff TO dbstaff;
+GRANT pgtle_staff TO dbstaff;
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT backcountry_staff TO dbstaff2;
+GRANT pgtle_staff TO dbstaff2;
 -- create completely unprivileged role
 CREATE ROLE dbguest;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to backcountry_staff;
-SET search_path TO backcountry,public;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_staff;
+SET search_path TO pgtle,public;
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
@@ -27,52 +27,52 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
-SELECT backcountry.install_extension
+SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
-$_bcd_$
-comment = 'Test BC Functions'
+$_pgtle_$
+comment = 'Test TLE Functions'
 default_version = '1.0'
-module_pathname = 'backcountry_string'
+module_pathname = 'pg_tle_string'
 relocatable = false
 superuser = false
 trusted = true
-$_bcd_$,
+$_pgtle_$,
   false,
-$_bcd_$
+$_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
   (
     SELECT 42
   )$$ LANGUAGE sql;
-$_bcd_$
+$_pgtle_$
 );
  install_extension 
 -------------------
  OK
 (1 row)
 
-SELECT backcountry.install_extension
+SELECT pgtle.install_extension
 (
  'testsuonlycreate',
  '1.0',
-$_bcd_$
-comment = 'Test BC Functions'
+$_pgtle_$
+comment = 'Test TLE Functions'
 default_version = '1.0'
-module_pathname = 'backcountry_string'
+module_pathname = 'pg_tle_string'
 relocatable = false
 superuser = true
 trusted = false
-$_bcd_$,
+$_pgtle_$,
   false,
-$_bcd_$
+$_pgtle_$
   CREATE OR REPLACE FUNCTION testsuonlycreate_func()
   RETURNS INT AS $$
   (
     SELECT 101
   )$$ LANGUAGE sql;
-$_bcd_$
+$_pgtle_$
 );
  install_extension 
 -------------------
@@ -152,7 +152,7 @@ SELECT test123_func();
 -- fails
 DROP FUNCTION test123_func();
 ERROR:  must be owner of function test123_func
-SET search_path TO backcountry, public;
+SET search_path TO pgtle, public;
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
@@ -161,20 +161,20 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
-SELECT backcountry.install_extension
+SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
-$_bcd_$
-comment = 'Test BC Functions'
+$_pgtle_$
+comment = 'Test TLE Functions'
 default_version = '1.1'
-module_pathname = 'backcountry_string'
+module_pathname = 'pg_tle_string'
 relocatable = false
 superuser = false
 trusted = true
-$_bcd_$,
+$_pgtle_$,
   false,
-$_bcd_$
+$_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
   (
@@ -185,25 +185,25 @@ $_bcd_$
   (
     SELECT 424242
   )$$ LANGUAGE sql;
-$_bcd_$
+$_pgtle_$
 );
  install_extension 
 -------------------
  OK
 (1 row)
 
-SELECT backcountry.install_upgrade_path
+SELECT pgtle.install_upgrade_path
 (
  'test123',
  '1.0',
  '1.1',
-$_bcd_$
+$_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func_2()
   RETURNS INT AS $$
   (
     SELECT 424242
   )$$ LANGUAGE sql;
-$_bcd_$
+$_pgtle_$
 );
  install_upgrade_path 
 ----------------------
@@ -226,76 +226,76 @@ SELECT test123_func_2();
          424242
 (1 row)
 
-SELECT * FROM backcountry.extension_update_paths('test123');
+SELECT * FROM pgtle.extension_update_paths('test123');
  source | target |   path   
 --------+--------+----------
  1.0    | 1.1    | 1.0--1.1
  1.1    | 1.0    | 
 (2 rows)
 
-SELECT * FROM backcountry.available_extensions() ORDER BY name;
-       name       | default_version |      comment      
-------------------+-----------------+-------------------
- test123          | 1.1             | Test BC Functions
- testsuonlycreate | 1.0             | Test BC Functions
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
+       name       | default_version |      comment       
+------------------+-----------------+--------------------
+ test123          | 1.1             | Test TLE Functions
+ testsuonlycreate | 1.0             | Test TLE Functions
 (2 rows)
 
-SELECT * FROM backcountry.available_extension_versions() ORDER BY name;
-       name       | version | superuser | trusted | relocatable | schema | requires |      comment      
-------------------+---------+-----------+---------+-------------+--------+----------+-------------------
- test123          | 1.0     | f         | t       | f           |        |          | Test BC Functions
- test123          | 1.1     | f         | t       | f           |        |          | Test BC Functions
- testsuonlycreate | 1.0     | t         | f       | f           |        |          | Test BC Functions
+SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
+       name       | version | superuser | trusted | relocatable | schema | requires |      comment       
+------------------+---------+-----------+---------+-------------+--------+----------+--------------------
+ test123          | 1.0     | f         | t       | f           |        |          | Test TLE Functions
+ test123          | 1.1     | f         | t       | f           |        |          | Test TLE Functions
+ testsuonlycreate | 1.0     | t         | f       | f           |        |          | Test TLE Functions
 (3 rows)
 
 DROP EXTENSION test123;
 -- negative tests, run as superuser
 RESET SESSION AUTHORIZATION;
 -- should fail
--- attempt to create a function in backcountry directly
-CREATE OR REPLACE FUNCTION backcountry.foo()
+-- attempt to create a function in pgtle directly
+CREATE OR REPLACE FUNCTION pgtle.foo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
-ERROR:  backcountry schema reserved for backcountry functions
--- create a function in public and then attempt alter to backcountry
+ERROR:  pgtle schema reserved for pg_tle functions
+-- create a function in public and then attempt alter to pg_tle
 -- this works
-CREATE OR REPLACE FUNCTION public.backcountryfoo()
+CREATE OR REPLACE FUNCTION public.pg_tlefoo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
 -- but this should fail
-ALTER FUNCTION public.backcountryfoo() SET SCHEMA backcountry;
-ERROR:  backcountry schema reserved for backcountry functions
+ALTER FUNCTION public.pg_tlefoo() SET SCHEMA pgtle;
+ERROR:  pgtle schema reserved for pg_tle functions
 -- clean up, should work
-DROP FUNCTION public.backcountryfoo();
+DROP FUNCTION public.pg_tlefoo();
 -- attempt to shadow existing file-based extension
 -- fail
-SELECT backcountry.install_extension
+SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
-$_bcd_$
-comment = 'Test BC Functions'
+$_pgtle_$
+comment = 'Test TLE Functions'
 default_version = '1.0'
-module_pathname = 'backcountry_string'
+module_pathname = 'pg_tle_string'
 relocatable = false
 superuser = false
 trusted = true
-$_bcd_$,
+$_pgtle_$,
   false,
-$_bcd_$
+$_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
   (
     SELECT 42
   )$$ LANGUAGE sql;
-$_bcd_$
+$_pgtle_$
 );
 ERROR:  control file already exists for the plpgsql extension
--- attempt to alter a backcountry extension function
+-- attempt to alter a pg_tle extension function
 -- fail
-ALTER FUNCTION backcountry.install_extension
+ALTER FUNCTION pgtle.install_extension
 (
   extname text,
   extvers text,
@@ -304,7 +304,7 @@ ALTER FUNCTION backcountry.install_extension
   sql_str text
 )
 SET search_path TO 'public';
-ERROR:  altering backcountry functions in backcountry schema not allowed
+ERROR:  altering pg_tle functions in pgtle schema not allowed
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -314,13 +314,13 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
-SELECT backcountry.uninstall_extension('test123');
+SELECT pgtle.uninstall_extension('test123');
  uninstall_extension 
 ---------------------
  OK
 (1 row)
 
-SELECT backcountry.uninstall_extension('testsuonlycreate');
+SELECT pgtle.uninstall_extension('testsuonlycreate');
  uninstall_extension 
 ---------------------
  OK
@@ -332,9 +332,9 @@ DROP ROLE dbadmin;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
-DROP EXTENSION backcountry;
-DROP SCHEMA backcountry;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM backcountry_staff;
-DROP ROLE backcountry_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM backcountry_admin;
-DROP ROLE backcountry_admin;
+DROP EXTENSION pg_tle;
+DROP SCHEMA pgtle;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
+DROP ROLE pgtle_staff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
+DROP ROLE pgtle_admin;
