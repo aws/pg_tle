@@ -263,5 +263,5 @@ CREATE EVENT TRIGGER pg_tle_event_trigger_for_drop_function
    ON sql_drop
    EXECUTE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop();
 
-REVOKE ALL on SCHEMA EXTSCHEMA FROM public;
-GRANT USAGE on SCHEMA EXTSCHEMA TO public;
+REVOKE ALL ON SCHEMA EXTSCHEMA FROM PUBLIC;
+GRANT USAGE ON SCHEMA EXTSCHEMA TO pgtle_staff;
