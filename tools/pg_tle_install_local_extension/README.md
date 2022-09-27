@@ -1,5 +1,5 @@
 # pg_tle_install_local_extension
-A rust app to install a local extension in PostgreSQL database using backupcountry (pg_tle) extension. App will call pg_tle.install_extension to install extension. After this DBA/User can execute create extension.
+A rust app to install a local extension in PostgreSQL database using backcountry (pg_tle) extension. App will call pg_tle.install_extension to install extension. After this DBA/User can execute create extension.
 
 # Requirements
 
