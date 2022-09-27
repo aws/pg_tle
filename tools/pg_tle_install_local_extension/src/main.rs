@@ -48,7 +48,7 @@ fn main() {
     let func_content = fs::read_to_string(func_file)
         .expect("Should have been able to read the file");
     let mut client = Client::connect(&args.pg_conn, connector).unwrap();
-    client.execute("SELECT * FROM pg_tle.install_extension( $1, $2, $3, $4, $5 )", &[ &args.ext_name, &args.ext_rev, &cntrl_content, &false, &func_content ] ).unwrap();
+    client.execute("SELECT * FROM pgtle.install_extension( $1, $2, $3, $4, $5 )", &[ &args.ext_name, &args.ext_rev, &cntrl_content, &false, &func_content ] ).unwrap();
 
 }
 
