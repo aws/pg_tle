@@ -50,7 +50,7 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
 SELECT pgtle.install_extension
@@ -76,7 +76,7 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
 SET search_path TO public;
@@ -189,7 +189,7 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
 SELECT pgtle.install_upgrade_path
@@ -207,7 +207,7 @@ $_pgtle_$
 );
  install_upgrade_path 
 ----------------------
- OK
+ t
 (1 row)
 
 SET search_path TO public;
@@ -317,13 +317,13 @@ SELECT CURRENT_USER;
 SELECT pgtle.uninstall_extension('test123');
  uninstall_extension 
 ---------------------
- OK
+ t
 (1 row)
 
 SELECT pgtle.uninstall_extension('testsuonlycreate');
  uninstall_extension 
 ---------------------
- OK
+ t
 (1 row)
 
 -- clean up
