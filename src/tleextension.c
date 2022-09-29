@@ -3946,9 +3946,11 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	 * a standard file-based extension.
 	 */
 	filename = get_extension_control_filename(extname);
-	if (filestat(filename))
+	if (filestat(filename)) {
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				errmsg("control file already exists for the %s extension", extname)));
+		PG_RETURN_BOOL(false);
+	}
 
 	/*
 	 * Build appropriate function names based on extension name
@@ -3973,26 +3975,34 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
 
-	if (SPI_connect() != SPI_OK_CONNECT)
+	if (SPI_connect() != SPI_OK_CONNECT) {
 		elog(ERROR, "SPI_connect failed");
+		PG_RETURN_BOOL(false);
+	}
 
 	/* create the control function */
 	spi_rc = SPI_exec(ctlsql->data, 0);
-	if (spi_rc != SPI_OK_UTILITY)
+	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
+		PG_RETURN_BOOL(false);
+	}
 
 	/* create the sql function */
 	spi_rc = SPI_exec(sqlsql->data, 0);
-	if (spi_rc != SPI_OK_UTILITY)
+	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
+		PG_RETURN_BOOL(false);
+	}
 
-	if (SPI_finish() != SPI_OK_FINISH)
+	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
-
+		PG_RETURN_BOOL(false);
+	}
+	
 	/* done manipulating pg_tle artifacts */
 	UNSET_TLEART;
 
-	PG_RETURN_TEXT_P(cstring_to_text("OK"));
+	PG_RETURN_BOOL(true);
 }
 
 Datum pg_tle_install_upgrade_path(PG_FUNCTION_ARGS);
@@ -4014,9 +4024,11 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 	 * a standard file-based extension.
 	 */
 	filename = get_extension_control_filename(extname);
-	if (filestat(filename))
+	if (filestat(filename)) {
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				errmsg("control file already exists for the %s extension", extname)));
+		PG_RETURN_BOOL(false);
+	}
 
 	appendStringInfo(sqlname, "%s--%s--%s.sql", extname, fmvers, tovers);
 	appendStringInfo(sqlsql,
@@ -4027,19 +4039,26 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
 
-	if (SPI_connect() != SPI_OK_CONNECT)
+	if (SPI_connect() != SPI_OK_CONNECT) {
 		elog(ERROR, "SPI_connect failed");
+		PG_RETURN_BOOL(false);
+	}
 
 	/* create the sql function */
 	spi_rc = SPI_exec(sqlsql->data, 0);
-	if (spi_rc != SPI_OK_UTILITY)
+	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
+		PG_RETURN_BOOL(false);
+	}
 
-	if (SPI_finish() != SPI_OK_FINISH)
+	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
+		PG_RETURN_BOOL(false);
+	}
 
 	/* done manipulating pg_tle artifacts */
 	UNSET_TLEART;
 
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
+	PG_RETURN_BOOL(true);
 }

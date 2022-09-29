@@ -25,7 +25,7 @@ CREATE FUNCTION EXTSCHEMA.install_extension
   ctl_alt bool,
   sql_str text
 )
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
 LANGUAGE C STRICT;
@@ -37,13 +37,13 @@ CREATE FUNCTION EXTSCHEMA.install_upgrade_path
   tovers text,
   sql_str text
 )
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_upgrade_path'
 LANGUAGE C STRICT;
 
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text)
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS $_pgtleie_$
   DECLARE
@@ -69,7 +69,7 @@ AS $_pgtleie_$
       EXECUTE dropsql;
     END LOOP;
 
-    RETURN 'OK';
+    RETURN true;
   END;
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
