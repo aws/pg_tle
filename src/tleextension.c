@@ -3798,7 +3798,7 @@ _PU_HOOK
 						ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("control file not found for the %s extension", PG_TLE_EXTNAME)));
 				}
-				else
+				else if (!IsBinaryUpgrade)
 				{
 					/*
 					 * This is not a pg_tle extension artifact, so it does not
