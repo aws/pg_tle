@@ -34,15 +34,8 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -56,15 +49,8 @@ SELECT pgtle.install_extension
 (
  'testsuonlycreate',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = true
-trusted = false
-$_pgtle_$,
-  false,
+ false,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION testsuonlycreate_func()
   RETURNS INT AS $$
@@ -87,10 +73,6 @@ SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 CREATE EXTENSION test123;
 SELECT test123_func();
-
--- unprivileged role can't create extensions that are not trusted and require superuser privilege
--- fails
-CREATE EXTENSION testsuonlycreate;
 
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
@@ -121,15 +103,8 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.1'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -199,15 +174,8 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -221,11 +189,13 @@ $_pgtle_$
 -- fail
 ALTER FUNCTION pgtle.install_extension
 (
-  extname text,
-  extvers text,
-  ctl_str text,
-  ctl_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 )
 SET search_path TO 'public';
 
