@@ -19,16 +19,18 @@
 
 CREATE FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctl_str text,
-  ctl_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[] DEFAULT NULL,
+  encoding text DEFAULT NULL
 )
 RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
-LANGUAGE C STRICT;
+LANGUAGE C;
 
 CREATE FUNCTION EXTSCHEMA.install_upgrade_path
 (
@@ -113,11 +115,13 @@ LANGUAGE C STABLE STRICT;
 -- Revoke privs from PUBLIC
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctr_str text,
-  ctr_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 ) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
@@ -151,11 +155,13 @@ GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctr_str text,
-  ctr_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path

@@ -187,6 +187,7 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 								  bool is_create);
 static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
+static List *textarray_to_stringlist(ArrayType *textarray);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -3929,17 +3930,34 @@ PG_FUNCTION_INFO_V1(pg_tle_install_extension);
 Datum
 pg_tle_install_extension(PG_FUNCTION_ARGS)
 {
-	int				spi_rc;
-	char		   *extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	char		   *extvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	char		   *ctl_str = text_to_cstring(PG_GETARG_TEXT_PP(2));
-	bool			ctl_alt = PG_GETARG_BOOL(3);
-	char		   *sql_str = text_to_cstring(PG_GETARG_TEXT_PP(4));
-	StringInfo		ctlname = makeStringInfo();
-	StringInfo		sqlname = makeStringInfo();
-	StringInfo		ctlsql = makeStringInfo();
-	StringInfo		sqlsql = makeStringInfo();
-	char		   *filename;
+	int		spi_rc;
+	char		*extname;
+	char		*extvers;
+	bool		exttrusted;
+	char		*extdesc;
+	char		*sql_str;
+	ArrayType	*extrequires;
+	char		*extencode;
+	char		*ctlname;
+	StringInfo	ctlstr = makeStringInfo();
+	char		*sqlname;
+	char		*ctlsql;
+	char		*sqlsql;
+	StringInfo	reqstr = makeStringInfo();
+	char		*filename;
+	List		*reqlist;
+	ListCell	*req;
+	bool		has_ext = false;
+
+
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"name\" is a required argument.")));
+	}
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
 
 	/*
 	 * Verify that extname does not already exist as
@@ -3949,28 +3967,108 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	if (filestat(filename)) {
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				errmsg("control file already exists for the %s extension", extname)));
-		PG_RETURN_BOOL(false);
 	}
 
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"version\" is a required argument.")));
+	}
+
+	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
+	check_valid_version_name(extvers);
+
+	if (PG_ARGISNULL(2)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"trusted\" is a required argument.")));
+	}
+
+	exttrusted = PG_GETARG_BOOL(2);
+
+	if (PG_ARGISNULL(3)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"description\" is a required argument.")));
+	}
+
+	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(3));
+
+	if (PG_ARGISNULL(4)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"ext\" is a required argument.")));
+	}
+
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(4));
+
+	if (PG_ARGISNULL(5)) {
+		reqlist = NIL;
+	} else {
+		extrequires = PG_GETARG_ARRAYTYPE_P(5);
+		reqlist = textarray_to_stringlist(extrequires);
+	}
+
+	if (PG_ARGISNULL(6))
+		extencode = "";
+	else
+		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
 	/*
 	 * Build appropriate function names based on extension name
 	 * and version
 	 */
-	appendStringInfo(sqlname, "%s--%s.sql", extname, extvers);
-	if (!ctl_alt)
-		appendStringInfo(ctlname, "%s.control", extname);
+	sqlname = psprintf("%s--%s.sql", extname, extvers);
+	ctlname = psprintf("%s.control", extname);
+
+	/*
+	 * Check if PG_TLE_EXTNAME is in the list of requirements.
+	 * Meanwhile, also build up the "requires" string for the extension control
+	 * file.
+	 */
+	foreach(req, reqlist) {
+		char *reqname = lfirst(req);
+
+		has_ext = has_ext || strcmp(reqname, PG_TLE_EXTNAME) == 0;
+
+		if (req == list_tail(reqlist))
+			appendStringInfo(reqstr, "%s", reqname);
+		else
+			appendStringInfo(reqstr, "%s,", reqname);
+	}
+
+	if (!has_ext) {
+		if (list_length(reqlist) == 0) {
+			appendStringInfo(reqstr, "%s", PG_TLE_EXTNAME);
+		} else {
+			appendStringInfo(reqstr, ",%s", PG_TLE_EXTNAME);
+		}
+	}
+
+
+	/* Build up the control file that will be injected into the DB for the TLE */
+	appendStringInfo(ctlstr,
+		"module_pathname = '%s'\n"
+		"comment = '%s'\n"
+		"default_version = '%s'\n"
+		"superuser = false\n"
+		"relocatable = false\n"
+		"requires = '%s'\n",
+		extname, extdesc, extvers, reqstr->data);
+
+	if (exttrusted)
+		appendStringInfo(ctlstr, "trusted = true\n");
 	else
-		appendStringInfo(ctlname, "%s--%s.control", extname, extvers);
+		appendStringInfo(ctlstr, "trusted = false\n");
+
+	if (strcmp(extencode, "") != 0) {
+		appendStringInfo(ctlstr, "encoding = %s\n", extencode);
+	}
 
 	/* Create the control and sql string returning function */
-	appendStringInfo(ctlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
-					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
-					 PG_TLE_NSPNAME, ctlname->data, ctl_str);
-	appendStringInfo(sqlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
-					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
-					 PG_TLE_NSPNAME, sqlname->data, sql_str);
+	ctlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
+		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
+		PG_TLE_NSPNAME, ctlname, ctlstr->data);
+	sqlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
+		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
+		PG_TLE_NSPNAME, sqlname, sql_str);
 
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
@@ -3981,14 +4079,14 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	}
 
 	/* create the control function */
-	spi_rc = SPI_exec(ctlsql->data, 0);
+	spi_rc = SPI_exec(ctlsql, 0);
 	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
 		PG_RETURN_BOOL(false);
 	}
 
 	/* create the sql function */
-	spi_rc = SPI_exec(sqlsql->data, 0);
+	spi_rc = SPI_exec(sqlsql, 0);
 	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
 		PG_RETURN_BOOL(false);
@@ -3998,7 +4096,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		elog(ERROR, "SPI_finish failed");
 		PG_RETURN_BOOL(false);
 	}
-	
+
 	/* done manipulating pg_tle artifacts */
 	UNSET_TLEART;
 
@@ -4061,4 +4159,29 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 
 	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 	PG_RETURN_BOOL(true);
+}
+
+/*
+* Convert text array to list of strings.
+*
+* Note: the resulting list of strings is pallocated here.
+*
+* This is borrowed from pg_subscription.c
+*/
+static List *
+textarray_to_stringlist(ArrayType *textarray)
+{
+	Datum	   *elems;
+	int			nelems,
+				i;
+	List	   *res = NIL;
+
+	deconstruct_array(textarray,
+	  TEXTOID, -1, false, TYPALIGN_INT,
+	  &elems, NULL, &nelems);
+
+	for (i = 0; i < nelems; i++)
+		res = lappend(res, TextDatumGetCString(elems[i]));
+
+	return res;
 }
