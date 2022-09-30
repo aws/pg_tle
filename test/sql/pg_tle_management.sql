@@ -119,7 +119,7 @@ $_pgtle_$
 $_pgtle_$
 );
 
-SELECT pgtle.install_upgrade_path
+SELECT pgtle.install_update_path
 (
  'test123',
  '1.0',

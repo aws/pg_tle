@@ -166,7 +166,7 @@ $_pgtle_$
  t
 (1 row)
 
-SELECT pgtle.install_upgrade_path
+SELECT pgtle.install_update_path
 (
  'test123',
  '1.0',
@@ -179,8 +179,8 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
- install_upgrade_path 
-----------------------
+ install_update_path 
+---------------------
  t
 (1 row)
 
