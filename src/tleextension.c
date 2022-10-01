@@ -845,10 +845,10 @@ parse_extension_control_file(ExtensionControlFile *control,
 }
 
 /*
- * Read the primary control file for the specified extension.
+ * create a default control file
  */
 static ExtensionControlFile *
-read_extension_control_file(const char *extname)
+build_default_extension_control_file(const char *extname)
 {
 	ExtensionControlFile *control;
 
@@ -861,6 +861,66 @@ read_extension_control_file(const char *extname)
 	control->superuser = true;
 	control->trusted = false;
 	control->encoding = -1;
+
+	return control;
+}
+
+/*
+ * create a string that represents a control file.
+ * this assumes that the input has been validated.
+ */
+static StringInfo
+build_extension_control_file_string(ExtensionControlFile *control)
+{
+	StringInfo	ctlstr = makeStringInfo();
+	StringInfo	reqstr = makeStringInfo();
+	ListCell	*req;
+
+	Assert(control != NULL);
+	Assert(control->default_version != NULL);
+	Assert(control->comment != NULL);
+
+	appendStringInfo(ctlstr, "default_version = '%s'\n", control->default_version);
+	appendStringInfo(ctlstr, "comment = '%s'\n", control->comment);
+
+	/* relocatable and superuser values are forced to be false */
+	appendStringInfo(ctlstr,
+		"relocatable = false\n"
+		"superuser = false\n");
+
+	if (control->trusted)
+		appendStringInfo(ctlstr, "trusted = true\n");
+	else
+		appendStringInfo(ctlstr, "trusted = false\n");
+
+	if (control->encoding >= 0) {
+		appendStringInfo(ctlstr,
+			"encoding = '%s'\n", pg_encoding_to_char(control->encoding));
+	}
+
+	if (control->requires != NULL) {
+		foreach(req, control->requires) {
+			char *r = (char *) lfirst(req);
+
+			if (req == list_tail(control->requires))
+				appendStringInfo(reqstr, "%s", r);
+			else
+				appendStringInfo(reqstr, "%s,", r);
+		}
+
+		appendStringInfo(ctlstr, "requires = '%s'\n", reqstr->data);
+	}
+
+	return ctlstr;
+}
+
+/*
+ * Read the primary control file for the specified extension.
+ */
+static ExtensionControlFile *
+read_extension_control_file(const char *extname)
+{
+	ExtensionControlFile *control = build_default_extension_control_file(extname);
 
 	/*
 	 * Parse the primary control file.
@@ -3939,16 +3999,15 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	ArrayType	*extrequires;
 	char		*extencode;
 	char		*ctlname;
-	StringInfo	ctlstr = makeStringInfo();
+	StringInfo	ctlstr;
 	char		*sqlname;
 	char		*ctlsql;
 	char		*sqlsql;
-	StringInfo	reqstr = makeStringInfo();
 	char		*filename;
 	List		*reqlist;
 	ListCell	*req;
 	bool		has_ext = false;
-
+	ExtensionControlFile	*control;
 
 
 	if (PG_ARGISNULL(0)) {
@@ -4026,38 +4085,37 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 		has_ext = has_ext || strcmp(reqname, PG_TLE_EXTNAME) == 0;
 
-		if (req == list_tail(reqlist))
-			appendStringInfo(reqstr, "%s", reqname);
-		else
-			appendStringInfo(reqstr, "%s,", reqname);
+		if (has_ext)
+			break;
 	}
 
 	if (!has_ext) {
-		if (list_length(reqlist) == 0) {
-			appendStringInfo(reqstr, "%s", PG_TLE_EXTNAME);
-		} else {
-			appendStringInfo(reqstr, ",%s", PG_TLE_EXTNAME);
+		reqlist = lappend(reqlist, PG_TLE_EXTNAME);
+	}
+
+	/*
+	 * Build up the control file that will be injected into the DB for the TLE.
+	 * We can inherit some of the defaults (relocatable: false, encoding: -1)
+	 */
+	control = build_default_extension_control_file(extname);
+	control->superuser = false; // explicitly set to false
+	control->default_version = pstrdup(extvers);
+	control->comment = pstrdup(extdesc);
+	control->trusted = exttrusted;
+	control->requires = reqlist;
+
+	if (strcmp(extencode, "") != 0) {
+		control->encoding = pg_valid_server_encoding(extencode);
+
+		if (control->encoding < 0) {
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("\"%s\" is not a valid encoding name",
+							extencode)));
 		}
 	}
 
-
-	/* Build up the control file that will be injected into the DB for the TLE */
-	appendStringInfo(ctlstr,
-		"comment = '%s'\n"
-		"default_version = '%s'\n"
-		"superuser = false\n"
-		"relocatable = false\n"
-		"requires = '%s'\n",
-		extdesc, extvers, reqstr->data);
-
-	if (exttrusted)
-		appendStringInfo(ctlstr, "trusted = true\n");
-	else
-		appendStringInfo(ctlstr, "trusted = false\n");
-
-	if (strcmp(extencode, "") != 0) {
-		appendStringInfo(ctlstr, "encoding = %s\n", extencode);
-	}
+	ctlstr = build_extension_control_file_string(control);
 
 	/* Create the control and sql string returning function */
 	ctlsql = psprintf(
