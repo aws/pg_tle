@@ -4043,13 +4043,12 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	/* Build up the control file that will be injected into the DB for the TLE */
 	appendStringInfo(ctlstr,
-		"module_pathname = '%s'\n"
 		"comment = '%s'\n"
 		"default_version = '%s'\n"
 		"superuser = false\n"
 		"relocatable = false\n"
 		"requires = '%s'\n",
-		extname, extdesc, extvers, reqstr->data);
+		extdesc, extvers, reqstr->data);
 
 	if (exttrusted)
 		appendStringInfo(ctlstr, "trusted = true\n");
