@@ -32,17 +32,17 @@ SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
 LANGUAGE C;
 
-CREATE FUNCTION EXTSCHEMA.install_upgrade_path
+CREATE FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 )
 RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
-AS 'MODULE_PATHNAME', 'pg_tle_install_upgrade_path'
-LANGUAGE C STRICT;
+AS 'MODULE_PATHNAME', 'pg_tle_install_update_path'
+LANGUAGE C;
 
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text)
 RETURNS boolean
@@ -124,12 +124,12 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   encoding text
 ) FROM PUBLIC;
 
-REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 ) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
@@ -164,12 +164,12 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   encoding text
 ) TO pgtle_admin;
 
-GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension

@@ -4103,19 +4103,27 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(true);
 }
 
-Datum pg_tle_install_upgrade_path(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(pg_tle_install_upgrade_path);
+Datum pg_tle_install_update_path(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_install_update_path);
 Datum
-pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
+pg_tle_install_update_path(PG_FUNCTION_ARGS)
 {
 	int				spi_rc;
-	char		   *extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	char		   *fmvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	char		   *tovers = text_to_cstring(PG_GETARG_TEXT_PP(2));
-	char		   *sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
-	StringInfo		sqlname = makeStringInfo();
-	StringInfo		sqlsql = makeStringInfo();
+	char		*extname;
+	char		*fromvers;
+	char		*tovers;
+	char		*sql_str;
+	char		*sqlname;
+	char		*sqlsql;
 	char		   *filename;
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"name\" is a required argument.")));
+	}
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
 
 	/*
 	 * Verify that extname does not already exist as
@@ -4125,14 +4133,35 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 	if (filestat(filename)) {
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				errmsg("control file already exists for the %s extension", extname)));
-		PG_RETURN_BOOL(false);
 	}
 
-	appendStringInfo(sqlname, "%s--%s--%s.sql", extname, fmvers, tovers);
-	appendStringInfo(sqlsql,
-					 "CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_$"
-					 "SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_$ LANGUAGE SQL",
-					 PG_TLE_NSPNAME, sqlname->data, sql_str);
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"fromvers\" is a required argument.")));
+	}
+
+	if (PG_ARGISNULL(2)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"tovers\" is a required argument.")));
+	}
+
+	fromvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	check_valid_version_name(fromvers);
+	tovers = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	check_valid_version_name(tovers);
+
+	if (PG_ARGISNULL(3)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"ext\" is a required argument.")));
+	}
+
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
+
+	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
+	sqlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_$"
+		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_$ LANGUAGE SQL",
+		PG_TLE_NSPNAME, sqlname, sql_str);
 
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
@@ -4143,7 +4172,7 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 	}
 
 	/* create the sql function */
-	spi_rc = SPI_exec(sqlsql->data, 0);
+	spi_rc = SPI_exec(sqlsql, 0);
 	if (spi_rc != SPI_OK_UTILITY) {
 		elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
 		PG_RETURN_BOOL(false);
@@ -4157,7 +4186,6 @@ pg_tle_install_upgrade_path(PG_FUNCTION_ARGS)
 	/* done manipulating pg_tle artifacts */
 	UNSET_TLEART;
 
-	PG_RETURN_TEXT_P(cstring_to_text("OK"));
 	PG_RETURN_BOOL(true);
 }
 
