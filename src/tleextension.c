@@ -188,6 +188,7 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
+static bool validate_tle_sql(char *sql);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -880,8 +881,10 @@ build_extension_control_file_string(ExtensionControlFile *control)
 	Assert(control->default_version != NULL);
 	Assert(control->comment != NULL);
 
-	appendStringInfo(ctlstr, "default_version = '%s'\n", control->default_version);
-	appendStringInfo(ctlstr, "comment = '%s'\n", control->comment);
+	appendStringInfo(ctlstr, "default_version = %s\n",
+		quote_literal_cstr(control->default_version));
+	appendStringInfo(ctlstr, "comment = %s\n",
+		quote_literal_cstr(control->comment));
 
 	/* relocatable and superuser values are forced to be false */
 	appendStringInfo(ctlstr,
@@ -908,7 +911,8 @@ build_extension_control_file_string(ExtensionControlFile *control)
 				appendStringInfo(reqstr, "%s,", r);
 		}
 
-		appendStringInfo(ctlstr, "requires = '%s'\n", reqstr->data);
+		appendStringInfo(ctlstr, "requires = %s\n",
+			quote_literal_cstr(reqstr->data));
 	}
 
 	return ctlstr;
@@ -4110,22 +4114,40 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		if (control->encoding < 0) {
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("\"%s\" is not a valid encoding name",
+					 errmsg("\"%s\" is not a valid encoding name.",
 							extencode)));
 		}
 	}
 
 	ctlstr = build_extension_control_file_string(control);
 
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(ctlstr->data) && validate_tle_sql(sql_str))) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("Invalid character in extension definition."),
+				 errdetail("Use of string delimiters %s and %s are foribbden in extension definitions.",
+			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
+	}
+
 	/* Create the control and sql string returning function */
 	ctlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
-		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
-		PG_TLE_NSPNAME, ctlname, ctlstr->data);
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			PG_TLE_NSPNAME, quote_identifier(ctlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			ctlstr->data,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 	sqlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_o_$"
-		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_o_$ LANGUAGE SQL",
-		PG_TLE_NSPNAME, sqlname, sql_str);
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			PG_TLE_NSPNAME, quote_identifier(sqlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			sql_str,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
@@ -4269,4 +4291,16 @@ textarray_to_stringlist(ArrayType *textarray)
 		res = lappend(res, TextDatumGetCString(elems[i]));
 
 	return res;
+}
+
+/*
+ * validate_tle_sql - checks to see if any of the dollar-quoted strings that
+ * are used are present in the SQL string. If they are, abort.
+ */
+static bool validate_tle_sql(char *sql)
+{
+	Assert(sql != NULL);
+
+	PG_RETURN_BOOL(
+		strstr(sql, PG_TLE_OUTER_STR) == NULL && strstr(sql, PG_TLE_INNER_STR) == NULL);
 }
