@@ -21,6 +21,8 @@
 #define PG_TLE_MAGIC					"pg_tle_6ToRc5wJtKWTHWMn"
 #define PG_TLE_NSPNAME				"pgtle"
 #define PG_TLE_EXTNAME				"pg_tle"
+#define PG_TLE_OUTER_STR			"$_pgtle_o_$"
+#define PG_TLE_INNER_STR			"$_pgtle_i_$"
 
 /*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER
