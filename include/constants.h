@@ -28,6 +28,7 @@
 #define TLE_CTL_TRUSTED           "trusted"
 
 #define TLE_EXT_CONTROL_SUFFIX    ".control"
+#define TLE_EXT_LANG "language"
 #define TLE_EXT_SQL_SUFFIX        ".sql"
 
 /* general PostgreSQL names */

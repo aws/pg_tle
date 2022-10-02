@@ -1,0 +1,39 @@
+/*
+*
+* Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+*/
+\pset pager off
+CREATE EXTENSION pg_tle;
+-- attempt to create a TLE using a C-based function. This will error on
+-- CREATE EXTENSION
+SELECT pgtle.install_extension(
+  'tle_c',
+  '1.0',
+  FALSE,
+  'this will fail',
+$_pgtle_$
+  CREATE FUNCTION geo_distance (point, point)
+  RETURNS float8
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE AS '$libdir/earthdistance';
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- this will fail
+CREATE EXTENSION tle_c;
+ERROR:  language "c" is not trusted and cannot be used in a trusted-language function.
+-- cleanup
+SELECT pgtle.uninstall_extension('tle_c');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+DROP EXTENSION pg_tle;
+DROP SCHEMA pgtle;
+DROP ROLE pgtle_staff;
+DROP ROLE pgtle_admin;

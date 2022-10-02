@@ -9,7 +9,7 @@ OBJS = src/tleextension.o src/guc-file.o src/passcheck.o src/uni_api.o
 EXTRA_CLEAN	= src/guc-file.c pg_tle.control pg_tle--$(EXTVERSION).sql
 DATA_built = pg_tle.control pg_tle--$(EXTVERSION).sql
 
-REGRESS = pg_tle_api pg_tle_management pg_tle_injection
+REGRESS = pg_tle_api pg_tle_management pg_tle_injection pg_tle_language
 
 REGRESS_OPTS = --inputdir=test --temp-config ./regress.conf
 

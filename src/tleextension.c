@@ -51,6 +51,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
@@ -156,6 +157,23 @@ bool	tleext = false;
 		tleext = false; \
 	} while (0)
 
+/* global indicator for manipulating functions within a TLE extensions */
+bool tleextfunc = false;
+#define SET_TLEEXTFUNC \
+	do { \
+		if (!cb_registered) \
+		{ \
+			RegisterXactCallback(pg_tle_xact_callback, NULL); \
+			cb_registered = true; \
+		} \
+		tleextfunc = true; \
+	} while (0)
+#define UNSET_TLEEXTFUNC \
+	do { \
+		tleextfunc = false; \
+	} while (0)
+
+
 static ProcessUtility_hook_type prev_hook = NULL;
 
 /* Local functions */
@@ -191,6 +209,7 @@ static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
+static void validate_tle_language(List *options);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -1379,10 +1398,12 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 		/* And now back to C string */
 		c_sql = text_to_cstring(DatumGetTextPP(t_sql));
 
+		SET_TLEEXTFUNC;
 		execute_sql_string(c_sql);
 	}
 	PG_FINALLY();
 	{
+		UNSET_TLEEXTFUNC;
 		creating_extension = false;
 		CurrentExtensionObject = InvalidOid;
 	}
@@ -3738,6 +3759,9 @@ read_whole_file(const char *filename, int *length)
 static void
 pg_tle_xact_callback(XactEvent event, void *arg)
 {
+	/* end pg_tle function observing */
+	UNSET_TLEEXTFUNC;
+
 	/* end pg_tle artifacts */
 	UNSET_TLEART;
 
@@ -3884,7 +3908,7 @@ _PU_HOOK
 			nspname = get_namespace_name(nspid);
 
 			/*
-			 * We only care about functions being created in the
+			 * We care about functions being created in the
 			 * private pg_tle schema which are not under the control
 			 * of the pg_tle artifact manipulation functions.
 			 */
@@ -3915,6 +3939,17 @@ _PU_HOOK
 					ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("%s schema reserved for pg_tle functions", PG_TLE_NSPNAME)));
 				}
+			}
+
+			/*
+			 * We also have to see if we are in the process of creating a TLE
+			 * extension function and see what kind of language the function is
+			 * written in. If it is written in an untrusted language, we will need
+			 * to raise an error.
+			 */
+			if (tleextfunc)
+			{
+				validate_tle_language(n->options);
 			}
 
 			break;
@@ -4345,4 +4380,59 @@ static bool validate_tle_sql(char *sql)
 
 	PG_RETURN_BOOL(
 		strstr(sql, PG_TLE_OUTER_STR) == NULL && strstr(sql, PG_TLE_INNER_STR) == NULL);
+}
+
+/*
+ * validate_tle_language - checks to see if a function within a TLE uses a
+ * trusted language.
+ * Raises an error if the language is not trusted.
+ * We call this function "validate_tle_language" as a future commit may allow
+ * for a GUC that lets a user specify if they want trusted, untrusted (non-C),
+ * or C functions within their inline extensions.
+ */
+static void validate_tle_language(List *options)
+{
+	ListCell		*option;
+	char		*language = NULL;
+	HeapTuple		languageTuple;
+	Form_pg_language		languageStruct;
+
+	Assert(options != NULL);
+
+	foreach(option, options) {
+		DefElem	*defel = (DefElem *) lfirst(option);
+
+		if (strncmp(defel->defname, TLE_EXT_LANG, sizeof(TLE_EXT_LANG)) == 0)
+		{
+			language = strVal(defel->arg);
+			break;
+		}
+	}
+
+	/*
+	 * If language is not set, we can assume it's SQL,
+	 * per src/backend/commands/functioncmds => CreateFunction
+	 * We do not need to do any more checks.
+	 */
+	if (!language)
+		return;
+
+	languageTuple = SearchSysCache1(LANGNAME, PointerGetDatum(language));
+
+	/* If we do not find the language, passthrough as this will fail anyway */
+	if (HeapTupleIsValid(languageTuple))
+	{
+		languageStruct = (Form_pg_language) GETSTRUCT(languageTuple);
+
+		/*
+		 * If the language is untrusted, fail
+		 */
+		if (!languageStruct->lanpltrusted) {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				errmsg("language \"%s\" is not trusted and cannot be used in a trusted-language function.",
+					language)));
+		}
+	}
+
+	ReleaseSysCache(languageTuple);
 }
