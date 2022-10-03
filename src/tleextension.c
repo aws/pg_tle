@@ -77,6 +77,7 @@
 #include "utils/syscache.h"
 #include "utils/varlena.h"
 
+#include "constants.h"
 #include "tleextension.h"
 #include "compatibility.h"
 
@@ -507,7 +508,8 @@ pg_tle_is_extension_control_filename(const char *filename)
 {
 	const char *extension = strrchr(filename, '.');
 
-	return (extension != NULL) && (strcmp(extension, ".control") == 0);
+	return (extension != NULL) && (
+		strncmp(extension, TLE_EXT_CONTROL_SUFFIX, sizeof(TLE_EXT_CONTROL_SUFFIX)) == 0);
 }
 
 static bool
@@ -515,7 +517,8 @@ is_extension_script_filename(const char *filename)
 {
 	const char *extension = strrchr(filename, '.');
 
-	return (extension != NULL) && (strcmp(extension, ".sql") == 0);
+	return (extension != NULL) && (
+		strncmp(extension, TLE_EXT_SQL_SUFFIX, sizeof(TLE_EXT_SQL_SUFFIX)) == 0);
 }
 
 static char *
@@ -758,7 +761,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 	 */
 	for (item = head; item != NULL; item = item->next)
 	{
-		if (strcmp(item->name, "directory") == 0)
+		if (strncmp(item->name, TLE_CTL_DIR, sizeof(TLE_CTL_DIR)) == 0)
 		{
 			if (version)
 				ereport(ERROR,
@@ -768,7 +771,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 			control->directory = pstrdup(item->value);
 		}
-		else if (strcmp(item->name, "default_version") == 0)
+		else if (strncmp(item->name, TLE_CTL_DEF_VER, sizeof(TLE_CTL_DEF_VER)) == 0)
 		{
 			if (version)
 				ereport(ERROR,
@@ -778,19 +781,19 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 			control->default_version = pstrdup(item->value);
 		}
-		else if (strcmp(item->name, "module_pathname") == 0)
+		else if (strncmp(item->name, TLE_CTL_MOD_PATH, sizeof(TLE_CTL_MOD_PATH)) == 0)
 		{
 			control->module_pathname = pstrdup(item->value);
 		}
-		else if (strcmp(item->name, "comment") == 0)
+		else if (strncmp(item->name, TLE_CTL_COMMENT, sizeof(TLE_CTL_COMMENT)) == 0)
 		{
 			control->comment = pstrdup(item->value);
 		}
-		else if (strcmp(item->name, "schema") == 0)
+		else if (strncmp(item->name, TLE_CTL_SCHEMA, sizeof(TLE_CTL_SCHEMA)) == 0)
 		{
 			control->schema = pstrdup(item->value);
 		}
-		else if (strcmp(item->name, "relocatable") == 0)
+		else if (strncmp(item->name, TLE_CTL_RELOCATABLE, sizeof(TLE_CTL_RELOCATABLE)) == 0)
 		{
 			if (!parse_bool(item->value, &control->relocatable))
 				ereport(ERROR,
@@ -798,7 +801,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 						 errmsg("parameter \"%s\" requires a Boolean value",
 								item->name)));
 		}
-		else if (strcmp(item->name, "superuser") == 0)
+		else if (strncmp(item->name, TLE_CTL_SUPERUSER, sizeof(TLE_CTL_SUPERUSER)) == 0)
 		{
 			if (!parse_bool(item->value, &control->superuser))
 				ereport(ERROR,
@@ -806,7 +809,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 						 errmsg("parameter \"%s\" requires a Boolean value",
 								item->name)));
 		}
-		else if (strcmp(item->name, "trusted") == 0)
+		else if (strncmp(item->name, TLE_CTL_TRUSTED, sizeof(TLE_CTL_TRUSTED)) == 0)
 		{
 			if (!parse_bool(item->value, &control->trusted))
 				ereport(ERROR,
@@ -814,7 +817,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 						 errmsg("parameter \"%s\" requires a Boolean value",
 								item->name)));
 		}
-		else if (strcmp(item->name, "encoding") == 0)
+		else if (strncmp(item->name, TLE_CTL_ENCODING, sizeof(TLE_CTL_ENCODING)) == 0)
 		{
 			control->encoding = pg_valid_server_encoding(item->value);
 			if (control->encoding < 0)
@@ -823,7 +826,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 						 errmsg("\"%s\" is not a valid encoding name",
 								item->value)));
 		}
-		else if (strcmp(item->name, "requires") == 0)
+		else if (strncmp(item->name, TLE_CTL_REQUIRES, sizeof(TLE_CTL_REQUIRES)) == 0)
 		{
 			/* Need a modifiable copy of string */
 			char	   *rawnames = pstrdup(item->value);
@@ -1290,7 +1293,7 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 		Oid			reqschema = lfirst_oid(lc);
 		char	   *reqname = get_namespace_name(reqschema);
 
-		if (reqname && strcmp(reqname, "pg_catalog") != 0)
+		if (reqname && strncmp(reqname, PG_CTLG_SCHEMA, sizeof(PG_CTLG_SCHEMA)) != 0)
 			appendStringInfo(&pathbuf, ", %s", quote_identifier(reqname));
 	}
 	appendStringInfoString(&pathbuf, ", pg_temp");
@@ -1893,7 +1896,7 @@ CreateExtensionInternal(char *extensionName,
 		 * Unless CASCADE parameter was given, it's an error to give a schema
 		 * different from control->schema if control->schema is specified.
 		 */
-		if (schemaName && strcmp(control->schema, schemaName) != 0 &&
+		if (schemaName && strncmp(control->schema, schemaName, NAMEDATALEN) != 0 &&
 			!cascade)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2062,7 +2065,7 @@ get_required_extension(char *reqExtensionName,
 			{
 				char	   *pname = (char *) lfirst(lc);
 
-				if (strcmp(pname, reqExtensionName) == 0)
+				if (strncmp(pname, reqExtensionName, NAMEDATALEN) == 0)
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_RECURSION),
 							 errmsg("cyclic dependency detected between extensions \"%s\" and \"%s\"",
@@ -2118,7 +2121,7 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	ObjectAddress	retobj;
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
-	if (strcmp(pstate->p_sourcetext, PG_TLE_MAGIC) == 0)
+	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
 		SET_TLEEXT;
 
 	/* Check extension name validity before any filesystem access */
@@ -2161,21 +2164,21 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	{
 		DefElem    *defel = (DefElem *) lfirst(lc);
 
-		if (strcmp(defel->defname, "schema") == 0)
+		if (strncmp(defel->defname, TLE_CTL_SCHEMA, sizeof(TLE_CTL_SCHEMA)) == 0)
 		{
 			if (d_schema)
 				tleerrorConflictingDefElem(defel, pstate);
 			d_schema = defel;
 			schemaName = defGetString(d_schema);
 		}
-		else if (strcmp(defel->defname, "new_version") == 0)
+		else if (strncmp(defel->defname, TLE_CTL_NEW_VER, sizeof(TLE_CTL_NEW_VER)) == 0)
 		{
 			if (d_new_version)
 				tleerrorConflictingDefElem(defel, pstate);
 			d_new_version = defel;
 			versionName = defGetString(d_new_version);
 		}
-		else if (strcmp(defel->defname, "cascade") == 0)
+		else if (strncmp(defel->defname, TLE_CTL_CASCADE, sizeof(TLE_CTL_CASCADE)) == 0)
 		{
 			if (d_cascade)
 				tleerrorConflictingDefElem(defel, pstate);
@@ -3288,7 +3291,7 @@ tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 	{
 		DefElem    *defel = (DefElem *) lfirst(lc);
 
-		if (strcmp(defel->defname, "new_version") == 0)
+		if (strncmp(defel->defname, TLE_CTL_NEW_VER, sizeof(TLE_CTL_NEW_VER)) == 0)
 		{
 			if (d_new_version)
 				tleerrorConflictingDefElem(defel, pstate);
@@ -3875,12 +3878,12 @@ _PU_HOOK
 			 * private pg_tle schema which are not under the control
 			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(nspname, PG_TLE_NSPNAME) == 0) &&
+			if ((strncmp(nspname, PG_TLE_NSPNAME, sizeof(PG_TLE_NSPNAME)) == 0) &&
 				!tleart)
 			{
 				if (creating_extension &&
-					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PG_TLE_EXTNAME) == 0))
+					(strncmp(get_extension_name(CurrentExtensionObject),
+											   PG_TLE_EXTNAME, sizeof(PG_TLE_EXTNAME)) == 0))
 				{
 					/*
 					 * This is the pg_tle extension itself, so it had better
@@ -3924,12 +3927,12 @@ _PU_HOOK
 			 * private pg_tle schema which are not under the control
 			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(nspname, PG_TLE_NSPNAME) == 0) &&
+			if ((strncmp(nspname, PG_TLE_NSPNAME, sizeof(PG_TLE_NSPNAME)) == 0) &&
 				!tleart)
 			{
 				if (creating_extension &&
-					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PG_TLE_EXTNAME) == 0))
+					(strncmp(get_extension_name(CurrentExtensionObject),
+											   PG_TLE_EXTNAME, sizeof(PG_TLE_EXTNAME)) == 0))
 				{
 					/*
 					 * This is the pg_tle extension itself, so it had better
@@ -3965,12 +3968,12 @@ _PU_HOOK
 			 * private pg_tle schema which are not under the control
 			 * of the pg_tle artifact manipulation functions.
 			 */
-			if ((strcmp(n->newschema, PG_TLE_NSPNAME) == 0) &&
+			if ((strncmp(n->newschema, PG_TLE_NSPNAME, sizeof(PG_TLE_NSPNAME)) == 0) &&
 				!tleart)
 			{
 				if (creating_extension &&
-					(strcmp(get_extension_name(CurrentExtensionObject),
-											   PG_TLE_EXTNAME) == 0))
+					(strncmp(get_extension_name(CurrentExtensionObject),
+											   PG_TLE_EXTNAME, sizeof(PG_TLE_EXTNAME)) == 0))
 				{
 					/*
 					 * This is the pg_tle extension itself, so it had better
@@ -4118,7 +4121,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	foreach(req, reqlist) {
 		char *reqname = lfirst(req);
 
-		has_ext = has_ext || strcmp(reqname, PG_TLE_EXTNAME) == 0;
+		has_ext = has_ext || strncmp(reqname, PG_TLE_EXTNAME, sizeof(PG_TLE_EXTNAME)) == 0;
 
 		if (has_ext)
 			break;
