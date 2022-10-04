@@ -412,7 +412,7 @@ get_extension_schema(Oid ext_oid)
 static void
 check_valid_extension_name(const char *extensionname)
 {
-	int			namelen = strlen(extensionname);
+	int			namelen = strnlen(extensionname, NAMEDATALEN);
 
 	/*
 	 * Disallow empty names (the parser rejects empty identifiers anyway, but
@@ -459,7 +459,7 @@ check_valid_extension_name(const char *extensionname)
 static void
 check_valid_version_name(const char *versionname)
 {
-	int			namelen = strlen(versionname);
+	int			namelen = strnlen(versionname, MAXPGPATH);
 
 	/*
 	 * Disallow empty names (we could possibly allow this, but there seems
@@ -991,7 +991,7 @@ read_extension_script_file(const ExtensionControlFile *control,
 	{
 		src_str = exec_scalar_text_sql_func(filename);
 		if (src_str)
-			len = strlen(src_str);
+			len = strnlen(src_str, MaxAllocSize);
 		else
 			/* missing script function indicates extension is not installed */
 			ereport(ERROR,
@@ -1475,7 +1475,7 @@ get_ext_ver_list(ExtensionControlFile *control)
 	List	   *evi_list = NIL;
 	List	   *fnames = NIL;
 	ListCell   *fn;
-	int			extnamelen = strlen(control->name);
+	int			extnamelen = strnlen(control->name, NAMEDATALEN);
 
 	if (!tleext)		/* regular case */
 	{
