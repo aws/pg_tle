@@ -195,7 +195,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 				check_valid_name(res);
 
-				snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s%s",
+				snprintf(buf + strnlen(buf, 256), sizeof(buf) - strnlen(buf, 256), "%s%s",
 						 res,
 						 (i == tupdesc->natts) ? "" : ".");
 			}
