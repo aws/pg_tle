@@ -783,7 +783,9 @@ parse_extension_control_file(ExtensionControlFile *control,
 		}
 		else if (strncmp(item->name, TLE_CTL_MOD_PATH, sizeof(TLE_CTL_MOD_PATH)) == 0)
 		{
-			control->module_pathname = pstrdup(item->value);
+			/* Only evaluate module_pathname if this is a non-TLE extension */
+			if (!tleext)
+				control->module_pathname = pstrdup(item->value);
 		}
 		else if (strncmp(item->name, TLE_CTL_COMMENT, sizeof(TLE_CTL_COMMENT)) == 0)
 		{
@@ -795,7 +797,10 @@ parse_extension_control_file(ExtensionControlFile *control,
 		}
 		else if (strncmp(item->name, TLE_CTL_RELOCATABLE, sizeof(TLE_CTL_RELOCATABLE)) == 0)
 		{
-			if (!parse_bool(item->value, &control->relocatable))
+			/* if this is a TLE extension, set relocable explicitly to false */
+			if (tleext)
+				control->relocatable = false;
+			else if (!parse_bool(item->value, &control->relocatable))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						 errmsg("parameter \"%s\" requires a Boolean value",
@@ -803,7 +808,10 @@ parse_extension_control_file(ExtensionControlFile *control,
 		}
 		else if (strncmp(item->name, TLE_CTL_SUPERUSER, sizeof(TLE_CTL_SUPERUSER)) == 0)
 		{
-			if (!parse_bool(item->value, &control->superuser))
+			/* if this is a TLE extension, set superuser explicitly to false */
+			if (tleext)
+				control->superuser = false;
+			else if (!parse_bool(item->value, &control->superuser))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						 errmsg("parameter \"%s\" requires a Boolean value",
