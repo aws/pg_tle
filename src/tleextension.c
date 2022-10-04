@@ -1417,7 +1417,7 @@ get_ext_ver_info(const char *versionname, List **evi_list)
 	foreach(lc, *evi_list)
 	{
 		evi = (ExtensionVersionInfo *) lfirst(lc);
-		if (strcmp(evi->name, versionname) == 0)
+		if (strncmp(evi->name, versionname, MAXPGPATH) == 0)
 			return evi;
 	}
 
@@ -1676,15 +1676,20 @@ find_update_path(List *evi_list,
 			}
 			else if (newdist == evi2->distance &&
 					 evi2->previous != NULL &&
-					 strcmp(evi->name, evi2->previous->name) < 0)
+					 strncmp(evi->name, evi2->previous->name, MAXPGPATH) < 0)
 			{
 				/*
 				 * Break ties in favor of the version name that comes first
-				 * according to strcmp().  This behavior is undocumented and
+				 * according to strncmp().  This behavior is undocumented and
 				 * users shouldn't rely on it.  We do it just to ensure that
 				 * if there is a tie, the update path that is chosen does not
 				 * depend on random factors like the order in which directory
 				 * entries get visited.
+				 *
+				 * Note that we limit the comparison of char to MAXPGPATH. Extension
+				 * versions are normally derived from the filename. For TLEs, the
+				 * version can technically fit within a field, which is signiciantly
+				 * larger. This caps the comparison at a much more reasonable length.
 				 */
 				evi2->previous = evi;
 			}
@@ -1714,7 +1719,7 @@ find_update_path(List *evi_list,
  * On success, *best_path is set to the path from the start point.
  *
  * If there's more than one possible start point, prefer shorter update paths,
- * and break any ties arbitrarily on the basis of strcmp'ing the starting
+ * and break any ties arbitrarily on the basis of strncmp'ing the starting
  * versions' names.
  */
 static ExtensionVersionInfo *
@@ -1745,6 +1750,11 @@ find_install_path(List *evi_list, ExtensionVersionInfo *evi_target,
 		/*
 		 * Find shortest path from evi1 to evi_target; but no need to consider
 		 * paths going through other installable versions.
+		 *
+		 * Note that we limit the comparison of char to MAXPGPATH. Extension
+		 * versions are normally derived from the filename. For TLEs, the
+		 * version can technically fit within a field, which is signiciantly
+		 * larger. This caps the comparison at a much more reasonable length.
 		 */
 		path = find_update_path(evi_list, evi1, evi_target, true, true);
 		if (path == NIL)
@@ -1754,7 +1764,7 @@ find_install_path(List *evi_list, ExtensionVersionInfo *evi_target,
 		if (evi_start == NULL ||
 			list_length(path) < list_length(*best_path) ||
 			(list_length(path) == list_length(*best_path) &&
-			 strcmp(evi_start->name, evi1->name) < 0))
+			 strncmp(evi_start->name, evi1->name, MAXPGPATH) < 0))
 		{
 			evi_start = evi1;
 			*best_path = path;
@@ -3320,7 +3330,7 @@ tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 	/*
 	 * If we're already at that version, just say so
 	 */
-	if (strcmp(oldVersionName, versionName) == 0)
+	if (strncmp(oldVersionName, versionName, MAXPGPATH) == 0)
 	{
 		ereport(NOTICE,
 				(errmsg("version \"%s\" of extension \"%s\" is already installed",
@@ -4102,10 +4112,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		reqlist = textarray_to_stringlist(extrequires);
 	}
 
-	if (PG_ARGISNULL(6))
-		extencode = "";
-	else
-		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
 	/*
 	 * Build appropriate function names based on extension name
 	 * and version
@@ -4142,7 +4148,9 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->trusted = exttrusted;
 	control->requires = reqlist;
 
-	if (strcmp(extencode, "") != 0) {
+	if (!PG_ARGISNULL(6))
+	{
+		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
 		control->encoding = pg_valid_server_encoding(extencode);
 
 		if (control->encoding < 0) {
