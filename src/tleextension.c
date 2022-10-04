@@ -163,6 +163,7 @@ static char *exec_scalar_text_sql_func(const char *funcname);
 static bool filestat(char *filename);
 static bool funcstat(char *procedureName);
 static char *get_extension_control_filename(const char *extname);
+static char *get_extension_control_filename_for_file(const char *extname);
 static List *find_update_path(List *evi_list,
 							  ExtensionVersionInfo *evi_start,
 							  ExtensionVersionInfo *evi_target,
@@ -537,18 +538,27 @@ get_extension_control_filename(const char *extname)
 
 	if (!tleext)
 	{
-		char		sharepath[MAXPGPATH];
-
-		get_share_path(my_exec_path, sharepath);
-		result = (char *) palloc(MAXPGPATH);
-		snprintf(result, MAXPGPATH, "%s/extension/%s.control",
-				 sharepath, extname);
+		result = get_extension_control_filename_for_file(extname);
 	}
 	else
 	{
 		result = (char *) palloc(NAMEDATALEN);
 		snprintf(result, NAMEDATALEN, "%s.control", extname);
 	}
+
+	return result;
+}
+
+static char *
+get_extension_control_filename_for_file(const char *extname)
+{
+	char	   *result;
+	char		sharepath[MAXPGPATH];
+
+	get_share_path(my_exec_path, sharepath);
+	result = (char *) palloc(MAXPGPATH);
+	snprintf(result, MAXPGPATH, "%s/extension/%s.control",
+			 sharepath, extname);
 
 	return result;
 }
@@ -1780,6 +1790,19 @@ CreateExtensionInternal(char *extensionName,
 	Oid			extensionOid;
 	ObjectAddress address;
 	ListCell   *lc;
+	bool 	prevTLEState;
+
+	/*
+	 * We have to do some state checking here if we are cascading through a TLE
+	 * extension if the TLE extension has non-TLE dependencies.
+	 */
+	prevTLEState = tleext;
+	filename = get_extension_control_filename_for_file(extensionName);
+
+	if (filestat(filename))
+		UNSET_TLEEXT;
+	else
+		SET_TLEEXT;
 
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
@@ -1996,6 +2019,14 @@ CreateExtensionInternal(char *extensionName,
 	ApplyExtensionUpdates(extensionOid, pcontrol,
 						  versionName, updateVersions,
 						  origSchemaName, cascade, is_create);
+
+	if (prevTLEState != tleext)
+	{
+		if (prevTLEState)
+			SET_TLEEXT;
+		else
+			UNSET_TLEEXT;
+	}
 
 	return address;
 }
