@@ -31,15 +31,8 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -50,22 +43,15 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
 SELECT pgtle.install_extension
 (
  'testsuonlycreate',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = true
-trusted = false
-$_pgtle_$,
-  false,
+ false,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION testsuonlycreate_func()
   RETURNS INT AS $$
@@ -76,7 +62,7 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
 SET search_path TO public;
@@ -105,11 +91,6 @@ SELECT test123_func();
            42
 (1 row)
 
--- unprivileged role can't create extensions that are not trusted and require superuser privilege
--- fails
-CREATE EXTENSION testsuonlycreate;
-ERROR:  permission denied to create extension "testsuonlycreate"
-HINT:  Must be superuser to create this extension.
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
 SELECT CURRENT_USER;
@@ -165,15 +146,8 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.1'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -189,10 +163,10 @@ $_pgtle_$
 );
  install_extension 
 -------------------
- OK
+ t
 (1 row)
 
-SELECT pgtle.install_upgrade_path
+SELECT pgtle.install_update_path
 (
  'test123',
  '1.0',
@@ -205,9 +179,9 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
- install_upgrade_path 
-----------------------
- OK
+ install_update_path 
+---------------------
+ t
 (1 row)
 
 SET search_path TO public;
@@ -243,9 +217,9 @@ SELECT * FROM pgtle.available_extensions() ORDER BY name;
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
        name       | version | superuser | trusted | relocatable | schema | requires |      comment       
 ------------------+---------+-----------+---------+-------------+--------+----------+--------------------
- test123          | 1.0     | f         | t       | f           |        |          | Test TLE Functions
- test123          | 1.1     | f         | t       | f           |        |          | Test TLE Functions
- testsuonlycreate | 1.0     | t         | f       | f           |        |          | Test TLE Functions
+ test123          | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test123          | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ testsuonlycreate | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (3 rows)
 
 DROP EXTENSION test123;
@@ -275,15 +249,8 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
-$_pgtle_$
-comment = 'Test TLE Functions'
-default_version = '1.0'
-module_pathname = 'pg_tle_string'
-relocatable = false
-superuser = false
-trusted = true
-$_pgtle_$,
-  false,
+ true,
+ 'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
   RETURNS INT AS $$
@@ -297,11 +264,13 @@ ERROR:  control file already exists for the plpgsql extension
 -- fail
 ALTER FUNCTION pgtle.install_extension
 (
-  extname text,
-  extvers text,
-  ctl_str text,
-  ctl_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 )
 SET search_path TO 'public';
 ERROR:  altering pg_tle functions in pgtle schema not allowed
@@ -317,13 +286,13 @@ SELECT CURRENT_USER;
 SELECT pgtle.uninstall_extension('test123');
  uninstall_extension 
 ---------------------
- OK
+ t
 (1 row)
 
 SELECT pgtle.uninstall_extension('testsuonlycreate');
  uninstall_extension 
 ---------------------
- OK
+ t
 (1 row)
 
 -- clean up

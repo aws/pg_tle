@@ -19,31 +19,33 @@
 
 CREATE FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctl_str text,
-  ctl_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[] DEFAULT NULL,
+  encoding text DEFAULT NULL
 )
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
-LANGUAGE C STRICT;
+LANGUAGE C;
 
-CREATE FUNCTION EXTSCHEMA.install_upgrade_path
+CREATE FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 )
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
-AS 'MODULE_PATHNAME', 'pg_tle_install_upgrade_path'
-LANGUAGE C STRICT;
+AS 'MODULE_PATHNAME', 'pg_tle_install_update_path'
+LANGUAGE C;
 
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text)
-RETURNS TEXT
+RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
 AS $_pgtleie_$
   DECLARE
@@ -69,7 +71,7 @@ AS $_pgtleie_$
       EXECUTE dropsql;
     END LOOP;
 
-    RETURN 'OK';
+    RETURN true;
   END;
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
@@ -113,19 +115,21 @@ LANGUAGE C STABLE STRICT;
 -- Revoke privs from PUBLIC
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctr_str text,
-  ctr_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 ) FROM PUBLIC;
 
-REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 ) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
@@ -151,19 +155,21 @@ GRANT USAGE, CREATE ON SCHEMA EXTSCHEMA TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
-  extname text,
-  extvers text,
-  ctr_str text,
-  ctr_alt bool,
-  sql_str text
+  name text,
+  version text,
+  trusted bool,
+  description text,
+  ext text,
+  requires text[],
+  encoding text
 ) TO pgtle_admin;
 
-GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_upgrade_path
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
 (
-  extname text,
-  fmvers text,
+  name text,
+  fromvers text,
   tovers text,
-  sql_str text
+  ext text
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
@@ -263,5 +269,5 @@ CREATE EVENT TRIGGER pg_tle_event_trigger_for_drop_function
    ON sql_drop
    EXECUTE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop();
 
-REVOKE ALL on SCHEMA EXTSCHEMA FROM public;
-GRANT USAGE on SCHEMA EXTSCHEMA TO public;
+REVOKE ALL ON SCHEMA EXTSCHEMA FROM PUBLIC;
+GRANT USAGE ON SCHEMA EXTSCHEMA TO pgtle_staff;

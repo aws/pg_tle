@@ -477,7 +477,7 @@ DeescapeQuotedString(const char *s)
 
 	/* We just Assert that there are leading and trailing quotes */
 	Assert(s != NULL && s[0] == '\'');
-	len = strlen(s);
+	len = strnlen(s, MaxAllocSize);
 	Assert(len >= 2);
 	Assert(s[len - 1] == '\'');
 

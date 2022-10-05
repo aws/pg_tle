@@ -89,7 +89,7 @@ passcheck_init(void)
 	next_check_password_hook = check_password_hook;
 	check_password_hook = passcheck_check_password_hook;
 
-	DefineCustomEnumVariable("pg_tle.enable_password_check",
+	DefineCustomEnumVariable("pgtle.enable_password_check",
 							 "Sets the behavior for interacting with passcheck feature.",
 							 NULL,
 							 &enable_passcheck_feature,
@@ -195,7 +195,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 				check_valid_name(res);
 
-				snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s%s",
+				snprintf(buf + strnlen(buf, 256), sizeof(buf) - strnlen(buf, 256), "%s%s",
 						 res,
 						 (i == tupdesc->natts) ? "" : ".");
 			}
