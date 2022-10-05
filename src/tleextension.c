@@ -118,9 +118,6 @@ typedef struct ExtensionVersionInfo
 	struct ExtensionVersionInfo *previous;	/* current best predecessor */
 } ExtensionVersionInfo;
 
-/* custom GUC parameter to allow trusted pg_tle extensions if desired */
-bool trusted_enabled = false;
-
 /* callback to cleanup on abort */
 bool	cb_registered = false;
 
@@ -1197,15 +1194,8 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	{
 		if (extension_is_trusted(control))
 		{
-			if (trusted_enabled)
+		        if (!tleext)
 				switch_to_superuser = true;
-			else
-				ereport(ERROR,
-						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("permission denied to create extension \"%s\"",
-								control->name),
-						 errhint("Trusted %s extensions are disabled.",
-								 PG_TLE_EXTNAME)));
 		}
 		else if (from_version == NULL)
 			ereport(ERROR,
@@ -3758,11 +3748,6 @@ pg_tle_init(void)
 	if (!process_shared_preload_libraries_in_progress)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("pg_tle must be loaded via shared_preload_libraries")));
-
-	DefineCustomBoolVariable("pg_tle.trusted_enabled",
-							 "True if creation of trusted extensions is enabled",
-							 NULL, &trusted_enabled, false, PGC_POSTMASTER,
-							 0, NULL, NULL, NULL);
 
 	/* Install hook */
 	prev_hook = ProcessUtility_hook;
