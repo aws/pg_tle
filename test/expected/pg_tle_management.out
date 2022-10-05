@@ -16,8 +16,15 @@ CREATE ROLE dbstaff2;
 GRANT pgtle_staff TO dbstaff2;
 -- create completely unprivileged role
 CREATE ROLE dbguest;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC to pgtle_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_staff;
+-- create function that can be executed by superuser only
+CREATE OR REPLACE FUNCTION superuser_only()
+RETURNS INT AS $$
+(
+  SELECT 51
+) $$ LANGUAGE sql;
+REVOKE EXECUTE ON FUNCTION superuser_only() FROM PUBLIC;
 SET search_path TO pgtle,public;
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
@@ -48,12 +55,12 @@ $_pgtle_$
 
 SELECT pgtle.install_extension
 (
- 'testsuonlycreate',
+ 'test_superuser_only_when_untrusted',
  '1.0',
  false,
  'Test TLE Functions',
 $_pgtle_$
-  CREATE OR REPLACE FUNCTION testsuonlycreate_func()
+  CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
   RETURNS INT AS $$
   (
     SELECT 101
@@ -65,18 +72,33 @@ $_pgtle_$
  t
 (1 row)
 
-SET search_path TO public;
--- superuser can create extensions that are not trusted and require superuser privilege
-RESET SESSION AUTHORIZATION;
-CREATE EXTENSION testsuonlycreate;
-SELECT testsuonlycreate_func();
- testsuonlycreate_func 
------------------------
-                   101
+-- install a trusted extension that calls functions requiring superuser privilege
+SELECT pgtle.install_extension
+(
+ 'test_no_switch_to_superuser_when_trusted',
+ '1.0',
+ true,
+ 'Test TLE Functions',
+$_pgtle_$
+  SELECT superuser_only();
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
 (1 row)
 
-DROP EXTENSION testsuonlycreate;
--- unprivileged role can create and use trusted extension
+SET search_path TO public;
+-- superuser can create extensions that are not trusted and do not require superuser privilege
+RESET SESSION AUTHORIZATION;
+CREATE EXTENSION test_superuser_only_when_untrusted;
+SELECT test_superuser_only_when_untrusted_func();
+ test_superuser_only_when_untrusted_func 
+-----------------------------------------
+                                     101
+(1 row)
+
+DROP EXTENSION test_superuser_only_when_untrusted;
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
  current_user 
@@ -84,6 +106,7 @@ SELECT CURRENT_USER;
  dbstaff
 (1 row)
 
+-- unprivileged role can create and use trusted extensions that do not require superuser privilege
 CREATE EXTENSION test123;
 SELECT test123_func();
  test123_func 
@@ -91,6 +114,10 @@ SELECT test123_func();
            42
 (1 row)
 
+-- unprivileged role can not create a trusted extension that requires superuser privilege
+-- fails
+CREATE EXTENSION test_no_switch_to_superuser_when_trusted;
+ERROR:  permission denied for function superuser_only
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
 SELECT CURRENT_USER;
@@ -208,19 +235,21 @@ SELECT * FROM pgtle.extension_update_paths('test123');
 (2 rows)
 
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-       name       | default_version |      comment       
-------------------+-----------------+--------------------
- test123          | 1.1             | Test TLE Functions
- testsuonlycreate | 1.0             | Test TLE Functions
-(2 rows)
+                   name                   | default_version |      comment       
+------------------------------------------+-----------------+--------------------
+ test123                                  | 1.1             | Test TLE Functions
+ test_no_switch_to_superuser_when_trusted | 1.0             | Test TLE Functions
+ test_superuser_only_when_untrusted       | 1.0             | Test TLE Functions
+(3 rows)
 
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
-       name       | version | superuser | trusted | relocatable | schema | requires |      comment       
-------------------+---------+-----------+---------+-------------+--------+----------+--------------------
- test123          | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- test123          | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- testsuonlycreate | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
-(3 rows)
+                   name                   | version | superuser | trusted | relocatable | schema | requires |      comment       
+------------------------------------------+---------+-----------+---------+-------------+--------+----------+--------------------
+ test123                                  | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test123                                  | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test_no_switch_to_superuser_when_trusted | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test_superuser_only_when_untrusted       | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+(4 rows)
 
 DROP EXTENSION test123;
 -- negative tests, run as superuser
@@ -289,7 +318,13 @@ SELECT pgtle.uninstall_extension('test123');
  t
 (1 row)
 
-SELECT pgtle.uninstall_extension('testsuonlycreate');
+SELECT pgtle.uninstall_extension('test_superuser_only_when_untrusted');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
  uninstall_extension 
 ---------------------
  t
@@ -297,6 +332,7 @@ SELECT pgtle.uninstall_extension('testsuonlycreate');
 
 -- clean up
 RESET SESSION AUTHORIZATION;
+DROP FUNCTION superuser_only();
 DROP ROLE dbadmin;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
