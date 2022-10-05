@@ -202,6 +202,8 @@ CREATE TABLE EXTSCHEMA.feature_info(
 	proname text,
 	obj_identity text);
 
+SELECT pg_catalog.pg_extension_config_dump('EXTSCHEMA.feature_info', '');
+
 CREATE INDEX feature_info_idx ON EXTSCHEMA.feature_info(feature);
 
 GRANT SELECT on EXTSCHEMA.feature_info TO PUBLIC;
