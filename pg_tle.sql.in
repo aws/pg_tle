@@ -207,7 +207,7 @@ SELECT pg_catalog.pg_extension_config_dump('EXTSCHEMA.feature_info', '');
 
 GRANT SELECT on EXTSCHEMA.feature_info TO PUBLIC;
 
--- Helper function to insert into table
+-- Helper function to register features in the feature_info table
 CREATE FUNCTION EXTSCHEMA.register_feature(proc regproc, feature EXTSCHEMA.pg_tle_features)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -235,6 +235,21 @@ BEGIN
 	SELECT identity into ident FROM pg_catalog.pg_identify_object(pg_proc_relid, proc_oid, 0);
 
 	INSERT INTO EXTSCHEMA.feature_info VALUES (feature, proc_schema_name, proname, ident);
+END;
+$$;
+
+-- Helper function to softly fail if we try to register a function that already exists
+CREATE FUNCTION EXTSCHEMA.register_feature_if_not_exists(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM EXTSCHEMA.register_feature(proc, feature);
+  RETURN TRUE;
+EXCEPTION
+  -- only catch the unique violation. let all other exceptions pass through.
+  WHEN unique_violation THEN
+    RETURN FALSE;
 END;
 $$;
 
@@ -285,8 +300,23 @@ BEGIN
 	GET DIAGNOSTICS row_count = ROW_COUNT;
 
 	IF ROW_COUNT = 0 THEN
-    RAISE EXCEPTION 'Could not unregister "%": does not exist.', $1;
+    RAISE EXCEPTION 'Could not unregister "%": does not exist.', $1 USING ERRCODE = 'no_data_found';
   END IF;
+END;
+$$;
+
+-- Helper to softly fail if we try to unregister a function that does not exist
+CREATE FUNCTION EXTSCHEMA.unregister_feature_if_exists(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM EXTSCHEMA.unregister_feature(proc, feature);
+  RETURN TRUE;
+EXCEPTION
+  -- only catch the error that no data was found
+  WHEN no_data_found THEN
+    RETURN FALSE;
 END;
 $$;
 

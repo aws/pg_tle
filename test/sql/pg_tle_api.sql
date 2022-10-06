@@ -69,6 +69,12 @@ SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
 -- fail on unregistering a hook that does not exist
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+-- try the register if not exists
+SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
+-- try the unregister if exists
+SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
 TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
