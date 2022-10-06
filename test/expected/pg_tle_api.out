@@ -53,9 +53,9 @@ end if;
 END;
 $$
 LANGUAGE PLPGSQL;
-SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_length_greater_than_8', 'passcheck');
- pg_tle_feature_info_sql_insert 
---------------------------------
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+ register_feature 
+------------------
  
 (1 row)
 
@@ -76,9 +76,9 @@ RAISE EXCEPTION 'Passwords can only have numbers';
 END;
 $$
 LANGUAGE PLPGSQL;
-SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_only_nums', 'passcheck');
- pg_tle_feature_info_sql_insert 
---------------------------------
+SELECT pgtle.register_feature('password_check_only_nums', 'passcheck');
+ register_feature 
+------------------
  
 (1 row)
 
@@ -93,28 +93,28 @@ INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_num
 ALTER ROLE testuser with password '123456789';
 ERROR:  Check entries in pgtle.feature_info table, schema and proname must be present
 -- test insert of duplicate hook and fail
-SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
 ERROR:  duplicate key value violates unique constraint "feature_info_pkey"
 DETAIL:  Key (feature, schema_name, proname)=(passcheck, public, password_check_length_greater_than_8) already exists.
 CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
-PL/pgSQL function pgtle.pg_tle_feature_info_sql_insert(regproc,pgtle.pg_tle_features) line 24 at SQL statement
+PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 24 at SQL statement
 -- unregister hooks
-SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_only_nums', 'passcheck');
- pg_tle_feature_info_sql_delete 
---------------------------------
+SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
+ unregister_feature 
+--------------------
  
 (1 row)
 
-SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_length_greater_than_8', 'passcheck');
- pg_tle_feature_info_sql_delete 
---------------------------------
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+ unregister_feature 
+--------------------
  
 (1 row)
 
 -- fail on unregistering a hook that does not exist
-SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
 ERROR:  Could not unregister "password_check_length_greater_than_8": does not exist.
-CONTEXT:  PL/pgSQL function pgtle.pg_tle_feature_info_sql_delete(regproc,pgtle.pg_tle_features) line 44 at RAISE
+CONTEXT:  PL/pgSQL function pgtle.unregister_feature(regproc,pgtle.pg_tle_features) line 44 at RAISE
 TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';

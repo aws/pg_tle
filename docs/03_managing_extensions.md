@@ -142,6 +142,29 @@ $_pgtle_$
 );
 ```
 
+### `pgtle.register_feature(proc regproc, feature pg_tle_features)`
+
+`register_feature` provides a way to catalog functions that use `pg_tle` features such as [hooks](./04_hooks.md).
+
+The available features are:
+
+* `passcheck`
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `proc`: The name of a stored function to register with a `pg_tle` feature.
+* `feature`: The name of the `pg_tle` feature to register the function with (e.g. `passcheck`)
+
+#### Example
+
+```sql
+SELECT pgtle.register_feature('pw_hook', 'passcheck');
+```
+
 ### `pgtle.uninstall_extension(extname text)`
 
 `uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension.
@@ -191,13 +214,9 @@ SELECT pgtle.install_update_path('pg_tle_test', '0.1', '0.2',
 );
 ```
 
-### `pgtle.pg_tle_feature_info_sql_insert(proc regproc, feature pg_tle_features)`
+### `pgtle.unregister_feature(proc regproc, feature pg_tle_features)`
 
-`pg_tle_feature_info_sql_insert` provides a way to catalog functions that use `pg_tle` features such as [hooks](./04_hooks.md).
-
-The available features are:
-
-* `passcheck`
+`unregister_feature` provides a way to remove functions that were registered to use `pg_tle` features such as [hooks](./04_hooks.md).
 
 #### Role
 
@@ -211,7 +230,7 @@ The available features are:
 #### Example
 
 ```sql
-SELECT pgtle.pg_tle_feature_info_sql_insert('pw_hook', 'passcheck');
+SELECT pgtle.unregister_feature('pw_hook', 'passcheck');
 ```
 
 ## Next steps
