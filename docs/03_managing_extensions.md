@@ -162,6 +162,27 @@ If the extension is currently activate within a database, `uninstall_extension` 
 SELECT pgtle.uninstall_extension('pg_tle_test');
 ```
 
+### `pgtle.uninstall_extension(extname text, version text)`
+
+`uninstall_extension` removes the specific version of an extension from the database. This prevents `CREATE EXTENSION` and `ALTER EXTENSION` from installing or updating to this version of the extension
+
+If this version of the extension is currently activate within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `version`: The version of the extension to uninstall.
+
+#### Example
+
+```sql
+SELECT pgtle.uninstall_extension('pg_tle_test', '0.2');
+```
+
 ### `pgtle.install_update_path(name text, fromvers text, tovers text, ext text)`
 
 `install_update_path` provides an update path between two different version of an extension. This enables user to call `ALTER EXTENSION ... UPDATE` for a Trusted-Language Extension.
