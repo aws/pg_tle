@@ -76,6 +76,33 @@ AS $_pgtleie_$
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
+
+-- uninstall an extension for a specific version
+CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text, version text)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS $_pgtleie_$
+  DECLARE
+    sqlpattern text;
+    searchsql  text;
+    dropsql    text;
+    pgtlensp   text := 'EXTSCHEMA';
+    func       text;
+    row_count  bigint;
+  BEGIN
+    sqlpattern := format('%s--%%%s%%.sql', extname, version);
+    searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
+
+    FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
+      dropsql := format('DROP FUNCTION %I()', func);
+      EXECUTE dropsql;
+    END LOOP;
+
+    RETURN TRUE;
+  END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
+
 CREATE FUNCTION EXTSCHEMA.extension_update_paths
 (
   name name,

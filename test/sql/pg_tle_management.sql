@@ -226,6 +226,52 @@ ALTER FUNCTION pgtle.install_extension
 )
 SET search_path TO 'public';
 
+-- test uninstall extensions by a specific version
+SELECT pgtle.install_extension
+(
+ 'new_ext',
+ '1.0',
+ true,
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+SELECT pgtle.install_extension
+(
+ 'new_ext',
+ '1.1',
+ true,
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+SELECT *
+FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
+
+SELECT pgtle.uninstall_extension('new_ext', '1.1');
+
+SELECT *
+FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
+
+SELECT pgtle.uninstall_extension('new_ext');
+
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
