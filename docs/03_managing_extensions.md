@@ -165,6 +165,29 @@ The available features are:
 SELECT pgtle.register_feature('pw_hook', 'passcheck');
 ```
 
+### `pgtle.register_feature_if_not_exists(proc regproc, feature pg_tle_features)`
+
+`register_feature` provides a way to catalog functions that use `pg_tle` features such as [hooks](./04_hooks.md). It returns `true` if the feature is registered, otherwise it returns `false` if the feature is already registered.
+
+The available features are:
+
+* `passcheck`
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `proc`: The name of a stored function to register with a `pg_tle` feature.
+* `feature`: The name of the `pg_tle` feature to register the function with (e.g. `passcheck`)
+
+#### Example
+
+```sql
+SELECT pgtle.register_feature_if_not_exists('pw_hook', 'passcheck');
+```
+
 ### `pgtle.uninstall_extension(extname text)`
 
 `uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension.
@@ -231,6 +254,25 @@ SELECT pgtle.install_update_path('pg_tle_test', '0.1', '0.2',
 
 ```sql
 SELECT pgtle.unregister_feature('pw_hook', 'passcheck');
+```
+
+### `pgtle.unregister_feature_if_exists(proc regproc, feature pg_tle_features)`
+
+`unregister_feature` provides a way to remove functions that were registered to use `pg_tle` features such as [hooks](./04_hooks.md). Returns `true` if it succesfully unregisters the feature, and `false` if it does not because the feature does not exist.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `proc`: The name of a stored function to register with a `pg_tle` feature.
+* `feature`: The name of the `pg_tle` feature to register the function with (e.g. `passcheck`)
+
+#### Example
+
+```sql
+SELECT pgtle.unregister_feature_if_exists('pw_hook', 'passcheck');
 ```
 
 ## Next steps
