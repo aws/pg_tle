@@ -25,6 +25,18 @@ CREATE ROLE dbguest;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_staff;
 
+DO
+$$
+  DECLARE
+    dbname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO dbname;
+    sql := format('GRANT CREATE ON DATABASE %I TO pgtle_staff', dbname);
+    EXECUTE sql;
+  END;
+$$ LANGUAGE plpgsql;
+
 -- create function that can be executed by superuser only
 CREATE OR REPLACE FUNCTION superuser_only()
 RETURNS INT AS $$
@@ -100,6 +112,10 @@ SELECT test123_func();
 -- unprivileged role can not create a trusted extension that requires superuser privilege
 -- fails
 CREATE EXTENSION test_no_switch_to_superuser_when_trusted;
+
+-- unprivileged role can not create extensions that are not trusted
+-- fails
+CREATE EXTENSION test_superuser_only_when_untrusted;
 
 -- switch to dbstaff2
 SET SESSION AUTHORIZATION dbstaff2;
@@ -271,6 +287,17 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
+DO
+$$
+  DECLARE
+    dbname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO dbname;
+    sql := format('REVOKE CREATE ON DATABASE %I FROM pgtle_staff', dbname);
+    EXECUTE sql;
+  END;
+$$ LANGUAGE plpgsql;
 DROP ROLE dbadmin;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;

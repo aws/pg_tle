@@ -1214,7 +1214,21 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 					 ? errhint("Must have CREATE privilege on current database to update this extension.")
 					 : errhint("Must be superuser to update this extension.")));
 	}
+	/*
+	 * An untrusted extension can only be created with pg_tle by a user with pgtle_admin role
+	 */
+	if (tleext && !superuser() && !extension_is_trusted(control))
+	{
+		Oid roleoid = get_role_oid(PG_TLE_ADMIN_ROLENAME, true);
+		Oid userid = GetUserId(); 
 
+		if (!OidIsValid(roleoid) || !OidIsValid(userid) || !is_member_of_role_nosuper(userid, roleoid))
+		ereport(ERROR,
+		        (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+			 errmsg("permission denied to create extension"),
+			 errhint("Must be pgtle_admin to create this extension.")));
+	}
+	
 	filename = get_extension_script_filename(control, from_version, version);
 
 	/*

@@ -21,6 +21,7 @@
 #define PG_TLE_MAGIC					"pg_tle_6ToRc5wJtKWTHWMn"
 #define PG_TLE_NSPNAME				"pgtle"
 #define PG_TLE_EXTNAME				"pg_tle"
+#define PG_TLE_ADMIN_ROLENAME			"pgtle_admin"
 #define PG_TLE_OUTER_STR			"$_pgtle_o_$"
 #define PG_TLE_INNER_STR			"$_pgtle_i_$"
 
