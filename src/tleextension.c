@@ -118,6 +118,21 @@ typedef struct ExtensionVersionInfo
 	struct ExtensionVersionInfo *previous;	/* current best predecessor */
 } ExtensionVersionInfo;
 
+/*
+ * Internal data structure to store arguments for a TLE Extension
+ */
+typedef struct TLEExtensionOptions
+{
+	char			*name; /* name of the extension */
+	char			*version; /* version of the extension */
+	bool			trusted; /* true if the extension is a trusted extension */
+	char			*desc; /* detailed description of the extension */
+	char			*ext; /* contents of the extension */
+	List			*requires; /* list of extension dependencies, i.e. other extensions */
+	/* encoding of ext contents of ext. Input is text, but we convert to int */
+	int			encoding;
+} TLEExtensionOptions;
+
 /* callback to cleanup on abort */
 bool	cb_registered = false;
 
@@ -188,6 +203,7 @@ static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
+static TLEExtensionOptions *parse_tle_extension_args(PG_FUNCTION_ARGS);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -4024,92 +4040,34 @@ Datum
 pg_tle_install_extension(PG_FUNCTION_ARGS)
 {
 	int		spi_rc;
-	char		*extname;
-	char		*extvers;
-	bool		exttrusted;
-	char		*extdesc;
-	char		*sql_str;
-	ArrayType	*extrequires;
-	char		*extencode;
 	char		*ctlname;
 	StringInfo	ctlstr;
 	char		*sqlname;
 	char		*ctlsql;
 	char		*sqlsql;
-	char		*filename;
-	List		*reqlist;
 	ListCell	*req;
 	bool		has_ext = false;
+	TLEExtensionOptions		*options;
 	ExtensionControlFile	*control;
 
+	options = parse_tle_extension_args(fcinfo);
 
-	if (PG_ARGISNULL(0)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"name\" is a required argument.")));
-	}
-
-	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	check_valid_extension_name(extname);
-
-	/*
-	 * Verify that extname does not already exist as
-	 * a standard file-based extension.
-	 */
-	filename = get_extension_control_filename(extname);
-	if (filestat(filename)) {
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				errmsg("control file already exists for the %s extension", extname)));
-	}
-
-	if (PG_ARGISNULL(1)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"version\" is a required argument.")));
-	}
-
-	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
-	check_valid_version_name(extvers);
-
-	if (PG_ARGISNULL(2)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"trusted\" is a required argument.")));
-	}
-
-	exttrusted = PG_GETARG_BOOL(2);
-
-	if (PG_ARGISNULL(3)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"description\" is a required argument.")));
-	}
-
-	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(3));
-
-	if (PG_ARGISNULL(4)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"ext\" is a required argument.")));
-	}
-
-	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(4));
-
-	if (PG_ARGISNULL(5)) {
-		reqlist = NIL;
-	} else {
-		extrequires = PG_GETARG_ARRAYTYPE_P(5);
-		reqlist = textarray_to_stringlist(extrequires);
-	}
+	Assert(options != NULL);
 
 	/*
 	 * Build appropriate function names based on extension name
 	 * and version
 	 */
-	sqlname = psprintf("%s--%s.sql", extname, extvers);
-	ctlname = psprintf("%s.control", extname);
+	sqlname = psprintf("%s--%s.sql", options->name, options->version);
+	ctlname = psprintf("%s.control", options->name);
 
 	/*
 	 * Check if PG_TLE_EXTNAME is in the list of requirements.
 	 * Meanwhile, also build up the "requires" string for the extension control
 	 * file.
 	 */
-	foreach(req, reqlist) {
+	foreach(req, options->requires)
+	{
 		char *reqname = lfirst(req);
 
 		has_ext = has_ext || strncmp(reqname, PG_TLE_EXTNAME, sizeof(PG_TLE_EXTNAME)) == 0;
@@ -4118,40 +4076,29 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 			break;
 	}
 
-	if (!has_ext) {
-		reqlist = lappend(reqlist, PG_TLE_EXTNAME);
+	if (!has_ext)
+	{
+		options->requires = lappend(options->requires, PG_TLE_EXTNAME);
 	}
 
 	/*
 	 * Build up the control file that will be injected into the DB for the TLE.
 	 * We can inherit some of the defaults (relocatable: false, encoding: -1)
 	 */
-	control = build_default_extension_control_file(extname);
+	control = build_default_extension_control_file(options->name);
 	control->superuser = false; // explicitly set to false
-	control->default_version = pstrdup(extvers);
-	control->comment = pstrdup(extdesc);
-	control->trusted = exttrusted;
-	control->requires = reqlist;
-
-	if (!PG_ARGISNULL(6))
-	{
-		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
-		control->encoding = pg_valid_server_encoding(extencode);
-
-		if (control->encoding < 0) {
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("\"%s\" is not a valid encoding name.",
-							extencode)));
-		}
-	}
+	control->default_version = pstrdup(options->version);
+	control->comment = pstrdup(options->desc);
+	control->trusted = options->trusted;
+	control->requires = options->requires;
+	control->encoding = options->encoding;
 
 	ctlstr = build_extension_control_file_string(control);
 
 	/*
 	 * Validate that there are no injections using the dollar-quoted strings
 	 */
-	if (!(validate_tle_sql(ctlstr->data) && validate_tle_sql(sql_str))) {
+	if (!(validate_tle_sql(ctlstr->data) && validate_tle_sql(options->ext))) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("Invalid character in extension definition."),
@@ -4160,7 +4107,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
 
-	/* 
+	/*
 	 * Create the control and sql string returning function
 	 *
 	 * NOTE: we used to build a CREATE OR REPLACE statement here
@@ -4183,7 +4130,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		"SELECT %s%s%s%s LANGUAGE SQL",
 			PG_TLE_NSPNAME, quote_identifier(sqlname),
 			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
-			sql_str,
+			options->ext,
 			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 
 	/* flag that we are manipulating pg_tle artifacts */
@@ -4205,14 +4152,14 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	  /* create the control function */
 	  spi_rc = SPI_exec(ctlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
-	    elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
+	    elog(ERROR, "failed to install pg_tle extension, %s, control string", control->name);
 	    PG_RETURN_BOOL(false);
 	  }
 
 	  /* create the sql function */
 	  spi_rc = SPI_exec(sqlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
-	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
+	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", control->name);
 	    PG_RETURN_BOOL(false);
 	  }
 	}
@@ -4227,7 +4174,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	    ereport(ERROR,
 		    (errcode(ERRCODE_DUPLICATE_OBJECT),
-		     errmsg("Extension '%s' already installed.", extname)));
+		     errmsg("Extension '%s' already installed.", control->name)));
 	  }
 	  else
 	  {
@@ -4331,6 +4278,92 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 	UNSET_TLEART;
 
 	PG_RETURN_BOOL(true);
+}
+
+/*
+ * parse_tle_extension_args accepts arguments from the "install_extension" and
+ * "update_extension" functions and parses them so they can be processed for
+ * creating or modifying a TLE extension.
+ */
+static TLEExtensionOptions *parse_tle_extension_args(PG_FUNCTION_ARGS)
+{
+	ArrayType		*extrequires;
+	char		*filename;
+	char		*extencode;
+	TLEExtensionOptions		*options;
+
+	options = (TLEExtensionOptions *) palloc0(sizeof(TLEExtensionOptions));
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"name\" is a required argument.")));
+	}
+
+	options->name = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(options->name);
+
+	/*
+	 * Verify that extname does not already exist as
+	 * a standard file-based extension.
+	 */
+	filename = get_extension_control_filename(options->name);
+	if (filestat(filename)) {
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("control file already exists for the %s extension", options->name)));
+	}
+
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"version\" is a required argument.")));
+	}
+
+	options->version = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
+	check_valid_version_name(options->version);
+
+	if (PG_ARGISNULL(2)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"trusted\" is a required argument.")));
+	}
+
+	options->trusted = PG_GETARG_BOOL(2);
+
+	if (PG_ARGISNULL(3)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"description\" is a required argument.")));
+	}
+
+	options->desc = text_to_cstring(PG_GETARG_TEXT_PP(3));
+
+	if (PG_ARGISNULL(4)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"ext\" is a required argument.")));
+	}
+
+	options->ext = text_to_cstring(PG_GETARG_TEXT_PP(4));
+
+	if (PG_ARGISNULL(5)) {
+		options->requires = NIL;
+	} else {
+		extrequires = PG_GETARG_ARRAYTYPE_P(5);
+		options->requires = textarray_to_stringlist(extrequires);
+	}
+
+	options->encoding = -1;
+	if (!PG_ARGISNULL(6))
+	{
+		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
+		options->encoding = pg_valid_server_encoding(extencode);
+
+		if (options->encoding < 0)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("\"%s\" is not a valid encoding name.",
+							extencode)));
+		}
+	}
+
+	return options;
 }
 
 /*
