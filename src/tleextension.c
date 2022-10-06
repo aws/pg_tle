@@ -4227,7 +4227,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	    ereport(ERROR,
 		    (errcode(ERRCODE_DUPLICATE_OBJECT),
-		     errmsg("Extension '%s' already installed", extname)));
+		     errmsg("Extension '%s' already installed.", extname)));
 	  }
 	  else
 	  {
