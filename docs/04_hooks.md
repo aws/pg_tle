@@ -12,13 +12,13 @@ Note that some hooks are available globally across a PostgreSQL cluster (e.g. `c
 
 All hooks need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
 
-You can register a `pg_tle` hook using the `pgtle.pg_tle_feature_info_sql_insert` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
+You can register a `pg_tle` hook using the `pgtle.register_feature` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
 
 ```sql
-SELECT pgtle.pg_tle_feature_info_sql_insert('my_password_check_rules', 'passcheck');
+SELECT pgtle.register_feature('my_password_check_rules', 'passcheck');
 ```
 
-You can register hooks with `pgtle.pg_tle_feature_info_sql_insert` independently of using it with a `pg_tle` extension. However, we recommend using a `pg_tle` extension to manage your hook code.
+You can register hooks with `pgtle.register_feature` independently of using it with a `pg_tle` extension. However, we recommend using a `pg_tle` extension to manage your hook code.
 
 If you have the `pgle_staff` or `pgtle_admin` roles, you can view the registered hooks in the `pgtle.feature_info` table, e.g.:
 
@@ -26,13 +26,10 @@ If you have the `pgle_staff` or `pgtle_admin` roles, you can view the registered
 SELECT * FROM pgtle.feature_info;
 ```
 
-To unregister a hook, you will need to remove it manually from the `pgtle.feature_info` table. A role that is a member of `pgtle_admin` can do this. For example, if you have a `passcheck` hook named `my_password_check_rules`, you can run the following query to unregister it:
+To unregister a hook, you can call the `pgtle.unregister_feature` function. For example, if you have a `passcheck` hook named `my_password_check_rules`, you can run the following query to unregister it:
 
 ```sql
-DELETE FROM pgtle.feature_info
-WHERE
-  feature = 'passcheck' AND
-  proname = 'my_password_check_rules';
+SELECT pgtle.unregister_feature('my_password_check_rules', 'passcheck');
 ```
 
 ## Hooks
@@ -124,7 +121,7 @@ $_pgtle_$
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
-  SELECT pgtle.pg_tle_feature_info_sql_insert('password_check.passcheck_hook', 'passcheck');
+  SELECT pgtle.register_feature('password_check.passcheck_hook', 'passcheck');
 $_pgtle_$
 );
 ```
