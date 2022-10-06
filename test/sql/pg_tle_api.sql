@@ -62,6 +62,8 @@ ALTER ROLE testuser with password '123456789';
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_nums', '');
 -- Expect to fail cause no schema qualified function found
 ALTER ROLE testuser with password '123456789';
+-- test insert of duplicate hook and fail
+SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_length_greater_than_8', 'passcheck');
 TRUNCATE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
