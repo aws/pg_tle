@@ -202,7 +202,7 @@ CREATE TABLE EXTSCHEMA.feature_info(
 	proname text,
 	obj_identity text,
   PRIMARY KEY(feature, schema_name, proname));
-  
+
 SELECT pg_catalog.pg_extension_config_dump('EXTSCHEMA.feature_info', '');
 
 GRANT SELECT on EXTSCHEMA.feature_info TO PUBLIC;
@@ -238,6 +238,57 @@ BEGIN
 END;
 $$;
 
+-- Helper function to delete from table
+CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_delete(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+	pg_proc_relid oid;
+	proc_oid oid;
+	schema_name text;
+	nspoid oid;
+	proc_name text;
+	proc_schema_name text;
+	ident text;
+	row_count bigint;
+BEGIN
+	SELECT oid into nspoid
+  FROM pg_catalog.pg_namespace
+	WHERE nspname = 'pg_catalog';
+
+	SELECT oid into pg_proc_relid
+  FROM pg_catalog.pg_class
+	WHERE
+		relname = 'pg_proc' AND
+		relnamespace = nspoid;
+
+	SELECT
+		pg_namespace.nspname,
+		pg_proc.oid,
+		pg_proc.proname
+  INTO
+		proc_schema_name,
+		proc_oid,
+		proc_name
+	FROM pg_catalog.pg_namespace, pg_catalog.pg_proc
+	WHERE
+		pg_proc.oid = proc AND
+		pg_proc.pronamespace = pg_namespace.oid;
+
+	DELETE FROM EXTSCHEMA.feature_info
+	WHERE
+		feature_info.feature = $2 AND
+		feature_info.schema_name = proc_schema_name AND
+		feature_info.proname = proc_name;
+
+	GET DIAGNOSTICS row_count = ROW_COUNT;
+
+	IF ROW_COUNT = 0 THEN
+    RAISE EXCEPTION 'Could not unregister "%": does not exist.', $1;
+  END IF;
+END;
+$$;
 
 -- Prevent function from being dropped if referenced in table
 CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop()

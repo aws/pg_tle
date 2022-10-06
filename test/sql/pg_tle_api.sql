@@ -64,7 +64,12 @@ INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_num
 ALTER ROLE testuser with password '123456789';
 -- test insert of duplicate hook and fail
 SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_length_greater_than_8', 'passcheck');
-TRUNCATE pgtle.feature_info;
+-- unregister hooks
+SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_only_nums', 'passcheck');
+SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_length_greater_than_8', 'passcheck');
+-- fail on unregistering a hook that does not exist
+SELECT pgtle.pg_tle_feature_info_sql_delete('password_check_length_greater_than_8', 'passcheck');
+TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
 DROP ROLE testuser;
