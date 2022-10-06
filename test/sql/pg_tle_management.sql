@@ -239,18 +239,6 @@ $_pgtle_$
 $_pgtle_$
 );
 
-SELECT pgtle.install_extension
-(
- 'new_ext',
- '1.1',
- true,
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION fun()
-  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
-$_pgtle_$
-);
-
 SELECT pgtle.install_update_path
 (
  'new_ext',

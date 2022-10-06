@@ -188,11 +188,7 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
- install_extension 
--------------------
- t
-(1 row)
-
+ERROR:  Extension 'test123' already installed.
 SELECT pgtle.install_update_path
 (
  'test123',
@@ -237,7 +233,7 @@ SELECT * FROM pgtle.extension_update_paths('test123');
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
                    name                   | default_version |      comment       
 ------------------------------------------+-----------------+--------------------
- test123                                  | 1.1             | Test TLE Functions
+ test123                                  | 1.0             | Test TLE Functions
  test_no_switch_to_superuser_when_trusted | 1.0             | Test TLE Functions
  test_superuser_only_when_untrusted       | 1.0             | Test TLE Functions
 (3 rows)
@@ -313,22 +309,6 @@ SELECT pgtle.install_extension
 $_pgtle_$
   CREATE FUNCTION fun()
   RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
-$_pgtle_$
-);
- install_extension 
--------------------
- t
-(1 row)
-
-SELECT pgtle.install_extension
-(
- 'new_ext',
- '1.1',
- true,
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION fun()
-  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
 $_pgtle_$
 );
  install_extension 
