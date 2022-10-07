@@ -10,7 +10,7 @@ jobs:
       run:  sudo apt purge -y postgresql-14 postgresql-client-14 postgresql-client-common postgresql-common libpq-dev
     - name: Install build dependencies for postgresql
       run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build
-    - name: build and install postgresql 13.3
+    - name: build and install postgresql 14.5
       run:  >
         curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz &&
         tar xf postgresql-14.5.tar.gz &&
@@ -29,7 +29,8 @@ jobs:
     - name: compile pg_tle extension
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
-        cd pg_tle &&
+        pwd &&
+        ls -l &&
         make
     - name: install pg_tle extension
       run:  >
