@@ -1186,8 +1186,8 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	 * here so that the control flags are correctly associated with the right
 	 * script(s) if they happen to be set in secondary control files.
 	 *
-	 * NOTE: TLE extensions **do not** require superuser. We can consider just
-	 * if (false) -ing this block, just to keep it to compare to upstream.
+	* NOTE: TLE extensions **do not** require superuser. We can consider just
+	* if (false) -ing this block, just to keep it to compare to upstream.
 	 */
 	if (!tleext && control->superuser && !superuser())
 	{
