@@ -13,17 +13,15 @@ GRANT pgtle_admin TO dbadmin;
 
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT pgtle_staff TO dbstaff;
 
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT pgtle_staff TO dbstaff2;
 
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
 
 -- create function that can be executed by superuser only
 CREATE OR REPLACE FUNCTION superuser_only()
@@ -264,13 +262,12 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE dbadmin;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
-DROP ROLE pgtle_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE pgtle_admin;
