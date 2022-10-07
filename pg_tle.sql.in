@@ -21,7 +21,6 @@ CREATE FUNCTION EXTSCHEMA.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
   requires text[] DEFAULT NULL,
@@ -144,7 +143,6 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
   requires text[],
@@ -184,7 +182,6 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
   requires text[],
