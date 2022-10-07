@@ -43,6 +43,16 @@ SET search_path TO 'EXTSCHEMA'
 AS 'MODULE_PATHNAME', 'pg_tle_install_update_path'
 LANGUAGE C;
 
+CREATE FUNCTION EXTSCHEMA.set_default_version
+(
+  name text,
+  version text
+)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS 'MODULE_PATHNAME', 'pg_tle_set_default_version'
+LANGUAGE C;
+
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text)
 RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
@@ -157,6 +167,12 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
   ext text
 ) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.set_default_version
+(
+  name text,
+  version text
+) FROM PUBLIC;
+
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
 (
   extname text
@@ -194,6 +210,12 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
   fromvers text,
   tovers text,
   ext text
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.set_default_version
+(
+  name text,
+  version text
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
