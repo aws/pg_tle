@@ -45,7 +45,6 @@ SELECT pgtle.install_extension
 (
  'pg_distance',
  '0.1',
-  TRUE,
   'Distance functions for two points',
 $_pg_tle_$
     CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)

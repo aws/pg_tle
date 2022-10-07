@@ -71,7 +71,6 @@ Controls whether a `passcheck` hook is enabled. There are three settings:
 SELECT pgtle.install_extension (
   'my_password_check_rules',
   '1.0',
-  TRUE,
   'Do not let users use the 10 most commonly used passwords',
 $_pgtle_$
   CREATE SCHEMA password_check;

@@ -19,7 +19,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
 $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
@@ -37,7 +36,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  'hax',
 $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
   CREATE OR REPLACE FUNCTION basic_func()
@@ -61,7 +59,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
 $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
@@ -76,7 +73,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  'hax',
 $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
   CREATE OR REPLACE FUNCTION basic_func()
@@ -103,7 +99,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
 $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
@@ -118,7 +113,6 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  'hax',
 $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
   CREATE OR REPLACE FUNCTION basic_func()
