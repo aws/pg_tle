@@ -26,6 +26,7 @@
 #include "utils/timestamp.h"
 #include "utils/fmgrprotos.h"
 #include "miscadmin.h"
+#include "tleextension.h"
 
 void		passcheck_init(void);
 
@@ -39,7 +40,7 @@ static void passcheck_check_password_hook(const char *username, const char *shad
  *  require: If the feature is being called in the specific database then:
  *    - the extension must be installed in the database
  *    - at least one feature entry must exist in the table
- *    - The user who is altering the password must be able to run SELECT against bc.feature_info
+ *    - The user who is altering the password must be able to run SELECT against pgtle.feature_info
  *    - And have the ability to execute the referenced function
  *    - otherwise error.
  *  on: If the feature is being called in the specific database and the extension
@@ -70,10 +71,9 @@ static const struct config_enum_entry feature_mode_options[] = {
 static int	enable_passcheck_feature = FEATURE_OFF;
 
 
-/*  TODO: Update with proper name later */
-static const char *extension_name = "uni_api";
+static const char *extension_name = PG_TLE_EXTNAME;
 static const char *password_check_feature = "passcheck";
-static const char *schema_name = "bc";
+static const char *schema_name = PG_TLE_NSPNAME;
 static const char *feature_table_name = "feature_info";
 
 /*  This should match crypt.h */
@@ -89,7 +89,7 @@ passcheck_init(void)
 	next_check_password_hook = check_password_hook;
 	check_password_hook = passcheck_check_password_hook;
 
-	DefineCustomEnumVariable("bc.enable_password_check",
+	DefineCustomEnumVariable("pgtle.enable_password_check",
 							 "Sets the behavior for interacting with passcheck feature.",
 							 NULL,
 							 &enable_passcheck_feature,
@@ -125,7 +125,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("bc.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
+				 errmsg("pg_tle.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
 						extension_name, enable_passcheck_feature),
 				 errhidestmt(true)));
 	}
@@ -146,21 +146,21 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		if (ret != SPI_OK_CONNECT)
 			ereport(ERROR,
 					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("bc.enable_password_check feature was not able to connect to the database %s",
+					 errmsg("pg_tle.enable_password_check feature was not able to connect to the database %s",
 							get_database_name(MyDatabaseId))));
 
 		/*
 		 * Assume function accepts the proper argument, it'll error when we
 		 * call out to SPI_exec if it doesn't anyway
 		 */
-		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature = '%s'",
+		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature = '%s' ORDER BY proname",
 						 schema_name, feature_table_name, password_check_feature);
 
 		ret = SPI_execute(query, true, 0);
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
-					errmsg("Unable to query bc.feature_info"));
+					errmsg("Unable to query pg_tle.feature_info"));
 
 		if (SPI_processed <= 0)
 		{
@@ -172,7 +172,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 			ereport(ERROR,
 					errcode(ERRCODE_DATA_EXCEPTION),
-					errmsg("bc.enable_password_check feature is set to require, however no entries exist in bc.feature_info with the feature %s",
+					errmsg("pg_tle.enable_password_check feature is set to require, however no entries exist in pg_tle.feature_info with the feature %s",
 						   password_check_feature));
 		}
 
@@ -195,7 +195,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 				check_valid_name(res);
 
-				snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s%s",
+				snprintf(buf + strnlen(buf, 256), sizeof(buf) - strnlen(buf, 256), "%s%s",
 						 res,
 						 (i == tupdesc->natts) ? "" : ".");
 			}

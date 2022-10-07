@@ -14,15 +14,25 @@
  * limitations under the License.
  */
 #include "postgres.h"
+
+#include "tleextension.h"
 #include "passcheck.h"
 #include "fmgr.h"
 
 PG_MODULE_MAGIC;
 
 void		_PG_init(void);
+void		_PG_fini(void);
 
 void
 _PG_init(void)
 {
+    pg_tle_init();
 	passcheck_init();
+}
+
+void
+_PG_fini(void)
+{
+    pg_tle_fini();
 }

@@ -1,0 +1,6 @@
+# EXTNAME extension
+comment = 'Trusted-Language Extensions for PostgreSQL'
+default_version = 'EXTVERSION'
+module_pathname = '$libdir/EXTNAME'
+relocatable = false
+schema = 'SCHEMA'
