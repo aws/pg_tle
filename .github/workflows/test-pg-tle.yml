@@ -14,19 +14,19 @@ jobs:
       run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build
     - name: build and install postgresql 14.5
       run:  >
-        cd ~
-          && curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz
-          && tar xf postgresql-14.5.tar.gz
-          && cd postgresql-14.5
-          && ./configure
-          && make
-          && sudo make install
+        cd ~ &&
+        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz &&
+        tar xf postgresql-14.5.tar.gz &&
+        cd postgresql-14.5 &&
+        ./configure &&
+        make &&
+        sudo make install
     - name: initialize postgresql database
       run:  >
-        mkdir ~/data
-          && chmod -R 700 ~/data
-          && initdb -D ~/data
-          && pg_ctl -D ~/data start
+        mkdir ~/data &&
+        chmod -R 700 ~/data &&
+        initdb -D ~/data &&
+        pg_ctl -D ~/data start
     - uses: actions/checkout@v3
     - name: compile pg_tle extension
       run:  make
