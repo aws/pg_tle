@@ -4160,16 +4160,26 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
 
-	/* Create the control and sql string returning function */
+	/* 
+	 * Create the control and sql string returning function
+	 *
+	 * NOTE: we used to build a CREATE OR REPLACE statement here
+	 *       but that would silently replace the control-string
+	 *       function and the sql-string function. We've removed
+	 *       the "OR REPLACE" clause because we now assume that
+	 *       a "duplicate function" error means that the extension
+	 *       has already been installed.
+	 */
+
 	ctlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
 			PG_TLE_NSPNAME, quote_identifier(ctlname),
 			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
 			ctlstr->data,
 			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 	sqlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
 			PG_TLE_NSPNAME, quote_identifier(sqlname),
 			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
@@ -4184,19 +4194,47 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 	}
 
-	/* create the control function */
-	spi_rc = SPI_exec(ctlsql, 0);
-	if (spi_rc != SPI_OK_UTILITY) {
-		elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
-		PG_RETURN_BOOL(false);
-	}
+	/*
+	 * Try to create the control-string function and the
+	 * sql-string function - if either fails because of
+	 * ERRCODE_DUPLICATE_FUNCTION, we convert the error
+	 * to a more user-friendly form.
+	 */
+	PG_TRY();
+	{
+	  /* create the control function */
+	  spi_rc = SPI_exec(ctlsql, 0);
+	  if (spi_rc != SPI_OK_UTILITY) {
+	    elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
+	    PG_RETURN_BOOL(false);
+	  }
 
-	/* create the sql function */
-	spi_rc = SPI_exec(sqlsql, 0);
-	if (spi_rc != SPI_OK_UTILITY) {
-		elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
-		PG_RETURN_BOOL(false);
+	  /* create the sql function */
+	  spi_rc = SPI_exec(sqlsql, 0);
+	  if (spi_rc != SPI_OK_UTILITY) {
+	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
+	    PG_RETURN_BOOL(false);
+	  }
 	}
+	PG_CATCH();
+	{
+	  ErrorData  *errdata = CopyErrorData();
+
+	  if (errdata->sqlerrcode == ERRCODE_DUPLICATE_FUNCTION)
+	  {
+	    FlushErrorState();
+	    FreeErrorData(errdata);
+
+	    ereport(ERROR,
+		    (errcode(ERRCODE_DUPLICATE_OBJECT),
+		     errmsg("Extension '%s' already installed.", extname)));
+	  }
+	  else
+	  {
+	    PG_RE_THROW();
+	  }
+	}
+	PG_END_TRY();
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");

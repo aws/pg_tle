@@ -40,7 +40,7 @@ END;
 $$
 LANGUAGE PLPGSQL;
 
-SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
@@ -55,14 +55,27 @@ RAISE EXCEPTION 'Passwords can only have numbers';
 END;
 $$
 LANGUAGE PLPGSQL;
-SELECT pgtle.pg_tle_feature_info_sql_insert('password_check_only_nums', 'passcheck');
+SELECT pgtle.register_feature('password_check_only_nums', 'passcheck');
 -- Test both functions are called
 ALTER ROLE testuser with password 'passwords';
 ALTER ROLE testuser with password '123456789';
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_nums', '');
 -- Expect to fail cause no schema qualified function found
 ALTER ROLE testuser with password '123456789';
-TRUNCATE pgtle.feature_info;
+-- test insert of duplicate hook and fail
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+-- unregister hooks
+SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+-- fail on unregistering a hook that does not exist
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+-- try the register if not exists
+SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
+-- try the unregister if exists
+SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
+TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
 DROP ROLE testuser;

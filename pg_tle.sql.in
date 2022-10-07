@@ -76,6 +76,33 @@ AS $_pgtleie_$
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
+
+-- uninstall an extension for a specific version
+CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text, version text)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS $_pgtleie_$
+  DECLARE
+    sqlpattern text;
+    searchsql  text;
+    dropsql    text;
+    pgtlensp   text := 'EXTSCHEMA';
+    func       text;
+    row_count  bigint;
+  BEGIN
+    sqlpattern := format('%s--%%%s%%.sql', extname, version);
+    searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
+
+    FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
+      dropsql := format('DROP FUNCTION %I()', func);
+      EXECUTE dropsql;
+    END LOOP;
+
+    RETURN TRUE;
+  END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
+
 CREATE FUNCTION EXTSCHEMA.extension_update_paths
 (
   name name,
@@ -200,14 +227,15 @@ CREATE TABLE EXTSCHEMA.feature_info(
 	feature EXTSCHEMA.pg_tle_features,
 	schema_name text,
 	proname text,
-	obj_identity text);
+	obj_identity text,
+  PRIMARY KEY(feature, schema_name, proname));
 
-CREATE INDEX feature_info_idx ON EXTSCHEMA.feature_info(feature);
+SELECT pg_catalog.pg_extension_config_dump('EXTSCHEMA.feature_info', '');
 
 GRANT SELECT on EXTSCHEMA.feature_info TO PUBLIC;
 
--- Helper function to insert into table
-CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_insert(proc regproc, feature EXTSCHEMA.pg_tle_features)
+-- Helper function to register features in the feature_info table
+CREATE FUNCTION EXTSCHEMA.register_feature(proc regproc, feature EXTSCHEMA.pg_tle_features)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
@@ -237,6 +265,87 @@ BEGIN
 END;
 $$;
 
+-- Helper function to softly fail if we try to register a function that already exists
+CREATE FUNCTION EXTSCHEMA.register_feature_if_not_exists(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM EXTSCHEMA.register_feature(proc, feature);
+  RETURN TRUE;
+EXCEPTION
+  -- only catch the unique violation. let all other exceptions pass through.
+  WHEN unique_violation THEN
+    RETURN FALSE;
+END;
+$$;
+
+-- Helper function to delete from table
+CREATE FUNCTION EXTSCHEMA.unregister_feature(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+	pg_proc_relid oid;
+	proc_oid oid;
+	schema_name text;
+	nspoid oid;
+	proc_name text;
+	proc_schema_name text;
+	ident text;
+	row_count bigint;
+BEGIN
+	SELECT oid into nspoid
+  FROM pg_catalog.pg_namespace
+	WHERE nspname = 'pg_catalog';
+
+	SELECT oid into pg_proc_relid
+  FROM pg_catalog.pg_class
+	WHERE
+		relname = 'pg_proc' AND
+		relnamespace = nspoid;
+
+	SELECT
+		pg_namespace.nspname,
+		pg_proc.oid,
+		pg_proc.proname
+  INTO
+		proc_schema_name,
+		proc_oid,
+		proc_name
+	FROM pg_catalog.pg_namespace, pg_catalog.pg_proc
+	WHERE
+		pg_proc.oid = proc AND
+		pg_proc.pronamespace = pg_namespace.oid;
+
+	DELETE FROM EXTSCHEMA.feature_info
+	WHERE
+		feature_info.feature = $2 AND
+		feature_info.schema_name = proc_schema_name AND
+		feature_info.proname = proc_name;
+
+	GET DIAGNOSTICS row_count = ROW_COUNT;
+
+	IF ROW_COUNT = 0 THEN
+    RAISE EXCEPTION 'Could not unregister "%": does not exist.', $1 USING ERRCODE = 'no_data_found';
+  END IF;
+END;
+$$;
+
+-- Helper to softly fail if we try to unregister a function that does not exist
+CREATE FUNCTION EXTSCHEMA.unregister_feature_if_exists(proc regproc, feature EXTSCHEMA.pg_tle_features)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM EXTSCHEMA.unregister_feature(proc, feature);
+  RETURN TRUE;
+EXCEPTION
+  -- only catch the error that no data was found
+  WHEN no_data_found THEN
+    RETURN FALSE;
+END;
+$$;
 
 -- Prevent function from being dropped if referenced in table
 CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop()
