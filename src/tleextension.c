@@ -896,15 +896,11 @@ build_extension_control_file_string(ExtensionControlFile *control)
 	appendStringInfo(ctlstr, "comment = %s\n",
 		quote_literal_cstr(control->comment));
 
-	/* relocatable and superuser values are forced to be false */
+	/* relocatable, superuser, and trusted values are forced to be false */
 	appendStringInfo(ctlstr,
 		"relocatable = false\n"
-		"superuser = false\n");
-
-	if (control->trusted)
-		appendStringInfo(ctlstr, "trusted = true\n");
-	else
-		appendStringInfo(ctlstr, "trusted = false\n");
+		"superuser = false\n"
+		"trusted = false\n");
 
 	if (control->encoding >= 0) {
 		appendStringInfo(ctlstr,
@@ -1189,12 +1185,14 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	 * Enforce superuser-ness if appropriate.  We postpone these checks until
 	 * here so that the control flags are correctly associated with the right
 	 * script(s) if they happen to be set in secondary control files.
+	 *
+	 * NOTE: TLE extensions **do not** require superuser. We can consider just
+	 * if (false) -ing this block, just to keep it to compare to upstream.
 	 */
-	if (control->superuser && !superuser())
+	if (!tleext && control->superuser && !superuser())
 	{
 		if (extension_is_trusted(control))
 		{
-		        if (!tleext)
 				switch_to_superuser = true;
 		}
 		else if (from_version == NULL)
@@ -4026,7 +4024,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	int		spi_rc;
 	char		*extname;
 	char		*extvers;
-	bool		exttrusted;
 	char		*extdesc;
 	char		*sql_str;
 	ArrayType	*extrequires;
@@ -4071,29 +4068,22 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(2)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"trusted\" is a required argument.")));
-	}
-
-	exttrusted = PG_GETARG_BOOL(2);
-
-	if (PG_ARGISNULL(3)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 			errmsg("\"description\" is a required argument.")));
 	}
 
-	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(3));
+	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(2));
 
-	if (PG_ARGISNULL(4)) {
+	if (PG_ARGISNULL(3)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 			errmsg("\"ext\" is a required argument.")));
 	}
 
-	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(4));
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
 
-	if (PG_ARGISNULL(5)) {
+	if (PG_ARGISNULL(4)) {
 		reqlist = NIL;
 	} else {
-		extrequires = PG_GETARG_ARRAYTYPE_P(5);
+		extrequires = PG_GETARG_ARRAYTYPE_P(4);
 		reqlist = textarray_to_stringlist(extrequires);
 	}
 
@@ -4124,18 +4114,20 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	/*
 	 * Build up the control file that will be injected into the DB for the TLE.
-	 * We can inherit some of the defaults (relocatable: false, encoding: -1)
+	 * We can inherit some of the defaults (encoding: -1)
+	 * In case some defaults change, we will ensure we explicitly set them here.
 	 */
 	control = build_default_extension_control_file(extname);
+	control->relocatable = false; // explicitly set to false
 	control->superuser = false; // explicitly set to false
+	control->trusted = false; // explicitly set to false;
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
-	control->trusted = exttrusted;
 	control->requires = reqlist;
 
-	if (!PG_ARGISNULL(6))
+	if (!PG_ARGISNULL(5))
 	{
-		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
+		extencode = text_to_cstring(PG_GETARG_TEXT_PP(5));
 		control->encoding = pg_valid_server_encoding(extencode);
 
 		if (control->encoding < 0) {
@@ -4160,7 +4152,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
 
-	/* 
+	/*
 	 * Create the control and sql string returning function
 	 *
 	 * NOTE: we used to build a CREATE OR REPLACE statement here

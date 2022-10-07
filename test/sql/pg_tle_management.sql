@@ -44,7 +44,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -59,7 +58,6 @@ SELECT pgtle.install_extension
 (
  'test_superuser_only_when_untrusted',
  '1.0',
- false,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
@@ -75,7 +73,6 @@ SELECT pgtle.install_extension
 (
  'test_no_switch_to_superuser_when_trusted',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   SELECT superuser_only();
@@ -130,7 +127,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -201,7 +197,6 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -218,7 +213,6 @@ ALTER FUNCTION pgtle.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
   requires text[],
@@ -231,7 +225,6 @@ SELECT pgtle.install_extension
 (
  'new_ext',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE FUNCTION fun()

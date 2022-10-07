@@ -38,7 +38,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -57,7 +56,6 @@ SELECT pgtle.install_extension
 (
  'test_superuser_only_when_untrusted',
  '1.0',
- false,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
@@ -77,7 +75,6 @@ SELECT pgtle.install_extension
 (
  'test_no_switch_to_superuser_when_trusted',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   SELECT superuser_only();
@@ -173,7 +170,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -241,9 +237,9 @@ SELECT * FROM pgtle.available_extensions() ORDER BY name;
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
                    name                   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ------------------------------------------+---------+-----------+---------+-------------+--------+----------+--------------------
- test123                                  | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- test123                                  | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- test_no_switch_to_superuser_when_trusted | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test123                                  | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ test123                                  | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ test_no_switch_to_superuser_when_trusted | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
  test_superuser_only_when_untrusted       | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (4 rows)
 
@@ -274,7 +270,6 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -291,7 +286,6 @@ ALTER FUNCTION pgtle.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
   requires text[],
@@ -304,7 +298,6 @@ SELECT pgtle.install_extension
 (
  'new_ext',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE FUNCTION fun()
@@ -335,8 +328,8 @@ SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ---------+---------+-----------+---------+-------------+--------+----------+--------------------
- new_ext | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- new_ext | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (2 rows)
 
 SELECT pgtle.uninstall_extension('new_ext', '1.1');
@@ -349,7 +342,7 @@ SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ---------+---------+-----------+---------+-------------+--------+----------+--------------------
- new_ext | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
 
 SELECT pgtle.uninstall_extension('new_ext');

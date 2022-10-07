@@ -102,7 +102,7 @@ SELECT * FROM pgtle.available_extension_versions();
 SELECT * FROM pgtle.extension_update_paths('pg_tle_test');
 ```
 
-### `pgtle.install_extension(name text, version text, trusted boolean, description text, ext text, requires text[] DEFAULT NULL::text[], encoding text DEFAULT NULL::text)`
+### `pgtle.install_extension(name text, version text, description text, ext text, requires text[] DEFAULT NULL::text[], encoding text DEFAULT NULL::text)`
 
 `install_extension` lets users install a `pg_tle`-compatible extensions and make them available within a database.
 
@@ -116,7 +116,6 @@ This functions returns `'OK'` on success and `NULL` on error.
 
 * `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
 * `version`: The version of the extension.
-* `trusted`: If set to true, allows non-superusers with the `pgtle_staff` privilege to use `CREATE EXTENSION` for this Trusted-Language Extension.
 * `description`: A detailed description about the extension. This is displayed in the `comment` field in `pgtle.available_extensions()`.
 * `ext`: The contents of the extension. This contains objects such as functions.
 * `requires`: An optional parameter that specifies dependencies for this extension. `pg_tle` is automatically added as a dependency.
@@ -130,7 +129,6 @@ Many of the above values are part of the [extension control file](https://www.po
 SELECT pgtle.install_extension(
  'pg_tle_test',
  '0.1',
- TRUE,
  'My first pg_tle extension',
 $_pgtle_$
   CREATE FUNCTION my_test()
