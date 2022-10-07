@@ -6,7 +6,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - run:  echo "/usr/local/pgsql/bin" >> $GITHUB_PATH
+    - name: Append /usr/local/pgsql/bin to PATH
+      run:  echo "/usr/local/pgsql/bin" >> $GITHUB_PATH
     - name: Uninstall Ubuntu's postgresql installation
       run:  sudo apt purge -y postgresql-14 postgresql-client-14 postgresql-client-common postgresql-common libpq-dev
     - name: Install build dependencies for postgresql
