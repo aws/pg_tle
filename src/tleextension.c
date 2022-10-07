@@ -4420,6 +4420,18 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	ctlname = psprintf("%s.control", extname);
 	ctlstr = build_extension_control_file_string(control);
 
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(ctlstr->data))) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("Invalid character in extension definition."),
+				 errdetail("Use of string delimiters %s and %s are foribbden in extension definitions.",
+			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
+	}
+
 	ctlsql = psprintf(
 		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
