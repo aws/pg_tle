@@ -6,6 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - run:  echo "/usr/local/pgsql/bin" >> $GITHUB_PATH
     - name: Uninstall Ubuntu's postgresql installation
       run:  sudo apt purge -y postgresql-14 postgresql-client-14 postgresql-client-common postgresql-common libpq-dev
     - name: Install build dependencies for postgresql
@@ -20,7 +21,6 @@ jobs:
         sudo make install
     - name: initialize postgresql database
       run:  >
-        export PATH=/usr/local/pgsql/bin:$PATH &&
         mkdir ~/data &&
         chmod -R 700 ~/data &&
         initdb -D ~/data &&
@@ -28,20 +28,16 @@ jobs:
     - uses: actions/checkout@v3
     - name: compile pg_tle extension
       run:  >
-        export PATH=/usr/local/pgsql/bin:$PATH &&
         make
     - name: install pg_tle extension
       run:  >
-        export PATH=/usr/local/pgsql/bin:$PATH &&
         sudo PATH=$PATH make install
     - name: add pg_tle to shared_preload_libraries
       run:  >
-        export PATH=/usr/local/pgsql/bin:$PATH &&
         echo "shared_preload_libraries = 'pg_tle'" >> ~/data/postgresql.conf &&
         pg_ctl -D ~/data restart
     - name: run pg_tle regression tests
       run:  >
-        export PATH=/usr/local/pgsql/bin:$PATH &&
-        cd pg_tle &&
-        make installcheck &&
+        make installcheck
+    - name: print regression.diffs
         [ -f regression.diffs ] && cat regression.diffs
