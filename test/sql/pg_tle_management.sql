@@ -22,6 +22,16 @@ CREATE ROLE dbguest;
 
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('GRANT CREATE ON DATABASE %I TO dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 
 -- create function that can be executed by superuser only
 CREATE OR REPLACE FUNCTION superuser_only()
@@ -265,6 +275,16 @@ DROP FUNCTION superuser_only();
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE dbadmin;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
