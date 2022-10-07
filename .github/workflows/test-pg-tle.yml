@@ -1,0 +1,49 @@
+name: test pg_tle
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Uninstall Ubuntu's postgresql installation
+      run:  sudo apt purge -y postgresql-14 postgresql-client-14 postgresql-client-common postgresql-common libpq-dev
+    - name: Install build dependencies for postgresql
+      run:  sudo apt-get install -y gcc python g++ libreadline-dev make ninja-build
+    - name: build and install postgresql 13.3
+      run:  >
+        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz &&
+        tar xf postgresql-14.5.tar.gz &&
+        cd postgresql-14.5 &&
+        ./configure &&
+        make &&
+        sudo make install
+    - name: initialize postgresql database
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        mkdir ~/data &&
+        chmod -R 700 ~/data &&
+        initdb -D ~/data &&
+        pg_ctl -D ~/data start
+    - uses: actions/checkout@v3
+    - name: compile pg_tle extension
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        cd pg_tle &&
+        make
+    - name: install pg_tle extension
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        cd pg_tle &&
+        sudo PATH=$PATH make install
+    - name: add pg_tle to shared_preload_libraries
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        echo "shared_preload_libraries = 'pg_tle'" >> ~/data/postgresql.conf &&
+        pg_ctl -D ~/data restart
+    - name: run pg_tle regression tests
+      run:  >
+        export PATH=/usr/local/pgsql/bin:$PATH &&
+        cd pg_tle &&
+        make installcheck &&
+        [ -f regression.diffs ] && cat regression.diffs
