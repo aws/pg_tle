@@ -38,4 +38,4 @@ jobs:
     - name: run pg_tle regression tests
       run:  make installcheck
     - name: print regression.diffs
-      run:  [ -f regression.diffs ] && cat regression.diffs
+      run:  cat regression.diffs
