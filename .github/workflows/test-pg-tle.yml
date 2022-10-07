@@ -37,7 +37,8 @@ jobs:
         echo "shared_preload_libraries = 'pg_tle'" >> ~/data/postgresql.conf &&
         pg_ctl -D ~/data restart
     - name: run pg_tle regression tests
+      id:   regression-tests
       run:  make installcheck
     - name: print regression.diffs if regression tests failed
-      if:   failure()
+      if:   failure() && steps.regression-tests.outcome != 'success'
       run:  cat regression.diffs
