@@ -17,7 +17,7 @@ CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
 ALTER SYSTEM SET pgtle.enable_password_check = 'off';
 SELECT pg_reload_conf();
-ALTER ROLE wronguser with password 'pass';
+ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
 -- Do not expect an error
