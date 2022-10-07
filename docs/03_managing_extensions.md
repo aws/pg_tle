@@ -8,12 +8,11 @@ The behavior of certain [hooks](./04_hooks.md) may be available globally, e.g. a
 
 ## Roles
 
-`pg_tle` provides several roles for managing extensions. These include:
+`pg_tle` provides a special role for managing extensions:
 
-* `pgtle_staff`: A member of this role can call `CREATE EXTENSION` and `DROP EXTENSION` on any `pg_tle`-compatible extension that is marked as `trusted`.
 * `pgtle_admin`: A member of this role has all the privileges of `pg_tle_staff` and can also install / uninstall `pg_tle`-compatible extensions. See the [Functions](#functions) section for which management functions require the `pgtle_admin` role.
 
-A PostgreSQL superuser (e.g. the `postgres` user) has the privileges of both `pgtle_staff` and `pgtle_admin`.
+A PostgreSQL superuser (e.g. the `postgres` user) has the privileges of `pgtle_admin`.
 
 ## `pgtle` schema
 
@@ -29,7 +28,7 @@ If a schema is not specified in a `pg_tle`-compatible extensions, all objects (e
 
 #### Role
 
-`pgtle_staff`
+None.
 
 #### Arguments
 
@@ -55,7 +54,7 @@ For more information on the output values, please read the [extension files](htt
 
 #### Role
 
-`pgtle_staff`
+None.
 
 #### Arguments
 
@@ -84,7 +83,7 @@ SELECT * FROM pgtle.available_extension_versions();
 
 #### Role
 
-`pgtle_staff`
+None.
 
 #### Arguments
 
