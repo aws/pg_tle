@@ -28,17 +28,14 @@ jobs:
         pg_ctl -D ~/data start
     - uses: actions/checkout@v3
     - name: compile pg_tle extension
-      run:  >
-        make
+      run:  make
     - name: install pg_tle extension
-      run:  >
-        sudo PATH=$PATH make install
+      run:  sudo PATH=$PATH make install
     - name: add pg_tle to shared_preload_libraries
       run:  >
         echo "shared_preload_libraries = 'pg_tle'" >> ~/data/postgresql.conf &&
         pg_ctl -D ~/data restart
     - name: run pg_tle regression tests
-      run:  >
-        make installcheck
+      run:  make installcheck
     - name: print regression.diffs
-        [ -f regression.diffs ] && cat regression.diffs
+      run:  [ -f regression.diffs ] && cat regression.diffs
