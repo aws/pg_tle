@@ -37,5 +37,6 @@ jobs:
         pg_ctl -D ~/data restart
     - name: run pg_tle regression tests
       run:  make installcheck
-    - name: print regression.diffs
+    - name: print regression.diffs if regression tests failed
+      if:   failure()
       run:  cat regression.diffs
