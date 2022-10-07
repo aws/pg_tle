@@ -64,9 +64,9 @@ None.
 
 * `name`: The name of the extension.
 * `version`: The version of the extension.
-* `superuser`: This is `true` if a PostgreSQL superuser must run `CREATE EXTENSION`.
-* `trusted`: This is `true` if the extension can be installed by an unprivileged user with the `CREATE` privilege in the current database.
-* `relocatable`: This is `true` if the objects can be moved into a different schema after the extension is created.
+* `superuser`: This is always `false` for a pg_tle-compatible extension.
+* `trusted`: This is always `false` for a pg_tle-compatible extension.
+* `relocatable`: This is always `false` for a pg_tle-compatible extension.
 * `schema`: This is set if the extension must be installed into a specific schema.
 * `requires`: An array of extension names that this extension depends on.
 * `description`: A more detailed description about the extension.
