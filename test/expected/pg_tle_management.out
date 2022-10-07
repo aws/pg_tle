@@ -353,6 +353,54 @@ FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
  new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
 
+-- add the update back in
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- test the default version, should be 1.0
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+  name   | default_version |      comment       
+---------+-----------------+--------------------
+ new_ext | 1.0             | Test TLE Functions
+(1 row)
+
+-- set the new default
+SELECT pgtle.set_default_version('new_ext', '1.1');
+ set_default_version 
+---------------------
+ t
+(1 row)
+
+-- test the default version, should be 1.1
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+  name   | default_version |      comment       
+---------+-----------------+--------------------
+ new_ext | 1.1             | Test TLE Functions
+(1 row)
+
+-- try setting a default version that does not exist
+-- fail
+SELECT pgtle.set_default_version('new_ext', '1.2');
+ERROR:  Extension and version do not exist.
+HINT:  Try installing the extension with "pgtle.install_extension".
+-- try setting a default version on an extension that does not exist
+-- fail
+SELECT pgtle.set_default_version('bogus', '1.2');
+ERROR:  Extension and version do not exist.
+HINT:  Try installing the extension with "pgtle.install_extension".
+-- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
  uninstall_extension 
 ---------------------

@@ -113,10 +113,16 @@ $_pg_tle_$
 );
 ```
 
+We can also make this version of the extension the default, so it will automatically update without specifying a version:
+
+```sql
+SELECT pgtle.set_default_version('pg_distance', '0.2');
+```
+
 Now, we can update the installed functions using `ALTER EXTENSION ... UPDATE`, e.g.:
 
 ```sql
-ALTER EXTENSION pg_distance UPDATE TO '0.2';
+ALTER EXTENSION pg_distance UPDATE;
 ```
 
 ### Delete a Trusted-Language Extension

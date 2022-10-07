@@ -185,6 +185,23 @@ The available features are:
 SELECT pgtle.register_feature_if_not_exists('pw_hook', 'passcheck');
 ```
 
+### `pgtle.set_default_version(name text, version text)`
+
+`set_default_version` lets users set a new `default_version` for an extension. This is helpful when adding a new upgrade path and wanting to make that version of the extension the default for `CREATE EXTENSION` calls or `ALTER EXTENSION ... UPDATE`;
+
+If the extension in `name` does not already exist, this returns an error. If the `version` of the extension does not exist, it returns an error.
+
+This functions returns `true` on success.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `version`: The version of the extension to set the default.
+
 ### `pgtle.uninstall_extension(extname text)`
 
 `uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension.

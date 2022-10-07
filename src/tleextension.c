@@ -4334,6 +4334,121 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(true);
 }
 
+Datum pg_tle_set_default_version(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_set_default_version);
+Datum
+pg_tle_set_default_version(PG_FUNCTION_ARGS)
+{
+	int		spi_rc;
+	char		*extname;
+	char		*extvers;
+	char		*ctlname;
+	char		*versql;
+	Oid		verargtypes[2] = { TEXTOID, TEXTOID };
+	Datum		verargs[2];
+	StringInfo	ctlstr;
+	char		*ctlsql;
+	ExtensionControlFile	*control;
+	char		   *filename;
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("\"name\" is a required argument.")));
+	}
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
+
+	/*
+	 * Verify that extname does not already exist as
+	 * a standard file-based extension.
+	 */
+	filename = get_extension_control_filename(extname);
+	if (filestat(filename)) {
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("control file already exists for the %s extension", extname)));
+	}
+
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"version\" is a required argument.")));
+	}
+
+	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
+	check_valid_version_name(extvers);
+
+	/*
+	 * Check to see if the extension exists. If it does not, then error
+	 */
+ 	if (SPI_connect() != SPI_OK_CONNECT) {
+ 		elog(ERROR, "SPI_connect failed");
+ 		PG_RETURN_BOOL(false);
+ 	}
+
+	verargs[0] = CStringGetTextDatum(extname);
+	verargs[1] = CStringGetTextDatum(extvers);
+	versql = psprintf("SELECT 1 FROM %s.available_extension_versions() e "
+		"WHERE e.name = $1 AND e.version = $2", PG_TLE_NSPNAME);
+
+	spi_rc = SPI_execute_with_args(versql, 2, verargtypes, verargs, NULL, true, 1);
+
+	if (spi_rc != SPI_OK_SELECT) {
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("Could not validate extension name."),
+			 errhint("Try calling \"set_default_version\" again. If this error continues, this may be a bug.")));
+  }
+
+	if (SPI_processed == 0) {
+		ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 errmsg("Extension and version do not exist."),
+			 errhint("Try installing the extension with \"%s.install_extension\".", PG_TLE_NSPNAME)));
+	}
+
+	/*
+	 * Modify the control file with a new version
+	 */
+	control = build_default_extension_control_file(extname);
+
+	SET_TLEEXT;
+	parse_extension_control_file(control, NULL);
+	UNSET_TLEEXT;
+
+	control->default_version = pstrdup(extvers);
+
+	ctlname = psprintf("%s.control", extname);
+	ctlstr = build_extension_control_file_string(control);
+
+	ctlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			PG_TLE_NSPNAME, quote_identifier(ctlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			ctlstr->data,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
+
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
+
+	spi_rc = SPI_exec(ctlsql, 0);
+	if (spi_rc != SPI_OK_UTILITY) {
+		ereport(ERROR,
+			(errcode(ERRCODE_INTERNAL_ERROR),
+			 errmsg("failed to updated default version for \"%s\"", extname)));
+		PG_RETURN_BOOL(false);
+  }
+
+	if (SPI_finish() != SPI_OK_FINISH) {
+		elog(ERROR, "SPI_finish failed");
+		PG_RETURN_BOOL(false);
+	}
+
+	/* flag that we are done manipulating pg_tle artifacts */
+	UNSET_TLEART;
+
+	PG_RETURN_BOOL(true);
+}
 /*
 * Convert text array to list of strings.
 *

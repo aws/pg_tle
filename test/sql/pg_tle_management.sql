@@ -259,6 +259,36 @@ SELECT pgtle.uninstall_extension('new_ext', '1.1');
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
 
+-- add the update back in
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- test the default version, should be 1.0
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+
+-- set the new default
+SELECT pgtle.set_default_version('new_ext', '1.1');
+
+-- test the default version, should be 1.1
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+
+-- try setting a default version that does not exist
+-- fail
+SELECT pgtle.set_default_version('new_ext', '1.2');
+
+-- try setting a default version on an extension that does not exist
+-- fail
+SELECT pgtle.set_default_version('bogus', '1.2');
+
+-- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
 
 -- back to our regular program: these should work
