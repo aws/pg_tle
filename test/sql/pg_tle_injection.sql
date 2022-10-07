@@ -48,46 +48,6 @@ $_pgtle_$
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
 
--- grant the pgtle_staff role to the bad_actor and try to install the extension
-GRANT pgtle_staff TO bad_actor;
-
--- become the bad_actor
-SET SESSION AUTHORIZATION bad_actor;
-
--- attempt to install the extension with an injection in the comments and error
-SELECT pgtle.install_extension
-(
- 'test_hax',
- '1.0',
- $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION basic_func()
-  RETURNS INT AS $$
-    SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
-$_pgtle_$
-);
-
--- attempt to install the extension with an injection in the ext and error
-SELECT pgtle.install_extension
-(
- 'test_hax',
- '1.0',
- 'hax',
-$_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
-  CREATE OR REPLACE FUNCTION basic_func()
-  RETURNS INT AS $$
-    SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
-$_pgtle_$
-);
-
--- revert back to superuser
-RESET SESSION AUTHORIZATION;
-
--- verify that the user did not elevate privileges
-SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
-
 -- grant the pgtle_admin role to the bad_actor and try to install the extension
 GRANT pgtle_admin TO bad_actor;
 
@@ -132,5 +92,4 @@ SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
 DROP ROLE bad_actor;
-DROP ROLE pgtle_staff;
 DROP ROLE pgtle_admin;
