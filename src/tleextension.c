@@ -847,6 +847,15 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 	FreeConfigVariables(head);
 
+	/* Force specific values for TLE extensions */
+	if (tleext) {
+		control->module_pathname = NULL;
+		control->relocatable = false;
+		control->schema = NULL;
+		control->superuser = false;
+		control->trusted = false;
+	}
+
 	if (control->relocatable && control->schema != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
