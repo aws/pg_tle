@@ -29,13 +29,10 @@ jobs:
     - name: compile pg_tle extension
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
-        pwd &&
-        ls -l &&
         make
     - name: install pg_tle extension
       run:  >
         export PATH=/usr/local/pgsql/bin:$PATH &&
-        cd pg_tle &&
         sudo PATH=$PATH make install
     - name: add pg_tle to shared_preload_libraries
       run:  >
