@@ -4219,13 +4219,10 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-	  ErrorData  *errdata = CopyErrorData();
 
-	  if (errdata->sqlerrcode == ERRCODE_DUPLICATE_FUNCTION)
+	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
 	  {
 	    FlushErrorState();
-	    FreeErrorData(errdata);
-
 	    ereport(ERROR,
 		    (errcode(ERRCODE_DUPLICATE_OBJECT),
 		     errmsg("Extension '%s' already installed.", extname)));
