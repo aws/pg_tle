@@ -20,9 +20,9 @@ jobs:
     - name: Create postgres superuser for runner
       run:  sudo -u postgres createuser -s -w runner
     - name: Add pg_tle to shared_preload_libraries
-      run:  >
-        sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\'' >> /etc/postgresql/14main/postgresql.conf'" &&
-        sudo systemctl restart postgresql
+      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\'' >> /etc/postgresql/14main/postgresql.conf'" &&
+    - name: Restart postgresql
+      run:  sudo systemctl restart postgresql
     - uses: actions/checkout@v3
     - name: Compile pg_tle extension
       run:  make
