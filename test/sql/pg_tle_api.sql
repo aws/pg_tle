@@ -44,6 +44,27 @@ SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
+-- Test that by default a role has access to the feature_info table
+CREATE ROLE testuser_2 with LOGIN;
+SET SESSION AUTHORIZATION testuser_2;
+ALTER ROLE testuser_2 with password 'pass';
+-- Test that by default unprivileged users do not have permission to insert into table
+-- or have access to functions
+CREATE OR REPLACE FUNCTION unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+if length(shadow_pass) < 8 then
+  RAISE EXCEPTION 'Passwords needs to be longer than 8';
+end if;
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('unpriv_function_passcheck', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'unpriv_function_passcheck', '');
+DELETE FROM pgtle.feature_info where feature = 'passcheck';
+RESET SESSION AUTHORIZATION;
+
 CREATE OR REPLACE FUNCTION password_check_only_nums(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 DECLARE x NUMERIC;
@@ -79,6 +100,8 @@ TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
 DROP ROLE testuser;
+DROP FUNCTION unpriv_function_passcheck;
+DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
 DROP FUNCTION password_check_length_greater_than_8;
