@@ -5,7 +5,7 @@
 */
 \pset pager off
 CREATE EXTENSION pg_tle;
--- create a role that initailly does not have CREATE in this database
+-- create a role that initially does not have CREATE in this database
 CREATE ROLE tle_person;
 DO
 $$
@@ -40,7 +40,7 @@ SELECT pgtle.install_extension
 (
  'yes_features',
  '1.0',
- 'Yes specal features',
+ 'Yes special features',
 $_bcd_$
   CREATE FUNCTION passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
   RETURNS void AS $$
@@ -141,15 +141,69 @@ CREATE EXTENSION yes_features;
 ERROR:  permission denied for table feature_info
 CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
 PL/pgSQL function register_feature(regproc,pg_tle_features) line 24 at SQL statement
+-- create a function and try to insert directly into pgtle.feature_info
+-- fail
+CREATE FUNCTION other_passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+RETURNS void AS $$
+BEGIN
+  RETURN; -- just pass through
+END
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'other_passcheck_hook', '');
+ERROR:  permission denied for table feature_info
+-- try to give themselves pgtle_admin
+-- fail
+GRANT pgtle_admin to tle_person;
+ERROR:  must have admin option on role "pgtle_admin"
 -- become the privileged user. grant pgtle_admin to tle_person
 RESET SESSION AUTHORIZATION;
 GRANT pgtle_admin TO tle_person;
 -- become tle_person again. create the featureful extension.
 SET SESSION AUTHORIZATION tle_person;
 CREATE EXTENSION yes_features;
--- drop the extension
+-- insert directly into pgtle.feature_info
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'other_passcheck_hook', '');
+-- become the privileged user. revoke pgtle_admin from tle_person
+RESET SESSION AUTHORIZATION;
+REVOKE pgtle_admin FROM tle_person;
+-- become tle_person. try to unregister features and delete directly from pgtle.feature_info
+-- fail
+SET SESSION AUTHORIZATION tle_person;
+SELECT pgtle.unregister_feature('passcheck_hook', 'passcheck');
+ERROR:  permission denied for table feature_info
+CONTEXT:  SQL statement "DELETE FROM pgtle.feature_info
+	WHERE
+		feature_info.feature = $2 AND
+		feature_info.schema_name = proc_schema_name AND
+		feature_info.proname = proc_name"
+PL/pgSQL function pgtle.unregister_feature(regproc,pgtle.pg_tle_features) line 35 at SQL statement
+SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
+ERROR:  permission denied for table feature_info
+CONTEXT:  SQL statement "DELETE FROM pgtle.feature_info
+	WHERE
+		feature_info.feature = $2 AND
+		feature_info.schema_name = proc_schema_name AND
+		feature_info.proname = proc_name"
+PL/pgSQL function pgtle.unregister_feature(regproc,pgtle.pg_tle_features) line 35 at SQL statement
+DELETE FROM pgtle.feature_info WHERE proname = 'passcheck_hook';
+ERROR:  permission denied for table feature_info
+DELETE FROM pgtle.feature_info WHERE proname = 'other_passcheck_hook';
+ERROR:  permission denied for table feature_info
+-- become the privileged user. grant pgtle_admin to tle_person
+RESET SESSION AUTHORIZATION;
+GRANT pgtle_admin TO tle_person;
+-- become tle_person and drop extensions
+SET SESSION AUTHORIZATION tle_person;
 DROP EXTENSION yes_features;
 DROP EXTENSION no_features;
+-- unregister hook and drop function
+SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+DROP FUNCTION other_passcheck_hook;
 -- become the privileged user again
 RESET SESSION AUTHORIZATION;
 -- revoke the create on schema privileges for tle_user
