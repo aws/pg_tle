@@ -16,8 +16,6 @@ jobs:
         sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' &&
         sudo apt-get update &&
         sudo apt-get install -y postgresql-14 postgresql-server-dev-14
-    - name: Add pg_tle to shared_preload_libraries
-      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\' >> /etc/postgresql/14/main/postgresql.conf"
     - name: Start postgresql
       run:  sudo systemctl start postgresql
     - name: Create postgres superuser for runner
@@ -27,6 +25,10 @@ jobs:
       run:  make
     - name: Install pg_tle extension
       run:  sudo make install
+    - name: Add pg_tle to shared_preload_libraries
+      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\' >> /etc/postgresql/14/main/postgresql.conf"
+    - name: Restart postgresql
+      run:  sudo systemctl restart postgresql
     - name: Run pg_tle regression tests
       id:   regression-tests
       run:  make installcheck
