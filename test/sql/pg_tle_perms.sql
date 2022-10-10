@@ -7,7 +7,7 @@
 \pset pager off
 CREATE EXTENSION pg_tle;
 
--- create a role that initailly does not have CREATE in this database
+-- create a role that initially does not have CREATE in this database
 CREATE ROLE tle_person;
 DO
 $$
@@ -38,7 +38,7 @@ SELECT pgtle.install_extension
 (
  'yes_features',
  '1.0',
- 'Yes specal features',
+ 'Yes special features',
 $_bcd_$
   CREATE FUNCTION passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
   RETURNS void AS $$
@@ -145,6 +145,20 @@ SET SESSION AUTHORIZATION tle_person;
 -- fail
 CREATE EXTENSION yes_features;
 
+-- create a function and try to insert directly into pgtle.feature_info
+-- fail
+CREATE FUNCTION other_passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+RETURNS void AS $$
+BEGIN
+  RETURN; -- just pass through
+END
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'other_passcheck_hook', '');
+
+-- try to give themselves pgtle_admin
+-- fail
+GRANT pgtle_admin to tle_person;
+
 -- become the privileged user. grant pgtle_admin to tle_person
 RESET SESSION AUTHORIZATION;
 GRANT pgtle_admin TO tle_person;
@@ -153,9 +167,33 @@ GRANT pgtle_admin TO tle_person;
 SET SESSION AUTHORIZATION tle_person;
 CREATE EXTENSION yes_features;
 
--- drop the extension
+-- insert directly into pgtle.feature_info
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'other_passcheck_hook', '');
+
+-- become the privileged user. revoke pgtle_admin from tle_person
+RESET SESSION AUTHORIZATION;
+REVOKE pgtle_admin FROM tle_person;
+
+-- become tle_person. try to unregister features and delete directly from pgtle.feature_info
+-- fail
+SET SESSION AUTHORIZATION tle_person;
+SELECT pgtle.unregister_feature('passcheck_hook', 'passcheck');
+SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
+DELETE FROM pgtle.feature_info WHERE proname = 'passcheck_hook';
+DELETE FROM pgtle.feature_info WHERE proname = 'other_passcheck_hook';
+
+-- become the privileged user. grant pgtle_admin to tle_person
+RESET SESSION AUTHORIZATION;
+GRANT pgtle_admin TO tle_person;
+
+-- become tle_person and drop extensions
+SET SESSION AUTHORIZATION tle_person;
 DROP EXTENSION yes_features;
 DROP EXTENSION no_features;
+
+-- unregister hook and drop function
+SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
+DROP FUNCTION other_passcheck_hook;
 
 -- become the privileged user again
 RESET SESSION AUTHORIZATION;
