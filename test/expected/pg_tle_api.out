@@ -65,6 +65,41 @@ ERROR:  Passwords needs to be longer than 8
 CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
 SQL statement "select public.password_check_length_greater_than_8('testuser', 'pass', 'PASSWORD_TYPE_PLAINTEXT', null, true)"
 ALTER ROLE testuser with password 'passwords';
+-- Test that by default a role has access to the feature_info table
+CREATE ROLE testuser_2 with LOGIN;
+SET SESSION AUTHORIZATION testuser_2;
+ALTER ROLE testuser_2 with password 'pass';
+ERROR:  Passwords needs to be longer than 8
+CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
+SQL statement "select public.password_check_length_greater_than_8('testuser_2', 'pass', 'PASSWORD_TYPE_PLAINTEXT', null, true)"
+-- Test that by default unprivileged users do not have permission to insert into table
+-- or have access to functions
+CREATE OR REPLACE FUNCTION unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+if length(shadow_pass) < 8 then
+  RAISE EXCEPTION 'Passwords needs to be longer than 8';
+end if;
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('unpriv_function_passcheck', 'passcheck');
+ERROR:  permission denied for table feature_info
+CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
+PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 24 at SQL statement
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+ERROR:  permission denied for table feature_info
+CONTEXT:  SQL statement "DELETE FROM pgtle.feature_info
+	WHERE
+		feature_info.feature = $2 AND
+		feature_info.schema_name = proc_schema_name AND
+		feature_info.proname = proc_name"
+PL/pgSQL function pgtle.unregister_feature(regproc,pgtle.pg_tle_features) line 35 at SQL statement
+INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'unpriv_function_passcheck', '');
+ERROR:  permission denied for table feature_info
+DELETE FROM pgtle.feature_info where feature = 'passcheck';
+ERROR:  permission denied for table feature_info
+RESET SESSION AUTHORIZATION;
 CREATE OR REPLACE FUNCTION password_check_only_nums(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 DECLARE x NUMERIC;
@@ -147,6 +182,8 @@ ALTER ROLE testuser with password '123456789';
 ERROR:  passcheck feature does not support calling out to functions/schemas that contain ';'
 HINT:  Check the pgtle.feature_info table does not contain ';' in it's entry.
 DROP ROLE testuser;
+DROP FUNCTION unpriv_function_passcheck;
+DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
  pg_reload_conf 
