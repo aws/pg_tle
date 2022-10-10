@@ -15,14 +15,13 @@ jobs:
         curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null &&
         sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' &&
         sudo apt-get update &&
-        sudo apt-get install -y postgresql-14 postgresql-server-dev-14 &&
-        sudo systemctl start postgresql
+        sudo apt-get install -y postgresql-14 postgresql-server-dev-14
+    - name: Add pg_tle to shared_preload_libraries
+      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\' >> /etc/postgresql/14/main/postgresql.conf"
+    - name: Start postgresql
+      run:  sudo systemctl start postgresql
     - name: Create postgres superuser for runner
       run:  sudo -u postgres createuser -s -w runner
-    - name: Add pg_tle to shared_preload_libraries
-      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\'' >> /etc/postgresql/14main/postgresql.conf'" &&
-    - name: Restart postgresql
-      run:  sudo systemctl restart postgresql
     - uses: actions/checkout@v3
     - name: Compile pg_tle extension
       run:  make
