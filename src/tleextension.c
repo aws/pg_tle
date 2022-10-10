@@ -605,9 +605,7 @@ get_extension_aux_control_filename(ExtensionControlFile *control,
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
-		snprintf(result, NAMEDATALEN, "%s--%s.control",
-				 control->name, version);
+		result = psprintf("%s--%s.control", control->name, version);
 	}
 
 	return result;
@@ -636,13 +634,10 @@ get_extension_script_filename(ExtensionControlFile *control,
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
 		if (from_version)
-			snprintf(result, NAMEDATALEN, "%s--%s--%s.sql",
-					 control->name, from_version, version);
+			result = psprintf("%s--%s--%s.sql", control->name, from_version, version);
 		else
-			snprintf(result, NAMEDATALEN, "%s--%s.sql",
-					 control->name, version);
+			result = psprintf("%s--%s.sql", control->name, version);
 	}
 
 	return result;
