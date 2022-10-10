@@ -542,8 +542,7 @@ get_extension_control_filename(const char *extname)
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
-		snprintf(result, NAMEDATALEN, "%s.control", extname);
+		result = psprintf("%s.control", extname);
 	}
 
 	return result;
