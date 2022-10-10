@@ -28,7 +28,7 @@ $_pgtle_$
 $_pgtle_$
 );
 ERROR:  Invalid character in extension definition.
-DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are foribbden in extension definitions.
+DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are forbidden in extension definitions.
 HINT:  This may be an attempt at a SQL injection attack. Please verify your installation file.
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
@@ -51,7 +51,7 @@ $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_
 $_pgtle_$
 );
 ERROR:  Invalid character in extension definition.
-DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are foribbden in extension definitions.
+DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are forbidden in extension definitions.
 HINT:  This may be an attempt at a SQL injection attack. Please verify your installation file.
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
@@ -78,7 +78,7 @@ $_pgtle_$
 $_pgtle_$
 );
 ERROR:  Invalid character in extension definition.
-DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are foribbden in extension definitions.
+DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are forbidden in extension definitions.
 HINT:  This may be an attempt at a SQL injection attack. Please verify your installation file.
 -- attempt to install the extension with an injection in the ext and error
 SELECT pgtle.install_extension
@@ -94,7 +94,7 @@ $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_
 $_pgtle_$
 );
 ERROR:  Invalid character in extension definition.
-DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are foribbden in extension definitions.
+DETAIL:  Use of string delimiters $_pgtle_o_$ and $_pgtle_i_$ are forbidden in extension definitions.
 HINT:  This may be an attempt at a SQL injection attack. Please verify your installation file.
 -- revert back to superuser
 RESET SESSION AUTHORIZATION;
