@@ -1,6 +1,8 @@
 name: PostgreSQL 14 regression tests
 
-on: [push]
+on:
+  pull_request:
+    types: [opened, edited, reopened, review_requested]
 
 jobs:
   build:
