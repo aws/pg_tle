@@ -778,7 +778,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 					 errdetail("Could not parse extension control function '%s.\"%s.control\"'.", PG_TLE_NSPNAME, control->name),
 					 errhint("You may need to reinstall the extension to correct this error.")));
 			}
-			
+
 			PG_RE_THROW();
 		}
 		PG_END_TRY();
@@ -2326,9 +2326,10 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%%.control' AND pronamespace = %u",
-							  schemaOid);
+		appendStringInfo(sql, "SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) %u::pg_catalog.oid",
+			schemaOid);
 		spi_rc = SPI_exec(sql->data, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
@@ -2423,9 +2424,10 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%%.control' AND pronamespace = %u",
-							  schemaOid);
+		appendStringInfo(sql, "SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) %u::pg_catalog.oid",
+			schemaOid);
 		spi_rc = SPI_exec(sql->data, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
@@ -4417,7 +4419,8 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	verargs[0] = CStringGetTextDatum(extname);
 	verargs[1] = CStringGetTextDatum(extvers);
 	versql = psprintf("SELECT 1 FROM %s.available_extension_versions() e "
-		"WHERE e.name = $1 AND e.version = $2", PG_TLE_NSPNAME);
+		"WHERE e.name OPERATOR(pg_catalog.=) $1::pg_catalog.name AND "
+		"e.version OPERATOR(pg_catalog.=) $2::pg_catalog.text", PG_TLE_NSPNAME);
 
 	spi_rc = SPI_execute_with_args(versql, 2, verargtypes, verargs, NULL, true, 1);
 

@@ -153,8 +153,9 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		 * Assume function accepts the proper argument, it'll error when we
 		 * call out to SPI_exec if it doesn't anyway
 		 */
-		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature = '%s' ORDER BY proname",
-						 schema_name, feature_table_name, password_check_feature);
+		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) %s::%s.pg_tle_features ORDER BY proname",
+			 quote_identifier(schema_name), quote_identifier(feature_table_name),
+			 quote_literal_cstr(password_check_feature), quote_identifier(schema_name));
 
 		ret = SPI_execute(query, true, 0);
 
