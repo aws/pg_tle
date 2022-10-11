@@ -88,6 +88,21 @@ RESET SESSION AUTHORIZATION;
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
 
+-- Attempt to install extension with invalid name
+SELECT pgtle.install_extension
+(
+ 'test9.control"(),pg_sleep(10),pgtle."test9',
+ '0.1',
+ 'comment',
+$_pg_tle_$
+    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
+    RETURNS numeric
+    AS $$
+      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+    $$ LANGUAGE SQL;
+$_pg_tle_$
+);
+
 -- cleanup
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
