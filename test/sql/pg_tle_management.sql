@@ -291,6 +291,29 @@ SELECT pgtle.set_default_version('bogus', '1.2');
 -- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
 
+-- OK let's try to install an extension with a control file that has errors
+SELECT pgtle.install_extension
+(
+ 'broken_ext',
+ '0.1',
+ $$Distance functions for two points'
+ directory = '/tmp/$$,
+$_pg_tle_$
+    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
+    RETURNS numeric
+    AS $$
+      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+    $$ LANGUAGE SQL;
+$_pg_tle_$
+);
+
+-- this should lead to a sytnax error that we catch
+-- fail
+SELECT * FROM pgtle.available_extensions();
+
+-- shoo shoo and uninstall
+SELECT pgtle.uninstall_extension('broken_ext');
+
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;

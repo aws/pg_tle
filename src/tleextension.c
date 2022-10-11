@@ -763,7 +763,25 @@ parse_extension_control_file(ExtensionControlFile *control,
 		 * Parse the string content, using GUC's file parsing code.  We need not
 		 * check the return value since any errors will be thrown at ERROR level.
 		 */
-		(void) tleParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
+		PG_TRY();
+		{
+			(void) tleParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
+		}
+		PG_CATCH();
+		{
+			if (geterrcode() == ERRCODE_SYNTAX_ERROR)
+			{
+				FlushErrorState();
+				ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("syntax error in extension control function for '%s'.", control->name),
+					 errdetail("Could not parse extension control function '%s.\"%s.control\"'.", PG_TLE_NSPNAME, control->name),
+					 errhint("You may need to reinstall the extension to correct this error.")));
+			}
+			
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
 	}
 
 	/*
@@ -862,6 +880,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 	/* Force specific values for TLE extensions */
 	if (tleext) {
+		control->directory = NULL;
 		control->module_pathname = NULL;
 		control->relocatable = false;
 		control->schema = NULL;
