@@ -10,7 +10,7 @@ The behavior of certain [hooks](./04_hooks.md) may be available globally, e.g. a
 
 `pg_tle` provides a special role for managing extensions:
 
-* `pgtle_admin`: A member of this role has all the privileges of `pg_tle_staff` and can also install / uninstall `pg_tle`-compatible extensions. See the [Functions](#functions) section for which management functions require the `pgtle_admin` role.
+* `pgtle_admin`: A member of this role can install / uninstall `pg_tle`-compatible extensions. See the [Functions](#functions) section for which management functions require the `pgtle_admin` role.
 
 A PostgreSQL superuser (e.g. the `postgres` user) has the privileges of `pgtle_admin`.
 
