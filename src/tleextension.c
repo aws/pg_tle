@@ -467,7 +467,7 @@ check_valid_extension_name(const char *extensionname)
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid extension name: \"%s\"", extensionname),
-				 errdetail("Extension names must only contain alphanumeric characters or the _ separator")));
+				 errdetail("Extension names must only contain alphanumeric characters or the _ separator.")));
 		idx++;
 	}
 }
