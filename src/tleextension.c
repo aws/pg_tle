@@ -457,17 +457,17 @@ check_valid_extension_name(const char *extensionname)
 	 * Check for alphanumeric character in extension name for now.
 	 * Although this does prevent some naming schemes, it's a more straight
 	 * forward prevention for preventing certain injection attacks due to
-	 * the way the way we rely on functions currently. Allow the '_' character
+	 * the way the way we rely on functions currently. Allow the '_' or '-' character
 	 * to provide a nice separator if desired.
 	 */
 
 	while (extensionname[idx] != '\0')
 	{
-		if (!isalnum(extensionname[idx]) && (extensionname[idx] != '_'))
+		if (!isalnum(extensionname[idx]) && extensionname[idx] != '_' && extensionname[idx] != '-')
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid extension name: \"%s\"", extensionname),
-				 errdetail("Extension names must only contain alphanumeric characters or the _ separator.")));
+				 errdetail("Extension names must only contain alphanumeric characters or valid separators.")));
 		idx++;
 	}
 }
