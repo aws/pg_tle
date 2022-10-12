@@ -13,6 +13,9 @@ REGRESS = pg_tle_api pg_tle_management pg_tle_injection pg_tle_perms
 
 REGRESS_OPTS = --inputdir=test --temp-config ./regress.conf
 
+TAP_TESTS = 1
+PROVE_TESTS = test/t/*.pl
+
 PG_CPPFLAGS += -I./include
 
 PG_CONFIG = pg_config
