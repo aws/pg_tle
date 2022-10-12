@@ -134,13 +134,13 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 	{
 		SPITupleTable *tuptable;
 		TupleDesc	tupdesc;
-		Datum		validUntil_datum_out;
-		char	   *validUntil;
 		ListCell   *item;
 		char	   *query;
 		uint64		j;
 		List	   *proc_names = NIL;
 		int			ret;
+		Oid		featargtypes[1] = { TEXTOID };
+		Datum		featargs[1];
 
 		ret = SPI_connect();
 		if (ret != SPI_OK_CONNECT)
@@ -153,11 +153,12 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		 * Assume function accepts the proper argument, it'll error when we
 		 * call out to SPI_exec if it doesn't anyway
 		 */
-		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) %s::%s.pg_tle_features ORDER BY proname",
-			 quote_identifier(schema_name), quote_identifier(feature_table_name),
-			 quote_literal_cstr(password_check_feature), quote_identifier(schema_name));
 
-		ret = SPI_execute(query, true, 0);
+		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) $1::%s.pg_tle_features ORDER BY proname",
+			 quote_identifier(schema_name), quote_identifier(feature_table_name), quote_identifier(schema_name));
+		featargs[0] = CStringGetTextDatum(password_check_feature);
+
+		ret = SPI_execute_with_args(query, 1, featargtypes, featargs, NULL, true, 0);
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
@@ -186,21 +187,19 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 			HeapTuple	tuple = tuptable->vals[j];
 			int			i;
 
-			/* Postgres truncates schema/function names */
-			/* by default to 63 bytes, enough space */
-			char		buf[256];
+			StringInfo buf = makeStringInfo();
 
-			for (i = 1, buf[0] = 0; i <= tupdesc->natts; i++)
+			for (i = 1; i <= tupdesc->natts; i++)
 			{
 				char	   *res = SPI_getvalue(tuple, tupdesc, i);
 
 				check_valid_name(res);
-
-				snprintf(buf + strnlen(buf, 256), sizeof(buf) - strnlen(buf, 256), "%s%s",
-						 res,
-						 (i == tupdesc->natts) ? "" : ".");
+				appendStringInfo(buf, "%s", quote_identifier(res));
+				
+				if (i != tupdesc->natts)
+					appendStringInfo(buf, ".");
 			}
-			proc_names = lappend(proc_names, pstrdup(buf));
+			proc_names = lappend(proc_names, pstrdup(buf->data));
 		}
 
 		/*
@@ -214,26 +213,32 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		/* Format the queries we need to execute */
 		foreach(item, proc_names)
 		{
-			char	   *query;
-			char	   *func_name = lfirst(item);
+			char			*query;
+			char			*func_name = lfirst(item);
+			Oid				hookargtypes[5] = { TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID };
+			Datum			hookargs[5];
+			char			*hooknulls = "     ";
+
+			/* func_name is already using quote_identifier from when it was assembled */
+			query = psprintf("SELECT %s($1::pg_catalog.text, $2::pg_catalog.text, $3::%s.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)",
+				func_name, quote_identifier(PG_TLE_NSPNAME));
+
+			hookargs[0] = CStringGetTextDatum(username);
+			hookargs[1] = CStringGetTextDatum(shadow_pass);
+			hookargs[2] = CStringGetTextDatum(pass_types[password_type]);
 
 			if (validuntil_null)
 			{
-				query = psprintf("select %s('%s', '%s', '%s', null, %s)",
-								 func_name, username, shadow_pass, pass_types[password_type],
-								 "true");
+				hooknulls[3] = 'n';
+				hookargs[4] = BoolGetDatum(true);
 			}
 			else
 			{
-				/* Convert TimestampTz Datum to char* for query */
-				validUntil_datum_out = DirectFunctionCall1(timestamptz_out, validuntil_time);
-				validUntil = DatumGetCString(validUntil_datum_out);
-				query = psprintf("select %s('%s', '%s', '%s', '%s', %s)",
-								 func_name, username, shadow_pass, pass_types[password_type],
-								 validUntil,
-								 "false");
+				hookargs[3] = DirectFunctionCall1(timestamptz_out, validuntil_time);
+				hookargs[4] = BoolGetDatum(false);
 			}
-			if (SPI_execute(query, true, 0) != SPI_OK_SELECT)
+
+			if (SPI_execute_with_args(query, 5, hookargtypes, hookargs, hooknulls, true, 0) != SPI_OK_SELECT)
 				ereport(ERROR,
 						errmsg("Unable to execute function %s", func_name));
 		}

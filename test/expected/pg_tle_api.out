@@ -63,7 +63,7 @@ SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck
 ALTER ROLE testuser with password 'pass';
 ERROR:  Passwords needs to be longer than 8
 CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
-SQL statement "select public.password_check_length_greater_than_8('testuser', 'pass', 'PASSWORD_TYPE_PLAINTEXT', null, true)"
+SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 ALTER ROLE testuser with password 'passwords';
 -- Test that by default a role has access to the feature_info table
 CREATE ROLE testuser_2 with LOGIN;
@@ -71,7 +71,7 @@ SET SESSION AUTHORIZATION testuser_2;
 ALTER ROLE testuser_2 with password 'pass';
 ERROR:  Passwords needs to be longer than 8
 CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
-SQL statement "select public.password_check_length_greater_than_8('testuser_2', 'pass', 'PASSWORD_TYPE_PLAINTEXT', null, true)"
+SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Test that by default unprivileged users do not have permission to insert into table
 -- or have access to functions
 CREATE OR REPLACE FUNCTION unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
@@ -121,7 +121,7 @@ SELECT pgtle.register_feature('password_check_only_nums', 'passcheck');
 ALTER ROLE testuser with password 'passwords';
 ERROR:  Passwords can only have numbers
 CONTEXT:  PL/pgSQL function password_check_only_nums(text,text,pgtle.password_types,timestamp with time zone,boolean) line 7 at RAISE
-SQL statement "select public.password_check_only_nums('testuser', 'passwords', 'PASSWORD_TYPE_PLAINTEXT', null, true)"
+SQL statement "SELECT public.password_check_only_nums($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 ALTER ROLE testuser with password '123456789';
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_nums', '');
 -- Expect to fail cause no schema qualified function found
