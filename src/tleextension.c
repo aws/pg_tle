@@ -299,7 +299,8 @@ exec_scalar_text_sql_func(const char *funcname)
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
 
-	appendStringInfo(sql, "SELECT %s.\"%s\"()", PG_TLE_NSPNAME, funcname);
+	appendStringInfo(sql, "SELECT %s.%s()",
+		quote_identifier(PG_TLE_NSPNAME), quote_identifier(funcname));
 
 	/* execute scalar text returning function */
 	spi_rc = SPI_exec(sql->data, 0);
@@ -1523,7 +1524,9 @@ get_ext_ver_list(ExtensionControlFile *control)
 	else			/* pg_tle extension */
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[2] = { TEXTOID, OIDOID };
+		Datum			sqlargs[2];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
@@ -1532,10 +1535,13 @@ get_ext_ver_list(ExtensionControlFile *control)
 		if (SPI_connect() != SPI_OK_CONNECT)
 			elog(ERROR, "SPI_connect failed");
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%s%%.sql' AND pronamespace = %u",
-							  control->name, schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE $1::pg_catalog.name AND pg_proc.pronamespace OPERATOR(pg_catalog.=) $2::pg_catalog.oid");
+
+		sqlargs[0] = CStringGetTextDatum(psprintf("%s%%.sql", control->name));
+		sqlargs[1] = ObjectIdGetDatum(schemaOid);
+		
+		spi_rc = SPI_execute_with_args(sql, 2, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %s%% in schema %u failed", control->name, schemaOid);
@@ -2320,17 +2326,21 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	else
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[1] = { OIDOID };
+		Datum			sqlargs[1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
 			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
-			"pg_proc.pronamespace OPERATOR(pg_catalog.=) %u::pg_catalog.oid",
-			schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
+
+		sqlargs[0] = ObjectIdGetDatum(schemaOid);
+		
+		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %%.control in schema %u failed", schemaOid);
@@ -2418,17 +2428,21 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 	else
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[1] = { OIDOID };
+		Datum			sqlargs[1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
 			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
-			"pg_proc.pronamespace OPERATOR(pg_catalog.=) %u::pg_catalog.oid",
-			schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
+
+		sqlargs[0] = ObjectIdGetDatum(schemaOid);
+		
+		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %%.control in schema %u failed", schemaOid);
@@ -4335,9 +4349,12 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
 	sqlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_$"
-		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_$ LANGUAGE SQL",
-		PG_TLE_NSPNAME, sqlname, sql_str);
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+		quote_identifier(PG_TLE_NSPNAME), quote_identifier(sqlname),
+		PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+		sql_str,
+		PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
@@ -4420,7 +4437,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	verargs[1] = CStringGetTextDatum(extvers);
 	versql = psprintf("SELECT 1 FROM %s.available_extension_versions() e "
 		"WHERE e.name OPERATOR(pg_catalog.=) $1::pg_catalog.name AND "
-		"e.version OPERATOR(pg_catalog.=) $2::pg_catalog.text", PG_TLE_NSPNAME);
+		"e.version OPERATOR(pg_catalog.=) $2::pg_catalog.text", quote_identifier(PG_TLE_NSPNAME));
 
 	spi_rc = SPI_execute_with_args(versql, 2, verargtypes, verargs, NULL, true, 1);
 
@@ -4467,7 +4484,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	ctlsql = psprintf(
 		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
-			PG_TLE_NSPNAME, quote_identifier(ctlname),
+			quote_identifier(PG_TLE_NSPNAME), quote_identifier(ctlname),
 			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
 			ctlstr->data,
 			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
