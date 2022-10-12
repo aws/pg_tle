@@ -64,27 +64,51 @@ AS $_pgtleie_$
     dropsql    text;
     pgtlensp    text := 'EXTSCHEMA';
     func       text;
+    existsvar  record;
   BEGIN
 
     ctrpattern := format('%s%%.control', extname);
     sqlpattern := format('%s%%.sql', extname);
     searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
 
-    FOR func IN EXECUTE searchsql USING ctrpattern, pgtlensp LOOP
-      dropsql := format('DROP FUNCTION %I()', func);
-      EXECUTE dropsql;
-    END LOOP;
+    EXECUTE searchsql USING ctrpattern, pgtlensp INTO existsvar;
+    IF existsvar IS NULL THEN
+      RAISE EXCEPTION 'Extension % does not exist', extname USING ERRCODE = 'no_data_found';
+    ELSE
+      FOR func IN EXECUTE searchsql USING ctrpattern, pgtlensp LOOP
+        dropsql := format('DROP FUNCTION %I()', func);
+        EXECUTE dropsql;
+      END LOOP;
+    END IF;
 
-    FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
-      dropsql := format('DROP FUNCTION %I()', func);
-      EXECUTE dropsql;
-    END LOOP;
+    EXECUTE searchsql USING sqlpattern, pgtlensp INTO existsvar;
+    IF existsvar IS NULL THEN
+      RAISE WARNING 'Extension % has an anomaly; control function exists, but no sql commands function exists', extname;
+    ELSE
+      FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
+        dropsql := format('DROP FUNCTION %I()', func);
+        EXECUTE dropsql;
+      END LOOP;
+    END IF;
 
     RETURN true;
   END;
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
+CREATE FUNCTION EXTSCHEMA.uninstall_extension_if_exists(extname text)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS $_pgtleie_$
+BEGIN
+  PERFORM EXTSCHEMA.uninstall_extension(extname);
+  RETURN TRUE;
+EXCEPTION
+  WHEN no_data_found THEN
+    RETURN FALSE;
+END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
 
 -- uninstall an extension for a specific version
 CREATE FUNCTION EXTSCHEMA.uninstall_extension(extname text, version text)

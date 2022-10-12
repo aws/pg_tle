@@ -204,9 +204,9 @@ This functions returns `true` on success.
 
 ### `pgtle.uninstall_extension(extname text)`
 
-`uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension.
+`uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension. If the extension does not exist in the database, then an error is raised.
 
-If the extension is currently activate within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
+If the extension is currently active within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
 
 #### Role
 
@@ -222,11 +222,31 @@ If the extension is currently activate within a database, `uninstall_extension` 
 SELECT pgtle.uninstall_extension('pg_tle_test');
 ```
 
+### `pgtle.uninstall_extension_if_exists(extname text)`
+
+`uninstall_extension_if_exists` is similar to `uninstall_extension` in that it removes all versions of an extension from a database, but if the extension does not exist in the database, then no error is raised. `uninstall_extension_if_exists` returns true if the extension was uninstalled, and false if the extension did not exist.
+
+If the extension is currently active within a database, `uninstall_extension_if_exists` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+
+#### Example
+
+```sql
+SELECT pgtle.uninstall_extension_if_exists('pg_tle_test');
+```
+
 ### `pgtle.uninstall_extension(extname text, version text)`
 
 `uninstall_extension` removes the specific version of an extension from the database. This prevents `CREATE EXTENSION` and `ALTER EXTENSION` from installing or updating to this version of the extension
 
-If this version of the extension is currently activate within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
+If this version of the extension is currently active within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
 
 #### Role
 

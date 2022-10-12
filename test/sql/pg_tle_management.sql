@@ -291,6 +291,7 @@ SELECT pgtle.set_default_version('bogus', '1.2');
 -- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
 
+
 -- OK let's try to install an extension with a control file that has errors
 SELECT pgtle.install_extension
 (
@@ -313,6 +314,32 @@ SELECT * FROM pgtle.available_extensions();
 
 -- shoo shoo and uninstall
 SELECT pgtle.uninstall_extension('broken_ext');
+
+-- uninstall with a non-existent extension
+-- error
+SELECT pgtle.uninstall_extension('bogus');
+
+-- uninstall_if_exists with a non-existent extension
+-- returns false, no error
+SELECT pgtle.uninstall_extension_if_exists('bogus');
+
+-- uninstall_if_exists with an extension that exists
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.uninstall_extension_if_exists('test42');
+
 
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role

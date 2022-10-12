@@ -440,6 +440,44 @@ SELECT pgtle.uninstall_extension('broken_ext');
  t
 (1 row)
 
+-- uninstall with a non-existent extension
+-- error
+SELECT pgtle.uninstall_extension('bogus');
+ERROR:  Extension bogus does not exist
+CONTEXT:  PL/pgSQL function uninstall_extension(text) line 18 at RAISE
+-- uninstall_if_exists with a non-existent extension
+-- returns false, no error
+SELECT pgtle.uninstall_extension_if_exists('bogus');
+ uninstall_extension_if_exists 
+-------------------------------
+ f
+(1 row)
+
+-- uninstall_if_exists with an extension that exists
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension_if_exists('test42');
+ uninstall_extension_if_exists 
+-------------------------------
+ t
+(1 row)
+
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
