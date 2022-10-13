@@ -67,6 +67,7 @@ SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog
 ALTER ROLE testuser with password 'passwords';
 -- Test that by default a role has access to the feature_info table
 CREATE ROLE testuser_2 with LOGIN;
+CREATE SCHEMA testuser_2 AUTHORIZATION testuser_2;
 SET SESSION AUTHORIZATION testuser_2;
 ALTER ROLE testuser_2 with password 'pass';
 ERROR:  Passwords needs to be longer than 8
@@ -74,7 +75,7 @@ CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle
 SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Test that by default unprivileged users do not have permission to insert into table
 -- or have access to functions
-CREATE OR REPLACE FUNCTION unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+CREATE OR REPLACE FUNCTION testuser_2.unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 BEGIN
 if length(shadow_pass) < 8 then
@@ -83,14 +84,12 @@ end if;
 END;
 $$
 LANGUAGE PLPGSQL;
-INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'unpriv_function_passcheck', 'public.unpriv_function_passcheck(pg_catalog.text,pg_catalog.text,pgtle.password_types,timestamp with time zone,boolean)');
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'testuser_2', 'unpriv_function_passcheck', 'public.unpriv_function_passcheck(pg_catalog.text,pg_catalog.text,pgtle.password_types,timestamp with time zone,boolean)');
 ERROR:  permission denied for table feature_info
-SELECT pgtle.register_feature('unpriv_function_passcheck', 'passcheck');
+SELECT pgtle.register_feature('testuser_2.unpriv_function_passcheck', 'passcheck');
 ERROR:  permission denied for function register_feature
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
 ERROR:  permission denied for function unregister_feature
-INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'unpriv_function_passcheck', '');
-ERROR:  permission denied for table feature_info
 DELETE FROM pgtle.feature_info where feature = 'passcheck';
 ERROR:  permission denied for table feature_info
 RESET SESSION AUTHORIZATION;
@@ -176,7 +175,8 @@ ALTER ROLE testuser with password '123456789';
 ERROR:  passcheck feature does not support calling out to functions/schemas that contain ';'
 HINT:  Check the pgtle.feature_info table does not contain ';' in it's entry.
 DROP ROLE testuser;
-DROP FUNCTION unpriv_function_passcheck;
+DROP FUNCTION testuser_2.unpriv_function_passcheck;
+DROP SCHEMA testuser_2;
 DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
