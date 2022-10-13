@@ -292,6 +292,49 @@ If the extension is currently active within a database, `uninstall_extension_if_
 SELECT pgtle.uninstall_extension_if_exists('pg_tle_test');
 ```
 
+### `pgtle.uninstall_update_path(extname text, fromvers text, tovers text)`
+
+`uninstall_update_path` removes the specific update path from an extension. This prevents `ALTER EXTENSION ... UPDATE TO` from using this as an update path.
+
+If the extension is currently being used on one of the version on this update path, it will remain in the database.
+
+If the update path does not exist, this function will raise an error.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `fromvers`: The source version of the extension used on the update path.
+* `tovers`: The destination version of the extension used on the update path.
+
+#### Example
+
+```sql
+SELECT pgtle.uninstall_update_path('pg_tle_test', '0.1', '0.2');
+```
+
+### `pgtle.uninstall_update_path_if_exists(extname text, fromvers text, tovers text)`
+
+`uninstall_update_path_if_exists` is similar to `uninstall_update_path` in that it removes removes the specific update path from an extension. However, if the update path does not exist, no error is raised. and the function returns `false`.
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `fromvers`: The source version of the extension used on the update path.
+* `tovers`: The destination version of the extension used on the update path.
+
+#### Example
+
+```sql
+SELECT pgtle.uninstall_update_path_if_exists('pg_tle_test', '0.1', '0.2');
+```
+
 ### `pgtle.unregister_feature(proc regproc, feature pg_tle_features)`
 
 `unregister_feature` provides a way to remove functions that were registered to use `pg_tle` features such as [hooks](./04_hooks.md).
