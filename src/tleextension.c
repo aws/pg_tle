@@ -4361,7 +4361,7 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
 	sqlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
 		quote_identifier(PG_TLE_NSPNAME), quote_identifier(sqlname),
 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
@@ -4376,12 +4376,35 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 	}
 
-	/* create the sql function */
-	spi_rc = SPI_exec(sqlsql, 0);
-	if (spi_rc != SPI_OK_UTILITY) {
-		elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
-		PG_RETURN_BOOL(false);
+	/*
+	 * Try to create the control-string function and the
+	 * sql-string function - if either fails because of
+	 * ERRCODE_DUPLICATE_FUNCTION, we convert the error
+	 * to a more user-friendly form.
+	 */
+	PG_TRY();
+	{
+		/* create the sql function */
+		spi_rc = SPI_exec(sqlsql, 0);
+		if (spi_rc != SPI_OK_UTILITY) {
+			elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
+			PG_RETURN_BOOL(false);
+		}
 	}
+	PG_CATCH();
+	{
+	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
+	  {
+			FlushErrorState();
+			ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("Extension '%s' update path '%s-%s' already installed.",
+				 	extname, fromvers, tovers)));
+	  }
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
