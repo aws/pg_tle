@@ -202,6 +202,17 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
   extname text
 ) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
+(
+  extname text,
+  version text
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension_if_exists
+(
+  extname text
+) FROM PUBLIC;
+
 DO
 $_do_$
 BEGIN
@@ -243,6 +254,17 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.set_default_version
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
+(
+  extname text
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
+(
+  extname text,
+  version text
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension_if_exists
 (
   extname text
 ) TO pgtle_admin;
@@ -373,6 +395,56 @@ EXCEPTION
     RETURN FALSE;
 END;
 $$;
+
+-- Revoke privs from PUBLIC
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.register_feature
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.register_feature_if_not_exists
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.unregister_feature
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.unregister_feature_if_exists
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) FROM PUBLIC;
+
+-- Grant privs to pgtle_admin
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.register_feature
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.register_feature_if_not_exists
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.unregister_feature
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.unregister_feature_if_exists
+(
+  proc regproc,
+  feature EXTSCHEMA.pg_tle_features
+) TO pgtle_admin;
 
 -- Prevent function from being dropped if referenced in table
 CREATE FUNCTION EXTSCHEMA.pg_tle_feature_info_sql_drop()

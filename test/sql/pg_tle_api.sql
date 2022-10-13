@@ -59,6 +59,7 @@ end if;
 END;
 $$
 LANGUAGE PLPGSQL;
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'unpriv_function_passcheck', 'public.unpriv_function_passcheck(pg_catalog.text,pg_catalog.text,pgtle.password_types,timestamp with time zone,boolean)');
 SELECT pgtle.register_feature('unpriv_function_passcheck', 'passcheck');
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'unpriv_function_passcheck', '');
