@@ -332,6 +332,22 @@ $_pgtle_$
  t
 (1 row)
 
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- check available extension versions -- should be 1.0 and 1.1
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
@@ -340,18 +356,37 @@ FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
  new_ext | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (2 rows)
 
+-- check avaialble version update paths -- should be 1.0<=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 1.1--1.0
+(2 rows)
+
 SELECT pgtle.uninstall_extension('new_ext', '1.1');
  uninstall_extension 
 ---------------------
  t
 (1 row)
 
+-- check avaialble versions, should only be 1.0
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ---------+---------+-----------+---------+-------------+--------+----------+--------------------
  new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
+
+-- check avaialble version update paths -- should be none
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target | path 
+--------+--------+------
+(0 rows)
 
 -- add the update back in
 SELECT pgtle.install_update_path
@@ -369,6 +404,29 @@ $_pgtle_$
  t
 (1 row)
 
+-- check avaialble version update paths -- should be 1.0=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+-- try to add a duplicate update path
+-- fail
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ERROR:  Extension 'new_ext' update path '1.0-1.1' already installed.
 -- test the default version, should be 1.0
 SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
   name   | default_version |      comment       

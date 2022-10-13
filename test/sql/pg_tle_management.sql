@@ -251,15 +251,56 @@ $_pgtle_$
 $_pgtle_$
 );
 
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check available extension versions -- should be 1.0 and 1.1
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
+
+-- check avaialble version update paths -- should be 1.0<=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
 
 SELECT pgtle.uninstall_extension('new_ext', '1.1');
 
+-- check avaialble versions, should only be 1.0
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
 
+-- check avaialble version update paths -- should be none
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
 -- add the update back in
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check avaialble version update paths -- should be 1.0=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- try to add a duplicate update path
+-- fail
 SELECT pgtle.install_update_path
 (
  'new_ext',
