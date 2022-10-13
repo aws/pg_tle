@@ -276,7 +276,7 @@ CREATE TABLE EXTSCHEMA.feature_info(
 	feature EXTSCHEMA.pg_tle_features,
 	schema_name text,
 	proname text,
-	obj_identity text,
+	obj_identity text NOT NULL,
   PRIMARY KEY(feature, schema_name, proname));
 
 SELECT pg_catalog.pg_extension_config_dump('EXTSCHEMA.feature_info', '');
