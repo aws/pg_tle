@@ -312,6 +312,78 @@ $_pgtle_$
 $_pgtle_$
 );
 
+-- add a downgrade path
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- only uninstall the downgrade path
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- try uninstalling again
+-- fail
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+
+-- try ininstall with if exists, see false
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- install again and uninstall with "if exists", see true
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- ok, install it again
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
 -- test the default version, should be 1.0
 SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
 

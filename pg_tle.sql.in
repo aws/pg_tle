@@ -136,6 +136,52 @@ AS $_pgtleie_$
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
+-- uninstall a specific update path
+CREATE FUNCTION EXTSCHEMA.uninstall_update_path(extname text, fromvers text, tovers text)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS $_pgtleie_$
+  DECLARE
+    sqlpattern text;
+    searchsql  text;
+    dropsql    text;
+    pgtlensp   text := 'EXTSCHEMA';
+    func       text;
+    existsvar  record;
+  BEGIN
+    sqlpattern := format('%s--%s--%s.sql', extname, fromvers, tovers);
+    searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname = $1 AND n.nspname = $2';
+
+    EXECUTE searchsql USING sqlpattern, pgtlensp INTO existsvar;
+
+    IF existsvar IS NULL THEN
+      RAISE EXCEPTION 'Extension % does not exist', extname USING ERRCODE = 'no_data_found';
+    ELSE
+      FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
+        dropsql := format('DROP FUNCTION %I()', func);
+        EXECUTE dropsql;
+      END LOOP;
+    END IF;
+
+    RETURN TRUE;
+  END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
+
+CREATE FUNCTION EXTSCHEMA.uninstall_update_path_if_exists(extname text, fromvers text, tovers text)
+RETURNS boolean
+SET search_path TO 'EXTSCHEMA'
+AS $_pgtleie_$
+BEGIN
+  PERFORM EXTSCHEMA.uninstall_update_path(extname, fromvers, tovers);
+  RETURN TRUE;
+EXCEPTION
+  WHEN no_data_found THEN
+    RETURN FALSE;
+END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
+
 CREATE FUNCTION EXTSCHEMA.extension_update_paths
 (
   name name,
@@ -213,6 +259,20 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension_if_exists
   extname text
 ) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_update_path
+(
+  extname text,
+  fromvers text,
+  tovers text
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION EXTSCHEMA.uninstall_update_path_if_exists
+(
+  extname text,
+  fromvers text,
+  tovers text
+) FROM PUBLIC;
+
 DO
 $_do_$
 BEGIN
@@ -267,6 +327,20 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_extension_if_exists
 (
   extname text
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_update_path
+(
+  extname text,
+  fromvers text,
+  tovers text
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION EXTSCHEMA.uninstall_update_path_if_exists
+(
+  extname text,
+  fromvers text,
+  tovers text
 ) TO pgtle_admin;
 
 CREATE TYPE EXTSCHEMA.pg_tle_features as ENUM ('passcheck');
