@@ -4084,7 +4084,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	char		*extdesc;
 	char		*sql_str;
 	ArrayType	*extrequires;
-	char		*extencode;
 	char		*ctlname;
 	StringInfo	ctlstr;
 	char		*sqlname;
@@ -4181,19 +4180,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
 	control->requires = reqlist;
-
-	if (!PG_ARGISNULL(5))
-	{
-		extencode = text_to_cstring(PG_GETARG_TEXT_PP(5));
-		control->encoding = pg_valid_server_encoding(extencode);
-
-		if (control->encoding < 0) {
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("\"%s\" is not a valid encoding name.",
-							extencode)));
-		}
-	}
 
 	ctlstr = build_extension_control_file_string(control);
 

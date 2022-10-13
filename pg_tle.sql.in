@@ -23,8 +23,7 @@ CREATE FUNCTION EXTSCHEMA.install_extension
   version text,
   description text,
   ext text,
-  requires text[] DEFAULT NULL,
-  encoding text DEFAULT NULL
+  requires text[] DEFAULT NULL
 )
 RETURNS boolean
 SET search_path TO 'EXTSCHEMA'
@@ -225,8 +224,7 @@ REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   version text,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 ) FROM PUBLIC;
 
 REVOKE EXECUTE ON FUNCTION EXTSCHEMA.install_update_path
@@ -295,8 +293,7 @@ GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_extension
   version text,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 ) TO pgtle_admin;
 
 GRANT EXECUTE ON FUNCTION EXTSCHEMA.install_update_path

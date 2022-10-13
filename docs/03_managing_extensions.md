@@ -101,7 +101,7 @@ None.
 SELECT * FROM pgtle.extension_update_paths('pg_tle_test');
 ```
 
-### `pgtle.install_extension(name text, version text, description text, ext text, requires text[] DEFAULT NULL::text[], encoding text DEFAULT NULL::text)`
+### `pgtle.install_extension(name text, version text, description text, ext text, requires text[] DEFAULT NULL::text[])`
 
 `install_extension` lets users install a `pg_tle`-compatible extensions and make them available within a database.
 
@@ -118,7 +118,6 @@ This functions returns `'OK'` on success and `NULL` on error.
 * `description`: A detailed description about the extension. This is displayed in the `comment` field in `pgtle.available_extensions()`.
 * `ext`: The contents of the extension. This contains objects such as functions.
 * `requires`: An optional parameter that specifies dependencies for this extension. `pg_tle` is automatically added as a dependency.
-* `encoding`: An optional parameter that specifies the encoding of the contents of `ext`.
 
 Many of the above values are part of the [extension control file](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11) used to provide information about how to install a PostgreSQL extension. For more information about how each of these values work, please see the PostgreSQL documentation on [extension control files](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11).
 

@@ -223,8 +223,7 @@ ALTER FUNCTION pgtle.install_extension
   version text,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 )
 SET search_path TO 'public';
 

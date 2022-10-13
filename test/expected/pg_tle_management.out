@@ -296,8 +296,7 @@ ALTER FUNCTION pgtle.install_extension
   version text,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 )
 SET search_path TO 'public';
 ERROR:  altering pg_tle functions in pgtle schema not allowed
