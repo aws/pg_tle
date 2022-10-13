@@ -1525,8 +1525,8 @@ get_ext_ver_list(ExtensionControlFile *control)
 	{
 		int				spi_rc;
 		char			*sql;
-		Oid				sqlargtypes[2] = { TEXTOID, OIDOID };
-		Datum			sqlargs[2];
+		Oid				sqlargtypes[SPI_NARGS_2] = { TEXTOID, OIDOID };
+		Datum			sqlargs[SPI_NARGS_2];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
@@ -2327,8 +2327,8 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	{
 		int				spi_rc;
 		char			*sql;
-		Oid				sqlargtypes[1] = { OIDOID };
-		Datum			sqlargs[1];
+		Oid				sqlargtypes[SPI_NARGS_1] = { OIDOID };
+		Datum			sqlargs[SPI_NARGS_1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
@@ -2429,8 +2429,8 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 	{
 		int				spi_rc;
 		char			*sql;
-		Oid				sqlargtypes[1] = { OIDOID };
-		Datum			sqlargs[1];
+		Oid				sqlargtypes[SPI_NARGS_1] = { OIDOID };
+		Datum			sqlargs[SPI_NARGS_1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
@@ -4426,8 +4426,8 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	char		*extvers;
 	char		*ctlname;
 	char		*versql;
-	Oid		verargtypes[2] = { TEXTOID, TEXTOID };
-	Datum		verargs[2];
+	Oid		verargtypes[SPI_NARGS_2] = { TEXTOID, TEXTOID };
+	Datum		verargs[SPI_NARGS_2];
 	StringInfo	ctlstr;
 	char		*ctlsql;
 	ExtensionControlFile	*control;
