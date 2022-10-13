@@ -9,29 +9,52 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Add PGDG apt repository and install postgresql-14 with header files
+    - name: Append /usr/local/pgsql/bin to PATH
+      run:  echo "/usr/local/pgsql/bin" >> $GITHUB_PATH
+    - name: Uninstall Ubuntu's postgresql installation
+      run:  sudo apt purge -y postgresql-14 postgresql-client-14 postgresql-client-common postgresql-common libpq-dev
+    - name: Install build dependencies for postgresql
+      run:  sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache libperl-dev
+    - name: Install CPAN dependencies
+      run:  sudo cpan -i "IPC::Run"
+    - name: download postgresql
       run:  >
-        sudo apt-get install -y curl ca-certificates gnupg &&
-        curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null &&
-        sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' &&
-        sudo apt-get update &&
-        sudo apt-get install -y postgresql-14 postgresql-server-dev-14
-    - name: Start postgresql
-      run:  sudo systemctl start postgresql
-    - name: Create postgres superuser for runner
-      run:  sudo -u postgres createuser -s -w runner
+        cd ~ &&
+        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz &&
+        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz.sha256
+    - name: verify postgresql
+      run:  >
+        cd ~ &&
+        sha256sum --check postgresql-14.5.tar.gz.sha256
+    - name: build postgresql
+      run:  >
+        cd ~ &&
+        tar xzf postgresql-14.5.tar.gz &&
+        cd postgresql-14.5 &&
+        ./configure --enable-tap-tests --enable-cassert --enable-debug --with-openssl --with-perl &&
+        make &&
+        sudo PATH=$PATH make install &&
+        cd contrib && make && sudo PATH=$PATH make install &&
+        cd ../src/test/perl && sudo PATH=$PATH make install
+    - name: initialize postgresql database
+      run:  >
+        mkdir ~/data &&
+        chmod -R 700 ~/data &&
+        initdb -D ~/data &&
+        pg_ctl -D ~/data start
     - uses: actions/checkout@v3
     - name: Compile pg_tle extension
       run:  make
     - name: Install pg_tle extension
-      run:  sudo make install
+      run:  sudo PATH=$PATH make install
     - name: Add pg_tle to shared_preload_libraries
-      run:  sudo sh -c "echo 'shared_preload_libraries = '\''pg_tle'\' >> /etc/postgresql/14/main/postgresql.conf"
+      run:  >
+        echo "shared_preload_libraries = 'pg_tle'" >> ~/data/postgresql.conf
     - name: Restart postgresql
-      run:  sudo systemctl restart postgresql
+      run:  pg_ctl -D ~/data restart
     - name: Run pg_tle regression tests
       id:   regression-tests
-      run:  make installcheck
+      run:  PERL5LIB="${HOME}/postgresql-14.5/src/test/perl:${PERL5LIB}" make installcheck
     - name: Print regression.diffs if regression tests failed
       if:   failure() && steps.regression-tests.outcome != 'success'
       run:  cat regression.diffs
