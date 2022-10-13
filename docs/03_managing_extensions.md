@@ -139,6 +139,35 @@ $_pgtle_$
 );
 ```
 
+### `pgtle.install_update_path(name text, fromvers text, tovers text, ext text)`
+
+`install_update_path` provides an update path between two different version of an extension. This enables user to call `ALTER EXTENSION ... UPDATE` for a Trusted-Language Extension.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `fromvers`: The source version of the extension for the upgrade.
+* `tovers`: The destination version of the extension for the upgrade.
+* `ext`: The contents of the update. This contains objects such as functions.
+
+#### Example
+
+```sql
+SELECT pgtle.install_update_path('pg_tle_test', '0.1', '0.2',
+  $_pgtle_$
+    CREATE OR REPLACE FUNCTION my_test()
+    RETURNS INT
+    AS $$
+      SELECT 21;
+    $$ LANGUAGE SQL IMMUTABLE;
+  $_pgtle_$
+);
+```
+
 ### `pgtle.register_feature(proc regproc, feature pg_tle_features)`
 
 `register_feature` provides a way to catalog functions that use `pg_tle` features such as [hooks](./04_hooks.md).
@@ -222,29 +251,9 @@ If the extension is currently active within a database, `uninstall_extension` **
 SELECT pgtle.uninstall_extension('pg_tle_test');
 ```
 
-### `pgtle.uninstall_extension_if_exists(extname text)`
-
-`uninstall_extension_if_exists` is similar to `uninstall_extension` in that it removes all versions of an extension from a database, but if the extension does not exist in the database, then no error is raised. `uninstall_extension_if_exists` returns true if the extension was uninstalled, and false if the extension did not exist.
-
-If the extension is currently active within a database, `uninstall_extension_if_exists` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
-
-#### Role
-
-`pgtle_admin`
-
-#### Arguments
-
-* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
-
-#### Example
-
-```sql
-SELECT pgtle.uninstall_extension_if_exists('pg_tle_test');
-```
-
 ### `pgtle.uninstall_extension(extname text, version text)`
 
-`uninstall_extension` removes the specific version of an extension from the database. This prevents `CREATE EXTENSION` and `ALTER EXTENSION` from installing or updating to this version of the extension
+`uninstall_extension` removes the specific version of an extension from the database. This prevents `CREATE EXTENSION` and `ALTER EXTENSION` from installing or updating to this version of the extension. This also removes all update paths that use this extension version.
 
 If this version of the extension is currently active within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
 
@@ -263,9 +272,11 @@ If this version of the extension is currently active within a database, `uninsta
 SELECT pgtle.uninstall_extension('pg_tle_test', '0.2');
 ```
 
-### `pgtle.install_update_path(name text, fromvers text, tovers text, ext text)`
+### `pgtle.uninstall_extension_if_exists(extname text)`
 
-`install_update_path` provides an update path between two different version of an extension. This enables user to call `ALTER EXTENSION ... UPDATE` for a Trusted-Language Extension.
+`uninstall_extension_if_exists` is similar to `uninstall_extension` in that it removes all versions of an extension from a database, but if the extension does not exist in the database, then no error is raised. `uninstall_extension_if_exists` returns true if the extension was uninstalled, and false if the extension did not exist.
+
+If the extension is currently active within a database, `uninstall_extension_if_exists` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
 
 #### Role
 
@@ -273,23 +284,12 @@ SELECT pgtle.uninstall_extension('pg_tle_test', '0.2');
 
 #### Arguments
 
-* `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
-* `fromvers`: The source version of the extension for the upgrade.
-* `tovers`: The destination version of the extension for the upgrade.
-* `ext`: The contents of the update. This contains objects such as functions.
+* `extname`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
 
 #### Example
 
 ```sql
-SELECT pgtle.install_update_path('pg_tle_test', '0.1', '0.2',
-  $_pgtle_$
-    CREATE OR REPLACE FUNCTION my_test()
-    RETURNS INT
-    AS $$
-      SELECT 21;
-    $$ LANGUAGE SQL IMMUTABLE;
-  $_pgtle_$
-);
+SELECT pgtle.uninstall_extension_if_exists('pg_tle_test');
 ```
 
 ### `pgtle.unregister_feature(proc regproc, feature pg_tle_features)`

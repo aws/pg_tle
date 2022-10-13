@@ -4399,7 +4399,8 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("Extension '%s' update path '%s-%s' already installed.",
-				 	extname, fromvers, tovers)));
+				 	extname, fromvers, tovers),
+				 errhint("To update this specific install path, first use \"%s.uninstall_update_path\".", PG_TLE_NSPNAME)));
 	  }
 
 		PG_RE_THROW();
