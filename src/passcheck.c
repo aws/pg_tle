@@ -25,6 +25,8 @@
 #include "utils/guc.h"
 #include "utils/timestamp.h"
 #include "utils/fmgrprotos.h"
+
+#include "constants.h"
 #include "miscadmin.h"
 #include "tleextension.h"
 
@@ -139,8 +141,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		uint64		j;
 		List	   *proc_names = NIL;
 		int			ret;
-		Oid		featargtypes[1] = { TEXTOID };
-		Datum		featargs[1];
+		Oid		featargtypes[SPI_NARGS_1] = { TEXTOID };
+		Datum		featargs[SPI_NARGS_1];
 
 		ret = SPI_connect();
 		if (ret != SPI_OK_CONNECT)
@@ -215,9 +217,11 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		{
 			char			*query;
 			char			*func_name = lfirst(item);
-			Oid				hookargtypes[5] = { TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID };
-			Datum			hookargs[5];
-			char			*hooknulls = "     ";
+			Oid				hookargtypes[SPI_NARGS_5] = { TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID };
+			Datum			hookargs[SPI_NARGS_5];
+			char			hooknulls[SPI_NARGS_5];
+
+			memset(hooknulls, ' ', sizeof(hooknulls));
 
 			/* func_name is already using quote_identifier from when it was assembled */
 			query = psprintf("SELECT %s($1::pg_catalog.text, $2::pg_catalog.text, $3::%s.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)",
