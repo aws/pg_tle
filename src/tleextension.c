@@ -1540,7 +1540,7 @@ get_ext_ver_list(ExtensionControlFile *control)
 
 		sqlargs[0] = CStringGetTextDatum(psprintf("%s%%.sql", control->name));
 		sqlargs[1] = ObjectIdGetDatum(schemaOid);
-		
+
 		spi_rc = SPI_execute_with_args(sql, 2, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
@@ -2339,7 +2339,7 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
 
 		sqlargs[0] = ObjectIdGetDatum(schemaOid);
-		
+
 		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
@@ -2441,7 +2441,7 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
 
 		sqlargs[0] = ObjectIdGetDatum(schemaOid);
-		
+
 		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
@@ -4346,6 +4346,18 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 	}
 
 	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
+
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(sql_str))) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("Invalid character in extension update definition."),
+				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
+					PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
+	}
 
 	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
 	sqlsql = psprintf(

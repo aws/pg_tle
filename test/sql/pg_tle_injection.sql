@@ -24,7 +24,7 @@ $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -41,12 +41,45 @@ $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- install a legit extension. then try to create an update path that has
+-- a trojan.
+SELECT pgtle.install_extension
+(
+ 'legit_100',
+ '1.0',
+ 'legit',
+$_pgtle_$
+  CREATE FUNCTION basic_func()
+  RETURNS INT AS $$
+    SELECT 1;
+  $$ LANGUAGE SQL;
+$_pgtle_$
+);
+SELECT pgtle.install_update_path
+(
+ 'legit_100',
+ '1.0',
+ '1.1',
+$_pgtle_$ $_pgtle_i_$ ; $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE FUNCTiON hax() RETURNS text AS $_pgtle_o_$ SELECT $_pgtle_i_$
+ CREATE OR REPLACE FUNCTION basic_func()
+ RETURNS INT AS $$
+   SELECT 2;
+ $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- verify that the user did not elevate privileges
+SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- remove the legit extension
+SELECT pgtle.uninstall_extension('legit_100');
 
 -- grant the pgtle_admin role to the bad_actor and try to install the extension
 GRANT pgtle_admin TO bad_actor;
@@ -64,7 +97,7 @@ $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -78,7 +111,7 @@ $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -87,6 +120,45 @@ RESET SESSION AUTHORIZATION;
 
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- become the bad_actor
+SET SESSION AUTHORIZATION bad_actor;
+
+-- install a legit extension. then try to create an update path that has
+-- a trojan.
+SELECT pgtle.install_extension
+(
+ 'legit_100',
+ '1.0',
+ 'legit',
+$_pgtle_$
+  CREATE FUNCTION basic_func()
+  RETURNS INT AS $$
+    SELECT 1;
+  $$ LANGUAGE SQL;
+$_pgtle_$
+);
+SELECT pgtle.install_update_path
+(
+ 'legit_100',
+ '1.0',
+ '1.1',
+$_pgtle_$ $_pgtle_i_$ ; $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE FUNCTiON hax() RETURNS text AS $_pgtle_o_$ SELECT $_pgtle_i_$
+ CREATE OR REPLACE FUNCTION basic_func()
+ RETURNS INT AS $$
+   SELECT 2;
+ $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- revert back to superuser
+RESET SESSION AUTHORIZATION;
+
+-- verify that the user did not elevate privileges
+SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- remove the legit extension
+SELECT pgtle.uninstall_extension('legit_100');
 
 -- Attempt to install extension with invalid name
 SELECT pgtle.install_extension
