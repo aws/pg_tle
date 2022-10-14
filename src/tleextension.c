@@ -775,8 +775,8 @@ parse_extension_control_file(ExtensionControlFile *control,
 				FlushErrorState();
 				ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("syntax error in extension control function for '%s'.", control->name),
-					 errdetail("Could not parse extension control function '%s.\"%s.control\"'.", PG_TLE_NSPNAME, control->name),
+					 errmsg("syntax error in extension control function for \"%s\"", control->name),
+					 errdetail("Could not parse extension control function \"%s\".\"%s.control\".", PG_TLE_NSPNAME, control->name),
 					 errhint("You may need to reinstall the extension to correct this error.")));
 			}
 
@@ -4098,7 +4098,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"name\" is a required argument.")));
+			errmsg("\"name\" is a required argument")));
 	}
 
 	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4116,7 +4116,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(1)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"version\" is a required argument.")));
+			errmsg("\"version\" is a required argument")));
 	}
 
 	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
@@ -4124,14 +4124,14 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(2)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"description\" is a required argument.")));
+			errmsg("\"description\" is a required argument")));
 	}
 
 	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(2));
 
 	if (PG_ARGISNULL(3)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"ext\" is a required argument.")));
+			errmsg("\"ext\" is a required argument")));
 	}
 
 	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
@@ -4189,7 +4189,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	{
 		control->encoding = pg_get_client_encoding();
 		ereport(NOTICE,
-				(errmsg("Extension encoding set to \"%s\".", pg_get_client_encoding_name()),
+				(errmsg("extension encoding set to \"%s\"", pg_get_client_encoding_name()),
 				 errhint("To set a different encoding, change the value of \"client_encoding\".")));
 	}
 
@@ -4201,8 +4201,8 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	if (!(validate_tle_sql(ctlstr->data) && validate_tle_sql(sql_str))) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("Invalid character in extension definition."),
-				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
+				 errmsg("invalid character in extension definition"),
+				 errdetail("Use of string delimiters \"%s\" and \"%s\" are forbidden in extension definitions.",
 			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
@@ -4271,7 +4271,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	    FlushErrorState();
 	    ereport(ERROR,
 		    (errcode(ERRCODE_DUPLICATE_OBJECT),
-		     errmsg("Extension '%s' already installed.", extname)));
+		     errmsg("extension \"%s\" already installed", extname)));
 	  }
 	  else
 	  {
@@ -4307,7 +4307,7 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"name\" is a required argument.")));
+			errmsg("\"name\" is a required argument")));
 	}
 
 	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4320,17 +4320,17 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 	filename = get_extension_control_filename(extname);
 	if (filestat(filename)) {
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				errmsg("control file already exists for the %s extension", extname)));
+				errmsg("control file already exists for the \"%s\" extension", extname)));
 	}
 
 	if (PG_ARGISNULL(1)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"fromvers\" is a required argument.")));
+			errmsg("\"fromvers\" is a required argument")));
 	}
 
 	if (PG_ARGISNULL(2)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"tovers\" is a required argument.")));
+			errmsg("\"tovers\" is a required argument")));
 	}
 
 	fromvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
@@ -4340,7 +4340,7 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(3)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"ext\" is a required argument.")));
+			errmsg("\"ext\" is a required argument")));
 	}
 
 	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
@@ -4351,8 +4351,8 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 	if (!(validate_tle_sql(sql_str))) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("Invalid character in extension update definition."),
-				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
+				 errmsg("invalid character in extension update definition"),
+				 errdetail("Use of string delimiters \"%s\" and \"%s\" are forbidden in extension definitions.",
 					PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
@@ -4396,7 +4396,7 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 			FlushErrorState();
 			ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("Extension '%s' update path '%s-%s' already installed.",
+				 errmsg("extension \"%s\" update path \"%s-%s\" already installed",
 				 	extname, fromvers, tovers),
 				 errhint("To update this specific install path, first use \"%s.uninstall_update_path\".", PG_TLE_NSPNAME)));
 	  }
@@ -4453,7 +4453,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(1)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"version\" is a required argument.")));
+			errmsg("\"version\" is a required argument")));
 	}
 
 	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
@@ -4478,14 +4478,14 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	if (spi_rc != SPI_OK_SELECT) {
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			 errmsg("Could not validate extension name."),
+			 errmsg("could not validate extension name"),
 			 errhint("Try calling \"set_default_version\" again. If this error continues, this may be a bug.")));
   }
 
 	if (SPI_processed == 0) {
 		ereport(ERROR,
 			(errcode(ERRCODE_UNDEFINED_OBJECT),
-			 errmsg("Extension and version do not exist."),
+			 errmsg("extension and version do not exist"),
 			 errhint("Try installing the extension with \"%s.install_extension\".", PG_TLE_NSPNAME)));
 	}
 
@@ -4509,7 +4509,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	if (!(validate_tle_sql(ctlstr->data))) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("Invalid character in extension definition."),
+				 errmsg("invalid character in extension definition"),
 				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
 			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));

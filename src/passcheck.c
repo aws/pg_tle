@@ -127,8 +127,9 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("%s.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
-						PG_TLE_NSPNAME, extension_name, enable_passcheck_feature),
+				 errmsg("\"%s.enable_password_check\" is set to \"require\" but extension \"%s\" is not installed in the database",
+						PG_TLE_NSPNAME, PG_TLE_EXTNAME),
+				 errhint("Call \"CREATE EXTENSION %s;\" in the current database.", PG_TLE_EXTNAME),
 				 errhidestmt(true)));
 	}
 
@@ -148,7 +149,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		if (ret != SPI_OK_CONNECT)
 			ereport(ERROR,
 					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("%s.enable_password_check feature was not able to connect to the database %s",
+					 errmsg("\"%s.enable_password_check\" feature was not able to connect to the database \"%s\"",
 							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		/*
@@ -164,7 +165,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
-					errmsg("Unable to query %s.feature_info", PG_TLE_NSPNAME));
+					errmsg("Unable to query \"%s.feature_info\"", PG_TLE_NSPNAME));
 
 		if (SPI_processed <= 0)
 		{
@@ -176,7 +177,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 			ereport(ERROR,
 					errcode(ERRCODE_DATA_EXCEPTION),
-					errmsg("%s.enable_password_check feature is set to require, however no entries exist in %s.feature_info with the feature %s",
+					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\"",
 						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature));
 		}
 
@@ -210,7 +211,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		 */
 		if (password_type > 2)
 			ereport(ERROR,
-					errmsg("A new password type has been introduced, the extension needs to be updated to support it."));
+				errmsg("unspported password type"),
+				errhint("This password type needs to be implemented in \"%s\".", PG_TLE_EXTNAME));
 
 		/* Format the queries we need to execute */
 		foreach(item, proc_names)
@@ -244,7 +246,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 			if (SPI_execute_with_args(query, 5, hookargtypes, hookargs, hooknulls, true, 0) != SPI_OK_SELECT)
 				ereport(ERROR,
-						errmsg("Unable to execute function %s", func_name));
+						errmsg("unable to execute function \"%s\"", func_name));
 		}
 		SPI_finish();
 
@@ -274,7 +276,7 @@ check_valid_name(char *val)
 
 	if (val[0] == '\0')
 		ereport(ERROR,
-				errmsg("Check entries in %s.%s table, schema and proname must be present",
+				errmsg("table, schema, and proname must be present in \"%s.%s\"",
 					   schema_name, feature_table_name));
 
 	ch = val[i];
@@ -283,8 +285,8 @@ check_valid_name(char *val)
 		if (ch == ';')
 		{
 			ereport(ERROR,
-					errmsg("%s feature does not support calling out to functions/schemas that contain \";\".", password_check_feature),
-					errhint("Check the %s.%s table does not contain ';'.", schema_name, feature_table_name));
+					errmsg("\"%s\" feature does not support calling out to functions/schemas that contain \";\"", password_check_feature),
+					errhint("Check the \"%s.%s\" table does not contain ';'.", schema_name, feature_table_name));
 		}
 		i++;
 		ch = val[i];
