@@ -30,7 +30,10 @@
 #define TLE_EXT_CONTROL_SUFFIX    ".control"
 #define TLE_EXT_SQL_SUFFIX        ".sql"
 
-/* sets the limit on how many entries can be in a requires */
+/*
+ * Sets the limit on how many entries can be in a requires.
+ * This is an arbitrary limit and could be changed or dropped in the future.
+ */
 #define TLE_REQUIRES_LIMIT        1024
 
 /* general PostgreSQL names */
