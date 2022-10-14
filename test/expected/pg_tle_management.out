@@ -192,7 +192,7 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
-ERROR:  Extension 'test123' already installed.
+ERROR:  extension "test123" already installed
 SELECT pgtle.install_update_path
 (
  'test123',
@@ -425,7 +425,7 @@ $_pgtle_$
   RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
 $_pgtle_$
 );
-ERROR:  Extension 'new_ext' update path '1.0-1.1' already installed.
+ERROR:  extension "new_ext" update path "1.0-1.1" already installed
 HINT:  To update this specific install path, first use "pgtle.uninstall_update_path".
 -- add a downgrade path
 SELECT pgtle.install_update_path
@@ -573,12 +573,12 @@ SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
 -- try setting a default version that does not exist
 -- fail
 SELECT pgtle.set_default_version('new_ext', '1.2');
-ERROR:  Extension and version do not exist.
+ERROR:  extension and version do not exist
 HINT:  Try installing the extension with "pgtle.install_extension".
 -- try setting a default version on an extension that does not exist
 -- fail
 SELECT pgtle.set_default_version('bogus', '1.2');
-ERROR:  Extension and version do not exist.
+ERROR:  extension and version do not exist
 HINT:  Try installing the extension with "pgtle.install_extension".
 -- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
@@ -610,8 +610,8 @@ $_pg_tle_$
 -- this should lead to a sytnax error that we catch
 -- fail
 SELECT * FROM pgtle.available_extensions();
-ERROR:  syntax error in extension control function for 'broken_ext'.
-DETAIL:  Could not parse extension control function 'pgtle."broken_ext.control"'.
+ERROR:  syntax error in extension control function for "broken_ext"
+DETAIL:  Could not parse extension control function "pgtle"."broken_ext.control".
 HINT:  You may need to reinstall the extension to correct this error.
 -- shoo shoo and uninstall
 SELECT pgtle.uninstall_extension('broken_ext');
