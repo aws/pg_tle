@@ -127,8 +127,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("pg_tle.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
-						extension_name, enable_passcheck_feature),
+				 errmsg("%s.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
+						PG_TLE_NSPNAME, extension_name, enable_passcheck_feature),
 				 errhidestmt(true)));
 	}
 
@@ -148,8 +148,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		if (ret != SPI_OK_CONNECT)
 			ereport(ERROR,
 					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("pg_tle.enable_password_check feature was not able to connect to the database %s",
-							get_database_name(MyDatabaseId))));
+					 errmsg("%s.enable_password_check feature was not able to connect to the database %s",
+							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		/*
 		 * Assume function accepts the proper argument, it'll error when we
@@ -164,7 +164,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
-					errmsg("Unable to query pg_tle.feature_info"));
+					errmsg("Unable to query %s.feature_info", PG_TLE_NSPNAME));
 
 		if (SPI_processed <= 0)
 		{
@@ -176,8 +176,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 			ereport(ERROR,
 					errcode(ERRCODE_DATA_EXCEPTION),
-					errmsg("pg_tle.enable_password_check feature is set to require, however no entries exist in pg_tle.feature_info with the feature %s",
-						   password_check_feature));
+					errmsg("%s.enable_password_check feature is set to require, however no entries exist in %s.feature_info with the feature %s",
+						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature));
 		}
 
 		/* Build a list of functions to call out to */
@@ -283,8 +283,8 @@ check_valid_name(char *val)
 		if (ch == ';')
 		{
 			ereport(ERROR,
-					errmsg("%s feature does not support calling out to functions/schemas that contain ';'", password_check_feature),
-					errhint("Check the %s.%s table does not contain ';' in it's entry.", schema_name, feature_table_name));
+					errmsg("%s feature does not support calling out to functions/schemas that contain \";\".", password_check_feature),
+					errhint("Check the %s.%s table does not contain ';'.", schema_name, feature_table_name));
 		}
 		i++;
 		ch = val[i];
