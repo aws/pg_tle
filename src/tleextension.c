@@ -188,6 +188,7 @@ static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
+static void check_requires_list(List *requires);
 
 #if PG_VERSION_NUM < 150000
 /* flag bits for SetSingleFuncCall() */
@@ -879,7 +880,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 	FreeConfigVariables(head);
 
-	/* Force specific values for TLE extensions */
+	/* Force specific values and checks for TLE extensions */
 	if (tleext) {
 		control->directory = NULL;
 		control->module_pathname = NULL;
@@ -888,6 +889,8 @@ parse_extension_control_file(ExtensionControlFile *control,
 		control->superuser = false;
 		control->trusted = false;
 		control->encoding = -1; /* encoding is that of the server_side encoding */
+
+		check_requires_list(control->requires);
 	}
 
 	if (control->relocatable && control->schema != NULL)
@@ -2595,6 +2598,9 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 
 /*
  * Convert a list of extension names to a name[] Datum
+ *
+ * This is taken from the upstream function, but has a specific check on
+ * requirement string length
  */
 static Datum
 convert_requires_to_datum(List *requires)
@@ -2604,8 +2610,11 @@ convert_requires_to_datum(List *requires)
 	ArrayType  *a;
 	ListCell   *lc;
 
+	check_requires_list(requires);
+
 	ndatums = list_length(requires);
 	datums = (Datum *) palloc(ndatums * sizeof(Datum));
+
 	ndatums = 0;
 	foreach(lc, requires)
 	{
@@ -4139,6 +4148,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	} else {
 		extrequires = PG_GETARG_ARRAYTYPE_P(4);
 		reqlist = textarray_to_stringlist(extrequires);
+		check_requires_list(reqlist);
 	}
 
 	/*
@@ -4565,4 +4575,19 @@ static bool validate_tle_sql(char *sql)
 
 	PG_RETURN_BOOL(
 		strstr(sql, PG_TLE_OUTER_STR) == NULL && strstr(sql, PG_TLE_INNER_STR) == NULL);
+}
+
+/*
+ * Check that a TLE requires list is valid. This includes check its length.
+ * Raises errors if its invalid.
+ */
+static void check_requires_list(List *requires)
+{
+	if (list_length(requires) > TLE_REQUIRES_LIMIT)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("\"requires\" limited to %d entries for \"%s\" extensions",
+			 		TLE_REQUIRES_LIMIT, PG_TLE_EXTNAME)));
+	}
 }
