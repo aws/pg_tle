@@ -17,9 +17,13 @@ CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
 ALTER SYSTEM SET pgtle.enable_password_check = 'off';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
 CREATE EXTENSION pg_tle;
@@ -27,6 +31,8 @@ CREATE EXTENSION pg_tle;
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'require';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
 -- Insert a value into the feature table
