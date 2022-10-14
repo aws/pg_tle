@@ -30,6 +30,9 @@
 #define TLE_EXT_CONTROL_SUFFIX    ".control"
 #define TLE_EXT_SQL_SUFFIX        ".sql"
 
+/* sets the limit on how many entries can be in a requires */
+#define TLE_REQUIRES_LIMIT        1024
+
 /* general PostgreSQL names */
 #define PG_CTLG_SCHEMA            "pg_catalog"
 
