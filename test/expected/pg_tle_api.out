@@ -21,6 +21,8 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
@@ -29,6 +31,8 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
 CREATE EXTENSION pg_tle;
@@ -41,8 +45,11 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
+ERROR:  pgtle.enable_password_check feature is set to require, however no entries exist in pgtle.feature_info with the feature passcheck
 -- Insert a value into the feature table
 CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
