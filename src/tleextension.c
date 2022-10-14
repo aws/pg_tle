@@ -887,6 +887,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 		control->schema = NULL;
 		control->superuser = false;
 		control->trusted = false;
+		control->encoding = -1; /* encoding is that of the server_side encoding */
 	}
 
 	if (control->relocatable && control->schema != NULL)
@@ -944,10 +945,7 @@ build_extension_control_file_string(ExtensionControlFile *control)
 		"superuser = false\n"
 		"trusted = false\n");
 
-	if (control->encoding >= 0) {
-		appendStringInfo(ctlstr,
-			"encoding = '%s'\n", pg_encoding_to_char(control->encoding));
-	}
+	/* we do not need to set "encoding" because it is set to the server_side encoding */
 
 	if (control->requires != NULL) {
 		foreach(req, control->requires) {
@@ -4180,18 +4178,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
 	control->requires = reqlist;
-
-	/*
-	 * see if client and server encoding differ. if they do, set the encoding
-	 * explicitly to the client encoding
-	 */
-	if (GetDatabaseEncoding() != pg_get_client_encoding() && pg_get_client_encoding() >= 0)
-	{
-		control->encoding = pg_get_client_encoding();
-		ereport(NOTICE,
-				(errmsg("extension encoding set to \"%s\"", pg_get_client_encoding_name()),
-				 errhint("To set a different encoding, change the value of \"client_encoding\".")));
-	}
 
 	ctlstr = build_extension_control_file_string(control);
 
