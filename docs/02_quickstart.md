@@ -7,26 +7,26 @@ Let's try writing our first Trusted-Language Extension for PostgreSQL! This assu
 Here we have a set of functions that are used to calculate the distance between two points:
 
 ```sql
-CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
-RETURNS numeric
+CREATE FUNCTION dist(x1 float8, y1 float8, x2 float8, y2 float8, norm int)
+RETURNS float8
 AS $$
-  SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+  SELECT (abs(x2 - x1) ^ norm + abs(y2 - y1) ^ norm) ^ (1::float8 / norm);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
-CREATE FUNCTION manhattan_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-RETURNS numeric
+CREATE FUNCTION manhattan_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+RETURNS float8
 AS $$
   SELECT dist(x1, y1, x2, y2, 1);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
-CREATE FUNCTION euclidean_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-RETURNS numeric
+CREATE FUNCTION euclidean_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+RETURNS float8
 AS $$
   SELECT dist(x1, y1, x2, y2, 2);
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 ```
 
-We can to created a Trusted-Language Extension that can be created by any unprivileged user in the database.
+Let's use these functions to create a Trusted-Language Extension.
 
 ### Install a Trusted-Language Extension
 
@@ -38,7 +38,15 @@ CREATE EXTENSION pg_tle;
 
 Creating this extension creates a schema in the database called `pgtle` that contains several helper functions for [managing extensions](./03_managing_extensions.md). For more information, please see the the section of the documentation on [managing extensions](./03_managing_extensions.md).
 
-Once `pg_tle` is installed, we can then create a Trusted-Language Extension for the above distance functions called `pg_distance` and install it into the PostgreSQL cluster. For this example, use a PostgreSQL superuser role (e.g. `postgres`) to install the `pg_distance` extension:
+Once `pg_tle` is installed, we can then create a Trusted-Language Extension (TLE) for the above distance functions called `pg_distance` and install it into the PostgreSQL cluster. Trusted-Language extensions can be installed by anyone who is a member of the `pgtle_admin` role. This includes PostgreSQL superusers.
+
+ For this example, use a PostgreSQL superuser role (e.g. `postgres`) to install the `pg_distance` extension. If you are using Amazon RDS, you will first need to grant this role to your master user, e.g.:
+
+ ```sql
+ GRANT pgtle_admin TO postgres;
+ ```
+
+ Now, install the `pg_distance` extension into your database:
 
 ```sql
 SELECT pgtle.install_extension
@@ -47,20 +55,20 @@ SELECT pgtle.install_extension
  '0.1',
   'Distance functions for two points',
 $_pg_tle_$
-    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
-    RETURNS numeric
+    CREATE FUNCTION dist(x1 float8, y1 float8, x2 float8, y2 float8, norm int)
+    RETURNS float8
     AS $$
-      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+      SELECT (abs(x2 - x1) ^ norm + abs(y2 - y1) ^ norm) ^ (1::float8 / norm);
     $$ LANGUAGE SQL;
 
-    CREATE FUNCTION manhattan_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-    RETURNS numeric
+    CREATE FUNCTION manhattan_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+    RETURNS float8
     AS $$
       SELECT dist(x1, y1, x2, y2, 1);
     $$ LANGUAGE SQL;
 
-    CREATE FUNCTION euclidean_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-    RETURNS numeric
+    CREATE FUNCTION euclidean_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+    RETURNS float8
     AS $$
       SELECT dist(x1, y1, x2, y2, 2);
     $$ LANGUAGE SQL;
@@ -68,7 +76,7 @@ $_pg_tle_$
 );
 ```
 
-The `pg_distance` extension is now installed into your PostgreSQL installation. To create the extension and enable users to access the functionality of the extension, run the `CREATE EXTENSION` command. Note that because this is a "trusted" extension, a non-superuser with the `CREATE` privilege in the current database can run the following command:
+The `pg_distance` extension is now installed into your PostgreSQL database. To create the extension and enable users to access the functionality of the extension, run the `CREATE EXTENSION` command. Note that any user can run `CREATE EXTENSION` for `pg_distance`, but for it to succeed, a user will need to have `CREATE` privileges in the current database:
 
 ```sql
 CREATE EXTENSION pg_distance;
@@ -92,20 +100,20 @@ SELECT pgtle.install_update_path
  '0.1',
  '0.2',
 $_pg_tle_$
-    CREATE OR REPLACE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
-    RETURNS numeric
+    CREATE OR REPLACE FUNCTION dist(x1 float8, y1 float8, x2 float8, y2 float8, norm int)
+    RETURNS float8
     AS $$
-      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+      SELECT (abs(x2 - x1) ^ norm + abs(y2 - y1) ^ norm) ^ (1::float8 / norm);
     $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
-    CREATE OR REPLACE FUNCTION manhattan_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-    RETURNS numeric
+    CREATE OR REPLACE FUNCTION manhattan_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+    RETURNS float8
     AS $$
       SELECT dist(x1, y1, x2, y2, 1);
     $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
-    CREATE OR REPLACE FUNCTION euclidean_dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric)
-    RETURNS numeric
+    CREATE OR REPLACE FUNCTION euclidean_dist(x1 float8, y1 float8, x2 float8, y2 float8)
+    RETURNS float8
     AS $$
       SELECT dist(x1, y1, x2, y2, 2);
     $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
