@@ -190,12 +190,13 @@ static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
 static void check_requires_list(List *requires);
 
-#if PG_VERSION_NUM < 150000
-/* flag bits for SetSingleFuncCall() */
-#define SRF_SINGLE_USE_EXPECTED	0x01	/* use expectedDesc as tupdesc */
-#define SRF_SINGLE_BLESS		0x02	/* validate tuple for SRF */
+#if PG_VERSION_NUM < 150001
+/* flag bits for InitMaterializedSRF() */
+#define MAT_SRF_USE_EXPECTED_DESC	0x01	/* use expectedDesc as tupdesc. */
+#define MAT_SRF_BLESS				0x02	/* "Bless" a tuple descriptor with
+											 * BlessTupleDesc(). */
 /*
- * SetSingleFuncCall
+ * InitMaterializedSRF
  *
  * Helper function to build the state of a set-returning function used
  * in the context of a single call with materialize mode.  This code
@@ -203,15 +204,15 @@ static void check_requires_list(List *requires);
  * the TupleDesc used with the function and stores them into the
  * function's ReturnSetInfo.
  *
- * "flags" can be set to SRF_SINGLE_USE_EXPECTED, to use the tuple
+ * "flags" can be set to MAT_SRF_USE_EXPECTED_DESC, to use the tuple
  * descriptor coming from expectedDesc, which is the tuple descriptor
- * expected by the caller.  SRF_SINGLE_BLESS can be set to complete the
+ * expected by the caller.  MAT_SRF_BLESS can be set to complete the
  * information associated to the tuple descriptor, which is necessary
  * in some cases where the tuple descriptor comes from a transient
  * RECORD datatype.
  */
 static void
-SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
+InitMaterializedSRF(FunctionCallInfo fcinfo, bits32 flags)
 {
 	bool		random_access;
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
@@ -226,7 +227,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("set-valued function called in context that cannot accept a set")));
 	if (!(rsinfo->allowedModes & SFRM_Materialize) ||
-		((flags & SRF_SINGLE_USE_EXPECTED) != 0 && rsinfo->expectedDesc == NULL))
+		((flags & MAT_SRF_USE_EXPECTED_DESC) != 0 && rsinfo->expectedDesc == NULL))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("materialize mode required, but it is not allowed in this context")));
@@ -239,7 +240,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 	old_context = MemoryContextSwitchTo(per_query_ctx);
 
 	/* build a tuple descriptor for our result type */
-	if ((flags & SRF_SINGLE_USE_EXPECTED) != 0)
+	if ((flags & MAT_SRF_USE_EXPECTED_DESC) != 0)
 		stored_tupdesc = CreateTupleDescCopy(rsinfo->expectedDesc);
 	else
 	{
@@ -248,7 +249,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 	}
 
 	/* If requested, bless the tuple descriptor */
-	if ((flags & SRF_SINGLE_BLESS) != 0)
+	if ((flags & MAT_SRF_BLESS) != 0)
 		BlessTupleDesc(stored_tupdesc);
 
 	random_access = (rsinfo->allowedModes & SFRM_Materialize_Random) != 0;
@@ -2317,7 +2318,7 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* now grab pg_tle extensions */
 	SET_TLEEXT;
@@ -2419,7 +2420,7 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* now grab pg_tle extensions */
 	SET_TLEEXT;
@@ -2651,7 +2652,7 @@ pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 	check_valid_extension_name(NameStr(*extname));
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* Read the extension's control file */
 	control = read_extension_control_file(NameStr(*extname));
