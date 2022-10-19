@@ -37,7 +37,6 @@ USAGE:
       --action install \
       --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" \
       --extname <ExtensionName> \
-      --extrev <ExtensionVersion> \
       --extpath <ExtensionPath>
 
   Remove:
@@ -60,7 +59,8 @@ OPTIONS:
 
     -a, --action <action name>
           A required parameter.
-          install - install extension 
+          install - install extension
+          update - update extension
           uninstall - uninstall extension
           list - list extension
           list-versions - list extension along with available versions
@@ -72,9 +72,6 @@ OPTIONS:
     -n, --extname <Extension Name>
           A required parameter for install and uninstall actions.
           Name of the extension
-
-    -r, --extrev <Extension Revision>
-          Extension revision to install
 
     -p, --extpath <Extension Path>
           A required parameter for install action.
@@ -112,14 +109,14 @@ Installing mv_stats  from ~/mv_stats in postgresql://myuser@localhost:5432/mydb?
 install compeleted succefully.
 ```
 
-or install a specific version
+## Update extension
 
-`./pg_tle_manage_local_extension.sh --action install --pgconn "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --extname mv_stats --extpath ~/mv_stats --extrev 0.2.0`
+`./pg_tle_manage_local_extension.sh --action update --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" --extname mv_stats --extpath ~/gitwork/mv_stats`
 
 ```
-Installing mv_stats 0.2.0 from ~/mv_stats in postgresql://myuser@localhost:5432/mydb?sslmode=prefer
+Updating mv_stats from /home/sharyogi/gitwork/mv_stats in postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer
 
-install compeleted succefully.
+update compeleted succefully.
 ```
 
 ## List extension(s)
