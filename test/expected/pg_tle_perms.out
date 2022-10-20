@@ -180,15 +180,21 @@ RESET SESSION AUTHORIZATION;
 GRANT pgtle_admin TO tle_person;
 -- become tle_person and drop extensions
 SET SESSION AUTHORIZATION tle_person;
-DROP EXTENSION yes_features;
-DROP EXTENSION no_features;
--- unregister hook and drop function
+SELECT pgtle.unregister_feature('passcheck_hook', 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
 SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
  unregister_feature 
 --------------------
  
 (1 row)
 
+DROP EXTENSION yes_features;
+DROP EXTENSION no_features;
+-- drop function
 DROP FUNCTION other_passcheck_hook;
 -- become the privileged user again
 RESET SESSION AUTHORIZATION;

@@ -530,7 +530,7 @@ BEGIN
 	FOR obj IN SELECT * FROM pg_catalog.pg_event_trigger_dropped_objects()
 
 	LOOP
-	IF tg_tag = 'DROP FUNCTION'
+	IF obj.object_type = 'function'
 	THEN
 		select count(*) into num_rows from EXTSCHEMA.feature_info
 		where obj_identity = obj.object_identity;
