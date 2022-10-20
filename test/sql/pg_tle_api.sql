@@ -133,6 +133,59 @@ SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'pass
 DROP SCHEMA pass CASCADE;
 -- unregister the feature
 SELECT pgtle.unregister_feature('pass.password_check_length_greater_than_8', 'passcheck');
+
+-- one more...register the feature in the extension can drop it on its own
+-- the feature should NOT be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+SELECT pgtle.install_extension
+(
+ 'test_unregister_feature',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+  $$
+  BEGIN
+    if length(shadow_pass) < 8 THEN
+      RAISE EXCEPTION 'Passwords needs to be longer than 8';
+    END IF;
+  END;
+  $$
+  LANGUAGE PLPGSQL;
+  
+  SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+$_pgtle_$
+);
+CREATE EXTENSION test_unregister_feature;
+
+-- the feature should be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+DROP EXTENSION test_unregister_feature;
+
+-- the feature should NOT be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+SELECT pgtle.uninstall_extension('test_unregister_feature');
 -- now drop everything
 DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;

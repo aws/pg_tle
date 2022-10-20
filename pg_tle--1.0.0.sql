@@ -530,16 +530,27 @@ BEGIN
 	FOR obj IN SELECT * FROM pg_catalog.pg_event_trigger_dropped_objects()
 
 	LOOP
-	IF obj.object_type = 'function'
-	THEN
-		select count(*) into num_rows from pgtle.feature_info
-		where obj_identity = obj.object_identity;
+		IF obj.object_type = 'function' THEN
+			-- if this is from a "DROP EXTENSION" call, use this to clean up any
+			-- remaining registered features associated with this extension
+			-- otherwise, continue to pass through
+			IF TG_TAG = 'DROP EXTENSION' THEN
+				BEGIN
+					DELETE FROM pgtle.feature_info
+					WHERE obj_identity = obj.object_identity;
+				EXCEPTION WHEN insufficient_privilege THEN
+					-- do nothing, continue on
+				END;
+			ELSE
+				SELECT count(*) INTO num_rows
+				FROM pgtle.feature_info
+				WHERE obj_identity = obj.object_identity;
 
-		IF num_rows > 0 then
-			RAISE EXCEPTION 'Function is referenced in pgtle.feature_info';
+				IF num_rows > 0 then
+					RAISE EXCEPTION 'Function is referenced in pgtle.feature_info';
+				END IF;
+			END IF;
 		END IF;
-	END IF;
-
 	END LOOP;
 END;
 $$;
