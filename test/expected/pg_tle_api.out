@@ -194,4 +194,39 @@ SELECT pg_reload_conf();
 
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
+-- OK, one more test. we're going to put a passcheck function in its own schema
+-- and then register it. we will then drop the schema and then unregister the
+-- function
+CREATE SCHEMA pass;
+CREATE FUNCTION pass.password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+  if length(shadow_pass) < 8 THEN
+    RAISE EXCEPTION 'Passwords needs to be longer than 8';
+  END IF;
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
+ register_feature 
+------------------
+ 
+(1 row)
+
+-- try to drop the schema while the code is still referenced
+-- fail
+DROP SCHEMA pass CASCADE;
+NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
+ERROR:  Function is referenced in pgtle.feature_info
+CONTEXT:  PL/pgSQL function pgtle.pg_tle_feature_info_sql_drop() line 16 at RAISE
+-- unregister the feature
+SELECT pgtle.unregister_feature('pass.password_check_length_greater_than_8', 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+-- now drop everything
+DROP SCHEMA pass CASCADE;
+NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
 DROP EXTENSION pg_tle;

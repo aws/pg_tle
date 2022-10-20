@@ -114,4 +114,25 @@ ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
+-- OK, one more test. we're going to put a passcheck function in its own schema
+-- and then register it. we will then drop the schema and then unregister the
+-- function
+CREATE SCHEMA pass;
+CREATE FUNCTION pass.password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+  if length(shadow_pass) < 8 THEN
+    RAISE EXCEPTION 'Passwords needs to be longer than 8';
+  END IF;
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
+-- try to drop the schema while the code is still referenced
+-- fail
+DROP SCHEMA pass CASCADE;
+-- unregister the feature
+SELECT pgtle.unregister_feature('pass.password_check_length_greater_than_8', 'passcheck');
+-- now drop everything
+DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;

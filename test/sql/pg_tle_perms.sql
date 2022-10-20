@@ -188,11 +188,12 @@ GRANT pgtle_admin TO tle_person;
 
 -- become tle_person and drop extensions
 SET SESSION AUTHORIZATION tle_person;
+SELECT pgtle.unregister_feature('passcheck_hook', 'passcheck');
+SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
 DROP EXTENSION yes_features;
 DROP EXTENSION no_features;
 
--- unregister hook and drop function
-SELECT pgtle.unregister_feature('other_passcheck_hook', 'passcheck');
+-- drop function
 DROP FUNCTION other_passcheck_hook;
 
 -- become the privileged user again
