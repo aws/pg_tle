@@ -52,7 +52,7 @@ passcheck_hook(username text, password text, password_type pgtle.password_types,
   * `PASSWORD_TYPE_PLAINTEXT` - a plaintext password.
   * `PASSWORD_TYPE_MD5` - a md5 hashed password.
   * `PASSWORD_TYPE_SCRAM_SHA_256` - a SCRAM-SHA-256 hashed password.
-* `valid_until` (`timestamp`) - if set, the time until the password on the account no longer works.
+* `valid_until` (`timestamptz`) - if set, the time until the password on the account no longer works.
 * `valid_null` (`bool`) - if true, `valid_until` is set to `NULL`.
 
 #### Configuration
@@ -93,7 +93,7 @@ $_pgtle_$
     ('dragon');
   CREATE UNIQUE INDEX ON password_check.bad_passwords (plaintext);
 
-  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     DECLARE
       invalid bool := false;
@@ -118,7 +118,7 @@ $_pgtle_$
         END IF;
       END IF;
     END
-  $$ LANGUAGE plpgsql SECURITY DEFINER;
+  $$ LANGUAGE plpgsql;
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
