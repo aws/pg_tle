@@ -1,18 +1,18 @@
 # Trusted Language Extensions hooks
 
-PostgreSQL provides hooks for extending its functionality without creating a fork. These hooks range from performing checks on user-supplied passwords to being able to modify queries.
+PostgreSQL provides hooks for extending its functionality without creating a fork. These hooks range from performing checks on user-supplied passwords to being able to modify queries. To use hooks, you have to write a "hook function" and register it with PostgreSQL. Once a hook function is registered, PostgreSQL then knows to execute the hook when that particular action is run (e.g. when checking a password).
 
-`pg_tle` enables you to build Trusted Language Extensions that make use of hooks from a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
+`pg_tle` enables you to build Trusted Language Extensions that can let you write hook functions and registered them through a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
 
-<!-- ## Scope
+## Scope
 
-Note that some hooks are available globally across a PostgreSQL cluster (e.g. `check_password_hook`). If you use a global hook, you will need to ensure you run `CREATE EXTENSION pg_tle;` in all of the databases. -->
+Note that some hooks are available globally across a PostgreSQL cluster (e.g. `check_password_hook`). If you use register a global hook function, you will need to ensure you run `CREATE EXTENSION pg_tle;` in all of your databases.
 
 ## General information
 
-All hooks need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
+All hook functions need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
 
-You can register a `pg_tle` hook using the `pgtle.register_feature` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
+You can register a `pg_tle` hook function using the `pgtle.register_feature` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
 
 ```sql
 SELECT pgtle.register_feature('my_password_check_rules', 'passcheck');
@@ -66,6 +66,8 @@ Controls whether a `passcheck` hook is enabled. There are three settings:
 * `require` — requires a password check hook to be defined.
 
 #### Example
+
+The following examples demonstrates how to write a hook function that checks to see if a user-supplied password is in a common password dictionary. After writing this function, the example shows how to register the hook function as part of the `passcheck` hook.
 
 ```sql
 SELECT pgtle.install_extension (
