@@ -1,6 +1,6 @@
-# Getting Started:  Writing a basic Trusted-Language Extension for PostgreSQL
+# Getting Started:  Writing a basic Trusted Language Extension for PostgreSQL
 
-Let's try writing our first Trusted-Language Extension for PostgreSQL! This assumes that you have [installed `pg_tle` in your PostgreSQL cluster](./01_install.md).
+Let's try writing our first Trusted Language Extension for PostgreSQL! This assumes that you have [installed `pg_tle` in your PostgreSQL cluster](./01_install.md).
 
 ## Example: Distance calculating functions
 
@@ -26,9 +26,9 @@ AS $$
 $$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 ```
 
-Let's use these functions to create a Trusted-Language Extension.
+Let's use these functions to create a Trusted Language Extension.
 
-### Install a Trusted-Language Extension
+### Install a Trusted Language Extension
 
 First, we need to install the `pg_tle` extension into our database. This command must be executed as a PostgreSQL superuser (e.g. `postgres`):
 
@@ -38,7 +38,7 @@ CREATE EXTENSION pg_tle;
 
 Creating this extension creates a schema in the database called `pgtle` that contains several helper functions for [managing extensions](./03_managing_extensions.md). For more information, please see the the section of the documentation on [managing extensions](./03_managing_extensions.md).
 
-Once `pg_tle` is installed, we can then create a Trusted-Language Extension (TLE) for the above distance functions called `pg_distance` and install it into the PostgreSQL cluster. Trusted-Language extensions can be installed by anyone who is a member of the `pgtle_admin` role. This includes PostgreSQL superusers.
+Once `pg_tle` is installed, we can then create a Trusted Language Extension (TLE) for the above distance functions called `pg_distance` and install it into the PostgreSQL cluster. Trusted Language extensions can be installed by anyone who is a member of the `pgtle_admin` role. This includes PostgreSQL superusers.
 
  For this example, use a PostgreSQL superuser role (e.g. `postgres`) to install the `pg_distance` extension. If you are using Amazon RDS, you will first need to grant this role to your master user, e.g.:
 
@@ -89,7 +89,7 @@ SELECT manhattan_dist(1, 1, 5, 5);
 SELECT euclidean_dist(1, 1, 5, 5);
 ```
 
-### Update a Trusted-Language Extension
+### Update a Trusted Language Extension
 
 What about extension updates? Looking at the example above, we can add a few attributes to these functions that can improve their performance in queries. Specifically, we can add the `IMMUTABLE` and `PARALLEL SAFE` options to the functions. We can do so in a version "0.2" of the extension:
 
@@ -133,9 +133,9 @@ Now, we can update the installed functions using `ALTER EXTENSION ... UPDATE`, e
 ALTER EXTENSION pg_distance UPDATE;
 ```
 
-### Delete a Trusted-Language Extension
+### Delete a Trusted Language Extension
 
-You can drop the functions created from a Trusted-Language extension using the `DROP EXTENSION` command. For example, to drop the `pg_distance` extension:
+You can drop the functions created from a Trusted Language extension using the `DROP EXTENSION` command. For example, to drop the `pg_distance` extension:
 
 ```sql
 DROP EXTENSION pg_distance;
@@ -149,4 +149,4 @@ SELECT pgtle.uninstall_extension('pg_distance');
 
 ## Next steps
 
-Now you have seen the basic lifecycle of a Trusted-Language Extension. The next section looks at [manage extensions](./03_managing_extensions.md) in greater depth.
+Now you have seen the basic lifecycle of a Trusted Language Extension. The next section looks at [manage extensions](./03_managing_extensions.md) in greater depth.

@@ -1,1 +1,1 @@
-# Examples: Writing Trusted-Language Extensions with PL/V8
+# Examples: Writing Trusted Language Extensions with PL/V8

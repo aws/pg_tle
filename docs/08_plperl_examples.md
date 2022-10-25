@@ -1,1 +1,1 @@
-# Examples: Writing Trusted-Language Extensions with PL/Perl
+# Examples: Writing Trusted Language Extensions with PL/Perl

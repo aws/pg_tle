@@ -1,4 +1,4 @@
-# Managing Trusted-Language Extensions for PostgreSQL
+# Managing Trusted Language Extensions for PostgreSQL
 
 ## Scope
 
@@ -24,7 +24,7 @@ If a schema is not specified in a `pg_tle`-compatible extensions, all objects (e
 
 ### `pgtle.available_extensions()`
 
-`available_extensions` is a set-returning functions that returns a list of all available Trusted-Language Extensions in a database. Each row contains information about a single extension.
+`available_extensions` is a set-returning functions that returns a list of all available Trusted Language Extensions in a database. Each row contains information about a single extension.
 
 #### Role
 
@@ -48,7 +48,7 @@ SELECT * FROM pgtle.available_extensions();
 
 ### `pgtle.available_extension_versions()`
 
-`available_extension_versions` is a set-returning functions that returns a list of all available Trusted-Language Extensions and their versions. Each row contains information about an individual version of an extension, including if it requires additional privileges for installation.
+`available_extension_versions` is a set-returning functions that returns a list of all available Trusted Language Extensions and their versions. Each row contains information about an individual version of an extension, including if it requires additional privileges for installation.
 
 For more information on the output values, please read the [extension files](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11) section in the PostgreSQL documentation.
 
@@ -79,7 +79,7 @@ SELECT * FROM pgtle.available_extension_versions();
 
 ### `pgtle.extension_update_paths(name name)`
 
-`extension_update_paths` is a set-returning functions that returns a list of all the possible update paths for a Trusted-Language Extension. Each row shows the path for how to upgrade/downgrade an extension.
+`extension_update_paths` is a set-returning functions that returns a list of all the possible update paths for a Trusted Language Extension. Each row shows the path for how to upgrade/downgrade an extension.
 
 #### Role
 
@@ -140,7 +140,7 @@ $_pgtle_$
 
 ### `pgtle.install_update_path(name text, fromvers text, tovers text, ext text)`
 
-`install_update_path` provides an update path between two different version of an extension. This enables user to call `ALTER EXTENSION ... UPDATE` for a Trusted-Language Extension.
+`install_update_path` provides an update path between two different version of an extension. This enables user to call `ALTER EXTENSION ... UPDATE` for a Trusted Language Extension.
 
 #### Role
 
@@ -374,4 +374,4 @@ SELECT pgtle.unregister_feature_if_exists('pw_hook', 'passcheck');
 
 ## Next steps
 
-Learn how you can use [hooks](./04_hooks.md) to use more PostgreSQL capabilities in your Trusted-Language Extensions.
+Learn how you can use [hooks](./04_hooks.md) to use more PostgreSQL capabilities in your Trusted Language Extensions.

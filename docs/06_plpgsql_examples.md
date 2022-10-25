@@ -1,1 +1,1 @@
-# Examples: Writing Trusted-Language Extensions with PL/pgSQL
+# Examples: Writing Trusted Language Extensions with PL/pgSQL

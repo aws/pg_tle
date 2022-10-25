@@ -1,8 +1,8 @@
-# Trusted-Language Extensions hooks
+# Trusted Language Extensions hooks
 
 PostgreSQL provides hooks for extending its functionality without creating a fork. These hooks range from performing checks on user-supplied passwords to being able to modify queries.
 
-`pg_tle` enables you to build Trusted-Language Extensions that make use of hooks from a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted-Language Extensions.
+`pg_tle` enables you to build Trusted Language Extensions that make use of hooks from a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
 
 <!-- ## Scope
 
@@ -34,7 +34,7 @@ SELECT pgtle.unregister_feature('my_password_check_rules', 'passcheck');
 
 ## Hooks
 
-This section describes the hooks that `pg_tle` makes availble to Trusted-Language Extensions.
+This section describes the hooks that `pg_tle` makes availble to Trusted Language Extensions.
 
 ### Password check hook (`passcheck`)
 
