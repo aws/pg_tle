@@ -1,1 +1,1 @@
-# Examples: Writing Trusted-Language Extensions with PL/Rust
+# Examples: Writing Trusted Language Extensions with PL/Rust
