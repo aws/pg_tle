@@ -190,7 +190,7 @@ static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
 static void check_requires_list(List *requires);
 
-#if PG_VERSION_NUM < 150001
+#if PG_VERSION_NUM <= 150000
 /* flag bits for InitMaterializedSRF() */
 #define MAT_SRF_USE_EXPECTED_DESC	0x01	/* use expectedDesc as tupdesc. */
 #define MAT_SRF_BLESS				0x02	/* "Bless" a tuple descriptor with
