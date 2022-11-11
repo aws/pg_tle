@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 
-###########################
-# Schema |              Name              | Result data type |                                                                     Argument data types                                                                      | Type
-#--------+--------------------------------+------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+------
-# pgtle  | available_extension_versions   | SETOF record     | OUT name name, OUT version text, OUT superuser boolean, OUT trusted boolean, OUT relocatable boolean, OUT schema name, OUT requires name[], OUT comment text | func
-# pgtle  | available_extensions           | SETOF record     | OUT name name, OUT default_version text, OUT comment text                                                                                                    | func
-# pgtle  | extension_update_paths         | SETOF record     | name name, OUT source text, OUT target text, OUT path text                                                                                                   | func
-# pgtle  | install_extension              | boolean          | name text, version text, trusted boolean, description text, ext text, requires text[] DEFAULT NULL::text[], encoding text DEFAULT NULL::text                 | func
-# pgtle  | install_update_path            | boolean          | name text, fromvers text, tovers text, ext text                                                                                                              | func
-# pgtle  | pg_tle_feature_info_sql_drop   | event_trigger    |                                                                                                                                                              | func
-# pgtle  | register_feature               | void             | proc regproc, feature pgtle.pg_tle_features                                                                                                                  | func
-# pgtle  | register_feature_if_not_exists | boolean          | proc regproc, feature pgtle.pg_tle_features                                                                                                                  | func
-# pgtle  | uninstall_extension            | boolean          | extname text                                                                                                                                                 | func
-# pgtle  | uninstall_extension            | boolean          | extname text, version text                                                                                                                                   | func
-# pgtle  | unregister_feature             | void             | proc regproc, feature pgtle.pg_tle_features                                                                                                                  | func
-# pgtle  | unregister_feature_if_exists   | boolean          | proc regproc, feature pgtle.pg_tle_features                                                                                                                  | func
-###########################
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
 PROGRAM_NAME=$(basename $0)
 PROGRAM_VERSION="1.0"
