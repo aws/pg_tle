@@ -1,1 +1,1 @@
-# Examples: Writing Trusted-Language Extensions with SQL
+# Examples: Writing Trusted Language Extensions with SQL

@@ -188,13 +188,15 @@ static char *read_whole_file(const char *filename, int *length);
 static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
+static void check_requires_list(List *requires);
 
-#if PG_VERSION_NUM < 150000
-/* flag bits for SetSingleFuncCall() */
-#define SRF_SINGLE_USE_EXPECTED	0x01	/* use expectedDesc as tupdesc */
-#define SRF_SINGLE_BLESS		0x02	/* validate tuple for SRF */
+#if PG_VERSION_NUM < 150001
+/* flag bits for InitMaterializedSRF() */
+#define MAT_SRF_USE_EXPECTED_DESC	0x01	/* use expectedDesc as tupdesc. */
+#define MAT_SRF_BLESS				0x02	/* "Bless" a tuple descriptor with
+											 * BlessTupleDesc(). */
 /*
- * SetSingleFuncCall
+ * InitMaterializedSRF
  *
  * Helper function to build the state of a set-returning function used
  * in the context of a single call with materialize mode.  This code
@@ -202,15 +204,15 @@ static bool validate_tle_sql(char *sql);
  * the TupleDesc used with the function and stores them into the
  * function's ReturnSetInfo.
  *
- * "flags" can be set to SRF_SINGLE_USE_EXPECTED, to use the tuple
+ * "flags" can be set to MAT_SRF_USE_EXPECTED_DESC, to use the tuple
  * descriptor coming from expectedDesc, which is the tuple descriptor
- * expected by the caller.  SRF_SINGLE_BLESS can be set to complete the
+ * expected by the caller.  MAT_SRF_BLESS can be set to complete the
  * information associated to the tuple descriptor, which is necessary
  * in some cases where the tuple descriptor comes from a transient
  * RECORD datatype.
  */
 static void
-SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
+InitMaterializedSRF(FunctionCallInfo fcinfo, bits32 flags)
 {
 	bool		random_access;
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
@@ -225,7 +227,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("set-valued function called in context that cannot accept a set")));
 	if (!(rsinfo->allowedModes & SFRM_Materialize) ||
-		((flags & SRF_SINGLE_USE_EXPECTED) != 0 && rsinfo->expectedDesc == NULL))
+		((flags & MAT_SRF_USE_EXPECTED_DESC) != 0 && rsinfo->expectedDesc == NULL))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("materialize mode required, but it is not allowed in this context")));
@@ -238,7 +240,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 	old_context = MemoryContextSwitchTo(per_query_ctx);
 
 	/* build a tuple descriptor for our result type */
-	if ((flags & SRF_SINGLE_USE_EXPECTED) != 0)
+	if ((flags & MAT_SRF_USE_EXPECTED_DESC) != 0)
 		stored_tupdesc = CreateTupleDescCopy(rsinfo->expectedDesc);
 	else
 	{
@@ -247,7 +249,7 @@ SetSingleFuncCall(FunctionCallInfo fcinfo, bits32 flags)
 	}
 
 	/* If requested, bless the tuple descriptor */
-	if ((flags & SRF_SINGLE_BLESS) != 0)
+	if ((flags & MAT_SRF_BLESS) != 0)
 		BlessTupleDesc(stored_tupdesc);
 
 	random_access = (rsinfo->allowedModes & SFRM_Materialize_Random) != 0;
@@ -299,7 +301,8 @@ exec_scalar_text_sql_func(const char *funcname)
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "SPI_connect failed");
 
-	appendStringInfo(sql, "SELECT %s.\"%s\"()", PG_TLE_NSPNAME, funcname);
+	appendStringInfo(sql, "SELECT %s.%s()",
+		quote_identifier(PG_TLE_NSPNAME), quote_identifier(funcname));
 
 	/* execute scalar text returning function */
 	spi_rc = SPI_exec(sql->data, 0);
@@ -410,6 +413,7 @@ static void
 check_valid_extension_name(const char *extensionname)
 {
 	int			namelen = strnlen(extensionname, NAMEDATALEN);
+	size_t idx = 0;
 
 	/*
 	 * Disallow empty names (the parser rejects empty identifiers anyway, but
@@ -451,6 +455,24 @@ check_valid_extension_name(const char *extensionname)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid extension name: \"%s\"", extensionname),
 				 errdetail("Extension names must not contain directory separator characters.")));
+
+	/*
+	 * Check for alphanumeric character in extension name for now.
+	 * Although this does prevent some naming schemes, it's a more straight
+	 * forward prevention for preventing certain injection attacks due to
+	 * the way the way we rely on functions currently. Allow the '_' or '-' character
+	 * to provide a nice separator if desired.
+	 */
+
+	while (extensionname[idx] != '\0')
+	{
+		if (!isalnum(extensionname[idx]) && extensionname[idx] != '_' && extensionname[idx] != '-')
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid extension name: \"%s\"", extensionname),
+				 errdetail("Extension names must only contain alphanumeric characters or valid separators.")));
+		idx++;
+	}
 }
 
 static void
@@ -542,8 +564,7 @@ get_extension_control_filename(const char *extname)
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
-		snprintf(result, NAMEDATALEN, "%s.control", extname);
+		result = psprintf("%s.control", extname);
 	}
 
 	return result;
@@ -606,9 +627,7 @@ get_extension_aux_control_filename(ExtensionControlFile *control,
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
-		snprintf(result, NAMEDATALEN, "%s--%s.control",
-				 control->name, version);
+		result = psprintf("%s--%s.control", control->name, version);
 	}
 
 	return result;
@@ -637,13 +656,10 @@ get_extension_script_filename(ExtensionControlFile *control,
 	}
 	else
 	{
-		result = (char *) palloc(NAMEDATALEN);
 		if (from_version)
-			snprintf(result, NAMEDATALEN, "%s--%s--%s.sql",
-					 control->name, from_version, version);
+			result = psprintf("%s--%s--%s.sql", control->name, from_version, version);
 		else
-			snprintf(result, NAMEDATALEN, "%s--%s.sql",
-					 control->name, version);
+			result = psprintf("%s--%s.sql", control->name, version);
 	}
 
 	return result;
@@ -750,7 +766,25 @@ parse_extension_control_file(ExtensionControlFile *control,
 		 * Parse the string content, using GUC's file parsing code.  We need not
 		 * check the return value since any errors will be thrown at ERROR level.
 		 */
-		(void) tleParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
+		PG_TRY();
+		{
+			(void) tleParseConfigFp(NULL, fstr, 0, ERROR, &head, &tail);
+		}
+		PG_CATCH();
+		{
+			if (geterrcode() == ERRCODE_SYNTAX_ERROR)
+			{
+				FlushErrorState();
+				ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("syntax error in extension control function for \"%s\"", control->name),
+					 errdetail("Could not parse extension control function \"%s\".\"%s.control\".", PG_TLE_NSPNAME, control->name),
+					 errhint("You may need to reinstall the extension to correct this error.")));
+			}
+
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
 	}
 
 	/*
@@ -847,6 +881,19 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 	FreeConfigVariables(head);
 
+	/* Force specific values and checks for TLE extensions */
+	if (tleext) {
+		control->directory = NULL;
+		control->module_pathname = NULL;
+		control->relocatable = false;
+		control->schema = NULL;
+		control->superuser = false;
+		control->trusted = false;
+		control->encoding = -1; /* encoding is that of the server_side encoding */
+
+		check_requires_list(control->requires);
+	}
+
 	if (control->relocatable && control->schema != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
@@ -896,20 +943,13 @@ build_extension_control_file_string(ExtensionControlFile *control)
 	appendStringInfo(ctlstr, "comment = %s\n",
 		quote_literal_cstr(control->comment));
 
-	/* relocatable and superuser values are forced to be false */
+	/* relocatable, superuser, and trusted values are forced to be false */
 	appendStringInfo(ctlstr,
 		"relocatable = false\n"
-		"superuser = false\n");
+		"superuser = false\n"
+		"trusted = false\n");
 
-	if (control->trusted)
-		appendStringInfo(ctlstr, "trusted = true\n");
-	else
-		appendStringInfo(ctlstr, "trusted = false\n");
-
-	if (control->encoding >= 0) {
-		appendStringInfo(ctlstr,
-			"encoding = '%s'\n", pg_encoding_to_char(control->encoding));
-	}
+	/* we do not need to set "encoding" because it is set to the server_side encoding */
 
 	if (control->requires != NULL) {
 		foreach(req, control->requires) {
@@ -1189,12 +1229,14 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	 * Enforce superuser-ness if appropriate.  We postpone these checks until
 	 * here so that the control flags are correctly associated with the right
 	 * script(s) if they happen to be set in secondary control files.
+	 *
+	* NOTE: TLE extensions **do not** require superuser. We can consider just
+	* if (false) -ing this block, just to keep it to compare to upstream.
 	 */
-	if (control->superuser && !superuser())
+	if (!tleext && control->superuser && !superuser())
 	{
 		if (extension_is_trusted(control))
 		{
-		        if (!tleext)
 				switch_to_superuser = true;
 		}
 		else if (from_version == NULL)
@@ -1484,7 +1526,9 @@ get_ext_ver_list(ExtensionControlFile *control)
 	else			/* pg_tle extension */
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[SPI_NARGS_2] = { TEXTOID, OIDOID };
+		Datum			sqlargs[SPI_NARGS_2];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
@@ -1493,10 +1537,13 @@ get_ext_ver_list(ExtensionControlFile *control)
 		if (SPI_connect() != SPI_OK_CONNECT)
 			elog(ERROR, "SPI_connect failed");
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%s%%.sql' AND pronamespace = %u",
-							  control->name, schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE $1::pg_catalog.name AND pg_proc.pronamespace OPERATOR(pg_catalog.=) $2::pg_catalog.oid");
+
+		sqlargs[0] = CStringGetTextDatum(psprintf("%s%%.sql", control->name));
+		sqlargs[1] = ObjectIdGetDatum(schemaOid);
+
+		spi_rc = SPI_execute_with_args(sql, 2, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %s%% in schema %u failed", control->name, schemaOid);
@@ -2271,7 +2318,7 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* now grab pg_tle extensions */
 	SET_TLEEXT;
@@ -2281,16 +2328,21 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	else
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[SPI_NARGS_1] = { OIDOID };
+		Datum			sqlargs[SPI_NARGS_1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%%.control' AND pronamespace = %u",
-							  schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
+
+		sqlargs[0] = ObjectIdGetDatum(schemaOid);
+
+		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %%.control in schema %u failed", schemaOid);
@@ -2368,7 +2420,7 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* now grab pg_tle extensions */
 	SET_TLEEXT;
@@ -2378,16 +2430,21 @@ pg_tle_available_extension_versions(PG_FUNCTION_ARGS)
 	else
 	{
 		int				spi_rc;
-		StringInfo		sql = makeStringInfo();
+		char			*sql;
+		Oid				sqlargtypes[SPI_NARGS_1] = { OIDOID };
+		Datum			sqlargs[SPI_NARGS_1];
 		int				i;
 		Oid				schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
 		MemoryContext	ctx = CurrentMemoryContext;
 		MemoryContext	oldcontext;
 
-		appendStringInfo(sql, "SELECT proname FROM pg_proc WHERE "
-							  "proname LIKE '%%.control' AND pronamespace = %u",
-							  schemaOid);
-		spi_rc = SPI_exec(sql->data, 0);
+		sql = psprintf("SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE "
+			"pg_proc.proname LIKE '%%.control'::pg_catalog.name AND "
+			"pg_proc.pronamespace OPERATOR(pg_catalog.=) $1::pg_catalog.oid");
+
+		sqlargs[0] = ObjectIdGetDatum(schemaOid);
+
+		spi_rc = SPI_execute_with_args(sql, 1, sqlargtypes, sqlargs, NULL, true, 0);
 
 		if (spi_rc != SPI_OK_SELECT)	/* internal error */
 			elog(ERROR, "search for %%.control in schema %u failed", schemaOid);
@@ -2542,6 +2599,9 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 
 /*
  * Convert a list of extension names to a name[] Datum
+ *
+ * This is taken from the upstream function, but has a specific check on
+ * requirement string length
  */
 static Datum
 convert_requires_to_datum(List *requires)
@@ -2551,8 +2611,11 @@ convert_requires_to_datum(List *requires)
 	ArrayType  *a;
 	ListCell   *lc;
 
+	check_requires_list(requires);
+
 	ndatums = list_length(requires);
 	datums = (Datum *) palloc(ndatums * sizeof(Datum));
+
 	ndatums = 0;
 	foreach(lc, requires)
 	{
@@ -2589,7 +2652,7 @@ pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 	check_valid_extension_name(NameStr(*extname));
 
 	/* Build tuplestore to hold the result rows */
-	SetSingleFuncCall(fcinfo, 0);
+	InitMaterializedSRF(fcinfo, 0);
 
 	/* Read the extension's control file */
 	control = read_extension_control_file(NameStr(*extname));
@@ -4026,11 +4089,9 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	int		spi_rc;
 	char		*extname;
 	char		*extvers;
-	bool		exttrusted;
 	char		*extdesc;
 	char		*sql_str;
 	ArrayType	*extrequires;
-	char		*extencode;
 	char		*ctlname;
 	StringInfo	ctlstr;
 	char		*sqlname;
@@ -4045,7 +4106,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"name\" is a required argument.")));
+			errmsg("\"name\" is a required argument")));
 	}
 
 	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4063,7 +4124,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(1)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"version\" is a required argument.")));
+			errmsg("\"version\" is a required argument")));
 	}
 
 	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
@@ -4071,30 +4132,24 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(2)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"trusted\" is a required argument.")));
+			errmsg("\"description\" is a required argument")));
 	}
 
-	exttrusted = PG_GETARG_BOOL(2);
+	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(2));
 
 	if (PG_ARGISNULL(3)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"description\" is a required argument.")));
+			errmsg("\"ext\" is a required argument")));
 	}
 
-	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(3));
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
 
 	if (PG_ARGISNULL(4)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"ext\" is a required argument.")));
-	}
-
-	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(4));
-
-	if (PG_ARGISNULL(5)) {
 		reqlist = NIL;
 	} else {
-		extrequires = PG_GETARG_ARRAYTYPE_P(5);
+		extrequires = PG_GETARG_ARRAYTYPE_P(4);
 		reqlist = textarray_to_stringlist(extrequires);
+		check_requires_list(reqlist);
 	}
 
 	/*
@@ -4124,27 +4179,16 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	/*
 	 * Build up the control file that will be injected into the DB for the TLE.
-	 * We can inherit some of the defaults (relocatable: false, encoding: -1)
+	 * We can inherit some of the defaults (encoding: -1)
+	 * In case some defaults change, we will ensure we explicitly set them here.
 	 */
 	control = build_default_extension_control_file(extname);
+	control->relocatable = false; // explicitly set to false
 	control->superuser = false; // explicitly set to false
+	control->trusted = false; // explicitly set to false;
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
-	control->trusted = exttrusted;
 	control->requires = reqlist;
-
-	if (!PG_ARGISNULL(6))
-	{
-		extencode = text_to_cstring(PG_GETARG_TEXT_PP(6));
-		control->encoding = pg_valid_server_encoding(extencode);
-
-		if (control->encoding < 0) {
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("\"%s\" is not a valid encoding name.",
-							extencode)));
-		}
-	}
 
 	ctlstr = build_extension_control_file_string(control);
 
@@ -4154,13 +4198,13 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	if (!(validate_tle_sql(ctlstr->data) && validate_tle_sql(sql_str))) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("Invalid character in extension definition."),
-				 errdetail("Use of string delimiters %s and %s are foribbden in extension definitions.",
+				 errmsg("invalid character in extension definition"),
+				 errdetail("Use of string delimiters \"%s\" and \"%s\" are forbidden in extension definitions.",
 			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
 
-	/* 
+	/*
 	 * Create the control and sql string returning function
 	 *
 	 * NOTE: we used to build a CREATE OR REPLACE statement here
@@ -4218,16 +4262,13 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-	  ErrorData  *errdata = CopyErrorData();
 
-	  if (errdata->sqlerrcode == ERRCODE_DUPLICATE_FUNCTION)
+	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
 	  {
 	    FlushErrorState();
-	    FreeErrorData(errdata);
-
 	    ereport(ERROR,
 		    (errcode(ERRCODE_DUPLICATE_OBJECT),
-		     errmsg("Extension '%s' already installed.", extname)));
+		     errmsg("extension \"%s\" already installed", extname)));
 	  }
 	  else
 	  {
@@ -4263,7 +4304,135 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"name\" is a required argument.")));
+			errmsg("\"name\" is a required argument")));
+	}
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
+
+	/*
+	 * Verify that extname does not already exist as
+	 * a standard file-based extension.
+	 */
+	filename = get_extension_control_filename(extname);
+	if (filestat(filename)) {
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("control file already exists for the \"%s\" extension", extname)));
+	}
+
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"fromvers\" is a required argument")));
+	}
+
+	if (PG_ARGISNULL(2)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"tovers\" is a required argument")));
+	}
+
+	fromvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	check_valid_version_name(fromvers);
+	tovers = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	check_valid_version_name(tovers);
+
+	if (PG_ARGISNULL(3)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"ext\" is a required argument")));
+	}
+
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
+
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(sql_str))) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid character in extension update definition"),
+				 errdetail("Use of string delimiters \"%s\" and \"%s\" are forbidden in extension definitions.",
+					PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
+	}
+
+	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
+	sqlsql = psprintf(
+		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+		quote_identifier(PG_TLE_NSPNAME), quote_identifier(sqlname),
+		PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+		sql_str,
+		PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
+
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
+
+	if (SPI_connect() != SPI_OK_CONNECT) {
+		elog(ERROR, "SPI_connect failed");
+		PG_RETURN_BOOL(false);
+	}
+
+	/*
+	 * Try to create the control-string function and the
+	 * sql-string function - if either fails because of
+	 * ERRCODE_DUPLICATE_FUNCTION, we convert the error
+	 * to a more user-friendly form.
+	 */
+	PG_TRY();
+	{
+		/* create the sql function */
+		spi_rc = SPI_exec(sqlsql, 0);
+		if (spi_rc != SPI_OK_UTILITY) {
+			elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
+			PG_RETURN_BOOL(false);
+		}
+	}
+	PG_CATCH();
+	{
+	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
+	  {
+			FlushErrorState();
+			ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("extension \"%s\" update path \"%s-%s\" already installed",
+				 	extname, fromvers, tovers),
+				 errhint("To update this specific install path, first use \"%s.uninstall_update_path\".", PG_TLE_NSPNAME)));
+	  }
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	if (SPI_finish() != SPI_OK_FINISH) {
+		elog(ERROR, "SPI_finish failed");
+		PG_RETURN_BOOL(false);
+	}
+
+	/* done manipulating pg_tle artifacts */
+	UNSET_TLEART;
+
+	PG_RETURN_BOOL(true);
+}
+
+Datum pg_tle_set_default_version(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_set_default_version);
+Datum
+pg_tle_set_default_version(PG_FUNCTION_ARGS)
+{
+	int		spi_rc;
+	char		*extname;
+	char		*extvers;
+	char		*ctlname;
+	char		*versql;
+	Oid		verargtypes[SPI_NARGS_2] = { TEXTOID, TEXTOID };
+	Datum		verargs[SPI_NARGS_2];
+	StringInfo	ctlstr;
+	char		*ctlsql;
+	ExtensionControlFile	*control;
+	char		   *filename;
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				errmsg("\"name\" is a required argument.")));
 	}
 
 	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -4281,58 +4450,97 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(1)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"fromvers\" is a required argument.")));
+			errmsg("\"version\" is a required argument")));
 	}
 
-	if (PG_ARGISNULL(2)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"tovers\" is a required argument.")));
+	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
+	check_valid_version_name(extvers);
+
+	/*
+	 * Check to see if the extension exists. If it does not, then error
+	 */
+ 	if (SPI_connect() != SPI_OK_CONNECT) {
+ 		elog(ERROR, "SPI_connect failed");
+ 		PG_RETURN_BOOL(false);
+ 	}
+
+	verargs[0] = CStringGetTextDatum(extname);
+	verargs[1] = CStringGetTextDatum(extvers);
+	versql = psprintf("SELECT 1 FROM %s.available_extension_versions() e "
+		"WHERE e.name OPERATOR(pg_catalog.=) $1::pg_catalog.name AND "
+		"e.version OPERATOR(pg_catalog.=) $2::pg_catalog.text", quote_identifier(PG_TLE_NSPNAME));
+
+	spi_rc = SPI_execute_with_args(versql, 2, verargtypes, verargs, NULL, true, 1);
+
+	if (spi_rc != SPI_OK_SELECT) {
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("could not validate extension name"),
+			 errhint("Try calling \"set_default_version\" again. If this error continues, this may be a bug.")));
+  }
+
+	if (SPI_processed == 0) {
+		ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 errmsg("extension and version do not exist"),
+			 errhint("Try installing the extension with \"%s.install_extension\".", PG_TLE_NSPNAME)));
 	}
 
-	fromvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	check_valid_version_name(fromvers);
-	tovers = text_to_cstring(PG_GETARG_TEXT_PP(2));
-	check_valid_version_name(tovers);
+	/*
+	 * Modify the control file with a new version
+	 */
+	control = build_default_extension_control_file(extname);
 
-	if (PG_ARGISNULL(3)) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-			errmsg("\"ext\" is a required argument.")));
+	SET_TLEEXT;
+	parse_extension_control_file(control, NULL);
+	UNSET_TLEEXT;
+
+	control->default_version = pstrdup(extvers);
+
+	ctlname = psprintf("%s.control", extname);
+	ctlstr = build_extension_control_file_string(control);
+
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(ctlstr->data))) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid character in extension definition"),
+				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
+			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 	}
 
-	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
-
-	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
-	sqlsql = psprintf(
-		"CREATE OR REPLACE FUNCTION %s.\"%s\"() RETURNS TEXT AS $_pgtle_$"
-		"SELECT $_pgtle_i_$%s$_pgtle_i_$$_pgtle_$ LANGUAGE SQL",
-		PG_TLE_NSPNAME, sqlname, sql_str);
+	ctlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			quote_identifier(PG_TLE_NSPNAME), quote_identifier(ctlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			ctlstr->data,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 
 	/* flag that we are manipulating pg_tle artifacts */
 	SET_TLEART;
 
-	if (SPI_connect() != SPI_OK_CONNECT) {
-		elog(ERROR, "SPI_connect failed");
-		PG_RETURN_BOOL(false);
-	}
-
-	/* create the sql function */
-	spi_rc = SPI_exec(sqlsql, 0);
+	spi_rc = SPI_exec(ctlsql, 0);
 	if (spi_rc != SPI_OK_UTILITY) {
-		elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
+		ereport(ERROR,
+			(errcode(ERRCODE_INTERNAL_ERROR),
+			 errmsg("failed to updated default version for \"%s\"", extname)));
 		PG_RETURN_BOOL(false);
-	}
+  }
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
 		PG_RETURN_BOOL(false);
 	}
 
-	/* done manipulating pg_tle artifacts */
+	/* flag that we are done manipulating pg_tle artifacts */
 	UNSET_TLEART;
 
 	PG_RETURN_BOOL(true);
 }
-
 /*
 * Convert text array to list of strings.
 *
@@ -4368,4 +4576,19 @@ static bool validate_tle_sql(char *sql)
 
 	PG_RETURN_BOOL(
 		strstr(sql, PG_TLE_OUTER_STR) == NULL && strstr(sql, PG_TLE_INNER_STR) == NULL);
+}
+
+/*
+ * Check that a TLE requires list is valid. This includes check its length.
+ * Raises errors if its invalid.
+ */
+static void check_requires_list(List *requires)
+{
+	if (list_length(requires) > TLE_REQUIRES_LIMIT)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DATA_EXCEPTION),
+				 errmsg("\"requires\" limited to %d entries for \"%s\" extensions",
+			 		TLE_REQUIRES_LIMIT, PG_TLE_EXTNAME)));
+	}
 }

@@ -19,13 +19,12 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
 $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -37,60 +36,50 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  'hax',
 $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
 
--- grant the pgtle_staff role to the bad_actor and try to install the extension
-GRANT pgtle_staff TO bad_actor;
-
--- become the bad_actor
-SET SESSION AUTHORIZATION bad_actor;
-
--- attempt to install the extension with an injection in the comments and error
+-- install a legit extension. then try to create an update path that has
+-- a trojan.
 SELECT pgtle.install_extension
 (
- 'test_hax',
+ 'legit_100',
  '1.0',
- TRUE,
- $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
+ 'legit',
 $_pgtle_$
-  CREATE OR REPLACE FUNCTION basic_func()
+  CREATE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
-
--- attempt to install the extension with an injection in the ext and error
-SELECT pgtle.install_extension
+SELECT pgtle.install_update_path
 (
- 'test_hax',
+ 'legit_100',
  '1.0',
- TRUE,
- 'hax',
-$_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
-  CREATE OR REPLACE FUNCTION basic_func()
-  RETURNS INT AS $$
-    SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+ '1.1',
+$_pgtle_$ $_pgtle_i_$ ; $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE FUNCTiON hax() RETURNS text AS $_pgtle_o_$ SELECT $_pgtle_i_$
+ CREATE OR REPLACE FUNCTION basic_func()
+ RETURNS INT AS $$
+   SELECT 2;
+ $$ LANGUAGE SQL;
 $_pgtle_$
 );
-
--- revert back to superuser
-RESET SESSION AUTHORIZATION;
 
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- remove the legit extension
+SELECT pgtle.uninstall_extension('legit_100');
 
 -- grant the pgtle_admin role to the bad_actor and try to install the extension
 GRANT pgtle_admin TO bad_actor;
@@ -103,13 +92,12 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  $$hax$_pgtle_i_$ $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE OR REPLACE FUNCTION haha() RETURNS TEXT AS $_pgtle_o_$ SELECT $_pgtle_i_$ $$,
 $_pgtle_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -118,13 +106,12 @@ SELECT pgtle.install_extension
 (
  'test_hax',
  '1.0',
- TRUE,
  'hax',
 $_pgtle_$ $_pgtle_i_$ $_pgtle_o_$ ALTER ROLE bad_actor SUPERUSER; $_pgtle_o_$ $_pgtle_i_$
   CREATE OR REPLACE FUNCTION basic_func()
   RETURNS INT AS $$
     SELECT 1;
-  $$ LANGUAGE LANGUAGE SQL;
+  $$ LANGUAGE SQL;
 $_pgtle_$
 );
 
@@ -134,9 +121,62 @@ RESET SESSION AUTHORIZATION;
 -- verify that the user did not elevate privileges
 SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
 
+-- become the bad_actor
+SET SESSION AUTHORIZATION bad_actor;
+
+-- install a legit extension. then try to create an update path that has
+-- a trojan.
+SELECT pgtle.install_extension
+(
+ 'legit_100',
+ '1.0',
+ 'legit',
+$_pgtle_$
+  CREATE FUNCTION basic_func()
+  RETURNS INT AS $$
+    SELECT 1;
+  $$ LANGUAGE SQL;
+$_pgtle_$
+);
+SELECT pgtle.install_update_path
+(
+ 'legit_100',
+ '1.0',
+ '1.1',
+$_pgtle_$ $_pgtle_i_$ ; $_pgtle_o_$ LANGUAGE SQL; ALTER ROLE bad_actor SUPERUSER; CREATE FUNCTiON hax() RETURNS text AS $_pgtle_o_$ SELECT $_pgtle_i_$
+ CREATE OR REPLACE FUNCTION basic_func()
+ RETURNS INT AS $$
+   SELECT 2;
+ $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- revert back to superuser
+RESET SESSION AUTHORIZATION;
+
+-- verify that the user did not elevate privileges
+SELECT rolsuper FROM pg_roles WHERE rolname = 'bad_actor';
+
+-- remove the legit extension
+SELECT pgtle.uninstall_extension('legit_100');
+
+-- Attempt to install extension with invalid name
+SELECT pgtle.install_extension
+(
+ 'test9.control"(),pg_sleep(10),pgtle."test9',
+ '0.1',
+ 'comment',
+$_pg_tle_$
+    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
+    RETURNS numeric
+    AS $$
+      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+    $$ LANGUAGE SQL;
+$_pg_tle_$
+);
+
 -- cleanup
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
 DROP ROLE bad_actor;
-DROP ROLE pgtle_staff;
 DROP ROLE pgtle_admin;

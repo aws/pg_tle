@@ -30,7 +30,24 @@
 #define TLE_EXT_CONTROL_SUFFIX    ".control"
 #define TLE_EXT_SQL_SUFFIX        ".sql"
 
+/*
+ * Sets the limit on how many entries can be in a requires.
+ * This is an arbitrary limit and could be changed or dropped in the future.
+ */
+#define TLE_REQUIRES_LIMIT        1024
+
 /* general PostgreSQL names */
 #define PG_CTLG_SCHEMA            "pg_catalog"
+
+/* handling SPI_execute_with_args parameters. if we go beyond 9, add more */
+#define SPI_NARGS_1   1
+#define SPI_NARGS_2   2
+#define SPI_NARGS_3    3
+#define SPI_NARGS_4    4
+#define SPI_NARGS_5    5
+#define SPI_NARGS_6    6
+#define SPI_NARGS_7    7
+#define SPI_NARGS_8    8
+#define SPI_NARGS_9    9
 
 #endif							/* TLEEXTENSION_H */

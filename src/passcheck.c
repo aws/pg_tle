@@ -25,6 +25,8 @@
 #include "utils/guc.h"
 #include "utils/timestamp.h"
 #include "utils/fmgrprotos.h"
+
+#include "constants.h"
 #include "miscadmin.h"
 #include "tleextension.h"
 
@@ -125,8 +127,9 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("pg_tle.enable_password_check is set as 'require' however the %s extension is not installed in the database, value is %d",
-						extension_name, enable_passcheck_feature),
+				 errmsg("\"%s.enable_password_check\" is set to \"require\" but extension \"%s\" is not installed in the database",
+						PG_TLE_NSPNAME, PG_TLE_EXTNAME),
+				 errhint("Call \"CREATE EXTENSION %s;\" in the current database.", PG_TLE_EXTNAME),
 				 errhidestmt(true)));
 	}
 
@@ -134,33 +137,35 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 	{
 		SPITupleTable *tuptable;
 		TupleDesc	tupdesc;
-		Datum		validUntil_datum_out;
-		char	   *validUntil;
 		ListCell   *item;
 		char	   *query;
 		uint64		j;
 		List	   *proc_names = NIL;
 		int			ret;
+		Oid		featargtypes[SPI_NARGS_1] = { TEXTOID };
+		Datum		featargs[SPI_NARGS_1];
 
 		ret = SPI_connect();
 		if (ret != SPI_OK_CONNECT)
 			ereport(ERROR,
 					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("pg_tle.enable_password_check feature was not able to connect to the database %s",
-							get_database_name(MyDatabaseId))));
+					 errmsg("\"%s.enable_password_check\" feature was not able to connect to the database \"%s\"",
+							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		/*
 		 * Assume function accepts the proper argument, it'll error when we
 		 * call out to SPI_exec if it doesn't anyway
 		 */
-		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature = '%s' ORDER BY proname",
-						 schema_name, feature_table_name, password_check_feature);
 
-		ret = SPI_execute(query, true, 0);
+		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) $1::%s.pg_tle_features ORDER BY proname",
+			 quote_identifier(schema_name), quote_identifier(feature_table_name), quote_identifier(schema_name));
+		featargs[0] = CStringGetTextDatum(password_check_feature);
+
+		ret = SPI_execute_with_args(query, 1, featargtypes, featargs, NULL, true, 0);
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
-					errmsg("Unable to query pg_tle.feature_info"));
+					errmsg("Unable to query \"%s.feature_info\"", PG_TLE_NSPNAME));
 
 		if (SPI_processed <= 0)
 		{
@@ -172,8 +177,8 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 			ereport(ERROR,
 					errcode(ERRCODE_DATA_EXCEPTION),
-					errmsg("pg_tle.enable_password_check feature is set to require, however no entries exist in pg_tle.feature_info with the feature %s",
-						   password_check_feature));
+					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\"",
+						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature));
 		}
 
 		/* Build a list of functions to call out to */
@@ -185,21 +190,19 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 			HeapTuple	tuple = tuptable->vals[j];
 			int			i;
 
-			/* Postgres truncates schema/function names */
-			/* by default to 63 bytes, enough space */
-			char		buf[256];
+			StringInfo buf = makeStringInfo();
 
-			for (i = 1, buf[0] = 0; i <= tupdesc->natts; i++)
+			for (i = 1; i <= tupdesc->natts; i++)
 			{
 				char	   *res = SPI_getvalue(tuple, tupdesc, i);
 
 				check_valid_name(res);
-
-				snprintf(buf + strnlen(buf, 256), sizeof(buf) - strnlen(buf, 256), "%s%s",
-						 res,
-						 (i == tupdesc->natts) ? "" : ".");
+				appendStringInfo(buf, "%s", quote_identifier(res));
+				
+				if (i != tupdesc->natts)
+					appendStringInfo(buf, ".");
 			}
-			proc_names = lappend(proc_names, pstrdup(buf));
+			proc_names = lappend(proc_names, pstrdup(buf->data));
 		}
 
 		/*
@@ -208,33 +211,42 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		 */
 		if (password_type > 2)
 			ereport(ERROR,
-					errmsg("A new password type has been introduced, the extension needs to be updated to support it."));
+				errmsg("unspported password type"),
+				errhint("This password type needs to be implemented in \"%s\".", PG_TLE_EXTNAME));
 
 		/* Format the queries we need to execute */
 		foreach(item, proc_names)
 		{
-			char	   *query;
-			char	   *func_name = lfirst(item);
+			char			*query;
+			char			*func_name = lfirst(item);
+			Oid				hookargtypes[SPI_NARGS_5] = { TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID };
+			Datum			hookargs[SPI_NARGS_5];
+			char			hooknulls[SPI_NARGS_5];
+
+			memset(hooknulls, ' ', sizeof(hooknulls));
+
+			/* func_name is already using quote_identifier from when it was assembled */
+			query = psprintf("SELECT %s($1::pg_catalog.text, $2::pg_catalog.text, $3::%s.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)",
+				func_name, quote_identifier(PG_TLE_NSPNAME));
+
+			hookargs[0] = CStringGetTextDatum(username);
+			hookargs[1] = CStringGetTextDatum(shadow_pass);
+			hookargs[2] = CStringGetTextDatum(pass_types[password_type]);
 
 			if (validuntil_null)
 			{
-				query = psprintf("select %s('%s', '%s', '%s', null, %s)",
-								 func_name, username, shadow_pass, pass_types[password_type],
-								 "true");
+				hooknulls[3] = 'n';
+				hookargs[4] = BoolGetDatum(true);
 			}
 			else
 			{
-				/* Convert TimestampTz Datum to char* for query */
-				validUntil_datum_out = DirectFunctionCall1(timestamptz_out, validuntil_time);
-				validUntil = DatumGetCString(validUntil_datum_out);
-				query = psprintf("select %s('%s', '%s', '%s', '%s', %s)",
-								 func_name, username, shadow_pass, pass_types[password_type],
-								 validUntil,
-								 "false");
+				hookargs[3] = DirectFunctionCall1(timestamptz_out, validuntil_time);
+				hookargs[4] = BoolGetDatum(false);
 			}
-			if (SPI_execute(query, true, 0) != SPI_OK_SELECT)
+
+			if (SPI_execute_with_args(query, 5, hookargtypes, hookargs, hooknulls, true, 0) != SPI_OK_SELECT)
 				ereport(ERROR,
-						errmsg("Unable to execute function %s", func_name));
+						errmsg("unable to execute function \"%s\"", func_name));
 		}
 		SPI_finish();
 
@@ -264,7 +276,7 @@ check_valid_name(char *val)
 
 	if (val[0] == '\0')
 		ereport(ERROR,
-				errmsg("Check entries in %s.%s table, schema and proname must be present",
+				errmsg("table, schema, and proname must be present in \"%s.%s\"",
 					   schema_name, feature_table_name));
 
 	ch = val[i];
@@ -273,8 +285,8 @@ check_valid_name(char *val)
 		if (ch == ';')
 		{
 			ereport(ERROR,
-					errmsg("%s feature does not support calling out to functions/schemas that contain ';'", password_check_feature),
-					errhint("Check the %s.%s table does not contain ';' in it's entry.", schema_name, feature_table_name));
+					errmsg("\"%s\" feature does not support calling out to functions/schemas that contain \";\"", password_check_feature),
+					errhint("Check the \"%s.%s\" table does not contain ';'.", schema_name, feature_table_name));
 		}
 		i++;
 		ch = val[i];

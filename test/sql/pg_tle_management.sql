@@ -13,17 +13,25 @@ GRANT pgtle_admin TO dbadmin;
 
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT pgtle_staff TO dbstaff;
 
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT pgtle_staff TO dbstaff2;
 
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('GRANT CREATE ON DATABASE %I TO dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 
 -- create function that can be executed by superuser only
 CREATE OR REPLACE FUNCTION superuser_only()
@@ -44,7 +52,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -59,7 +66,6 @@ SELECT pgtle.install_extension
 (
  'test_superuser_only_when_untrusted',
  '1.0',
- false,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
@@ -75,7 +81,6 @@ SELECT pgtle.install_extension
 (
  'test_no_switch_to_superuser_when_trusted',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   SELECT superuser_only();
@@ -130,7 +135,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -201,7 +205,6 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -218,11 +221,9 @@ ALTER FUNCTION pgtle.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 )
 SET search_path TO 'public';
 
@@ -231,7 +232,6 @@ SELECT pgtle.install_extension
 (
  'new_ext',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE FUNCTION fun()
@@ -250,15 +250,208 @@ $_pgtle_$
 $_pgtle_$
 );
 
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check available extension versions -- should be 1.0 and 1.1
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
+
+-- check avaialble version update paths -- should be 1.0<=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
 
 SELECT pgtle.uninstall_extension('new_ext', '1.1');
 
+-- check avaialble versions, should only be 1.0
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
 
+-- check avaialble version update paths -- should be none
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- add the update back in
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check avaialble version update paths -- should be 1.0=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- try to add a duplicate update path
+-- fail
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- add a downgrade path
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- only uninstall the downgrade path
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- try uninstalling again
+-- fail
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+
+-- try ininstall with if exists, see false
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- install again and uninstall with "if exists", see true
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+
+-- ok, install it again
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+
+-- test the default version, should be 1.0
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+
+-- set the new default
+SELECT pgtle.set_default_version('new_ext', '1.1');
+
+-- test the default version, should be 1.1
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+
+-- try setting a default version that does not exist
+-- fail
+SELECT pgtle.set_default_version('new_ext', '1.2');
+
+-- try setting a default version on an extension that does not exist
+-- fail
+SELECT pgtle.set_default_version('bogus', '1.2');
+
+-- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
+
+
+-- OK let's try to install an extension with a control file that has errors
+SELECT pgtle.install_extension
+(
+ 'broken_ext',
+ '0.1',
+ $$Distance functions for two points'
+ directory = '/tmp/$$,
+$_pg_tle_$
+    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
+    RETURNS numeric
+    AS $$
+      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+    $$ LANGUAGE SQL;
+$_pg_tle_$
+);
+
+-- this should lead to a sytnax error that we catch
+-- fail
+SELECT * FROM pgtle.available_extensions();
+
+-- shoo shoo and uninstall
+SELECT pgtle.uninstall_extension('broken_ext');
+
+-- uninstall with a non-existent extension
+-- error
+SELECT pgtle.uninstall_extension('bogus');
+
+-- uninstall_if_exists with a non-existent extension
+-- returns false, no error
+SELECT pgtle.uninstall_extension_if_exists('bogus');
+
+-- uninstall_if_exists with an extension that exists
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.uninstall_extension_if_exists('test42');
+
 
 -- back to our regular program: these should work
 -- removal of artifacts requires semi-privileged role
@@ -271,13 +464,22 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE dbadmin;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
-DROP ROLE pgtle_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE pgtle_admin;

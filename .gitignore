@@ -1,6 +1,5 @@
 *.so
 *.o
-pg_tle--*.sql
 pg_tle*.control
 regression.*
 results/*

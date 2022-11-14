@@ -17,9 +17,13 @@ CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
 ALTER SYSTEM SET pgtle.enable_password_check = 'off';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Do not expect an error
 ALTER ROLE testuser with password 'pass';
 CREATE EXTENSION pg_tle;
@@ -27,6 +31,8 @@ CREATE EXTENSION pg_tle;
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'require';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
 -- Insert a value into the feature table
@@ -44,6 +50,28 @@ SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
+-- Test that by default a role has access to the feature_info table
+CREATE ROLE testuser_2 with LOGIN;
+CREATE SCHEMA testuser_2 AUTHORIZATION testuser_2;
+SET SESSION AUTHORIZATION testuser_2;
+ALTER ROLE testuser_2 with password 'pass';
+-- Test that by default unprivileged users do not have permission to insert into table
+-- or have access to functions
+CREATE OR REPLACE FUNCTION testuser_2.unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+if length(shadow_pass) < 8 then
+  RAISE EXCEPTION 'Passwords needs to be longer than 8';
+end if;
+END;
+$$
+LANGUAGE PLPGSQL;
+INSERT INTO pgtle.feature_info VALUES ('passcheck', 'testuser_2', 'unpriv_function_passcheck', 'public.unpriv_function_passcheck(pg_catalog.text,pg_catalog.text,pgtle.password_types,timestamp with time zone,boolean)');
+SELECT pgtle.register_feature('testuser_2.unpriv_function_passcheck', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+DELETE FROM pgtle.feature_info where feature = 'passcheck';
+RESET SESSION AUTHORIZATION;
+
 CREATE OR REPLACE FUNCTION password_check_only_nums(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 DECLARE x NUMERIC;
@@ -79,8 +107,85 @@ TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
 DROP ROLE testuser;
+DROP FUNCTION testuser_2.unpriv_function_passcheck;
+DROP SCHEMA testuser_2;
+DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
+-- OK, one more test. we're going to put a passcheck function in its own schema
+-- and then register it. we will then drop the schema and then unregister the
+-- function
+CREATE SCHEMA pass;
+CREATE FUNCTION pass.password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+  if length(shadow_pass) < 8 THEN
+    RAISE EXCEPTION 'Passwords needs to be longer than 8';
+  END IF;
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
+-- try to drop the schema while the code is still referenced
+-- fail
+DROP SCHEMA pass CASCADE;
+-- unregister the feature
+SELECT pgtle.unregister_feature('pass.password_check_length_greater_than_8', 'passcheck');
+
+-- one more...register the feature in the extension can drop it on its own
+-- the feature should NOT be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+SELECT pgtle.install_extension
+(
+ 'test_unregister_feature',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+  $$
+  BEGIN
+    if length(shadow_pass) < 8 THEN
+      RAISE EXCEPTION 'Passwords needs to be longer than 8';
+    END IF;
+  END;
+  $$
+  LANGUAGE PLPGSQL;
+  
+  SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+$_pgtle_$
+);
+CREATE EXTENSION test_unregister_feature;
+
+-- the feature should be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+DROP EXTENSION test_unregister_feature;
+
+-- the feature should NOT be in the table
+SELECT EXISTS(
+  SELECT 1 FROM pgtle.feature_info
+  WHERE
+    schema_name = 'public' AND
+    proname = 'password_check_length_greater_than_8'
+  LIMIT 1
+);
+
+SELECT pgtle.uninstall_extension('test_unregister_feature');
+-- now drop everything
+DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;

@@ -1,6 +1,6 @@
 # Installation
 
-There are a few ways you can install Trusted-Language Extensions for PostgreSQL (`pg_tle`).
+There are a few ways you can install Trusted Language Extensions for PostgreSQL (`pg_tle`).
 
 ## Installing `pg_tle`
 
@@ -35,13 +35,13 @@ sudo make install
 
 ### Method #2: Amazon RDS for PostgreSQL / Amazon Aurora PostgreSQL-compatible edition
 
-Trusted-Language Extensions for PostgreSQL (`pg_tle`) comes with Amazon RDS for PostgreSQL and Amazon Aurora PostgreSQL-compatible edition. `pg_tle` is available in Amazon RDS for PostgreSQL since version 14.5 and Amazon Aurora PostgreSQL-compatible edition since 14.6.
+Trusted Language Extensions for PostgreSQL (`pg_tle`) comes with Amazon RDS for PostgreSQL and Amazon Aurora PostgreSQL-compatible edition. `pg_tle` is available in Amazon RDS for PostgreSQL since version 14.5 and Amazon Aurora PostgreSQL-compatible edition since 14.6.
 
 You can follow the directions in the next section for how to enable `pg_tle` in your Amazon RDS for PostgreSQL and Amazon Aurora PostgreSQL-compatible edition instances and clusters.
 
 ## Enabling `pg_tle` in your PostgreSQL installation
 
-Once you have installed the `pg_tle` extension files into your PostgreSQL installation, you can start using `pg_tle` to install Trusted-Language Extensions. Before running `CREATE EXTENSION`, you will have to add `pgtle` to the `shared_preload_libraries` configuration parameter and restart PostgreSQL. There are a few methods to do this. Note that you **must** use Method #3 for Amazon RDS for PostgreSQL and Amazon Aurora PostgreSQL-compatible edition.
+Once you have installed the `pg_tle` extension files into your PostgreSQL installation, you can start using `pg_tle` to install Trusted Language Extensions. Before running `CREATE EXTENSION`, you will have to add `pg_tle` to the `shared_preload_libraries` configuration parameter and restart PostgreSQL. There are a few methods to do this. Note that you **must** use Method #3 for Amazon RDS for PostgreSQL and Amazon Aurora PostgreSQL-compatible edition.
 
 ### Method #1: `ALTER SYSTEM`
 
@@ -81,7 +81,7 @@ shared_preload_libraries = 'pg_tle'
 
 ### Method #3: (Amazon RDS + Amazon Aurora only) Use parameter groups
 
-The following instructions use the [`aws` CLI](https://aws.amazon.com/cli/) for enabling `pg_tle` via [parameter groups](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithParamGroups.html). You can also use the console or the Amazon RDS API to add `pg_tle` to `shared_preload_libraries`.
+The following instructions use the [AWS Command Line Interface](https://aws.amazon.com/cli/) (`aws` CLI) for enabling `pg_tle` via [parameter groups](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithParamGroups.html). You can also use the console or the Amazon RDS API to add `pg_tle` to `shared_preload_libraries`.
 
 1. If you have not already done so, create a parameter group in the region that you want to install `pg_tle` to your Amazon RDS or Amazon Aurora database. For example, to create a new parameter group in `us-east-1` for Amazon RDS for PostgreSQL v14:
 
@@ -115,4 +115,4 @@ aws rds modify-db-instance \
 
 ## Next steps
 
-Now that `pg_tle` is installed in your PostgreSQL instance, let's try [creating our first Trusted-Language Extensions for PostgreSQL](./02_quickstart.md)
+Now that `pg_tle` is installed in your PostgreSQL instance, let's try [creating our first Trusted Language Extensions for PostgreSQL](./02_quickstart.md)

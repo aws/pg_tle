@@ -10,14 +10,22 @@ CREATE ROLE dbadmin;
 GRANT pgtle_admin TO dbadmin;
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT pgtle_staff TO dbstaff;
 -- create alt unprivileged role to create trusted extensions
 CREATE ROLE dbstaff2;
-GRANT pgtle_staff TO dbstaff2;
 -- create completely unprivileged role
 CREATE ROLE dbguest;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_staff;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('GRANT CREATE ON DATABASE %I TO dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 -- create function that can be executed by superuser only
 CREATE OR REPLACE FUNCTION superuser_only()
 RETURNS INT AS $$
@@ -38,7 +46,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -57,7 +64,6 @@ SELECT pgtle.install_extension
 (
  'test_superuser_only_when_untrusted',
  '1.0',
- false,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
@@ -77,7 +83,6 @@ SELECT pgtle.install_extension
 (
  'test_no_switch_to_superuser_when_trusted',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   SELECT superuser_only();
@@ -173,7 +178,6 @@ SELECT pgtle.install_extension
 (
  'test123',
  '1.1',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -188,7 +192,7 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
-ERROR:  Extension 'test123' already installed.
+ERROR:  extension "test123" already installed
 SELECT pgtle.install_update_path
 (
  'test123',
@@ -241,9 +245,9 @@ SELECT * FROM pgtle.available_extensions() ORDER BY name;
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
                    name                   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ------------------------------------------+---------+-----------+---------+-------------+--------+----------+--------------------
- test123                                  | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- test123                                  | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- test_no_switch_to_superuser_when_trusted | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ test123                                  | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ test123                                  | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ test_no_switch_to_superuser_when_trusted | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
  test_superuser_only_when_untrusted       | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (4 rows)
 
@@ -274,7 +278,6 @@ SELECT pgtle.install_extension
 (
  'plpgsql',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE OR REPLACE FUNCTION test123_func()
@@ -291,11 +294,9 @@ ALTER FUNCTION pgtle.install_extension
 (
   name text,
   version text,
-  trusted bool,
   description text,
   ext text,
-  requires text[],
-  encoding text
+  requires text[]
 )
 SET search_path TO 'public';
 ERROR:  altering pg_tle functions in pgtle schema not allowed
@@ -304,7 +305,6 @@ SELECT pgtle.install_extension
 (
  'new_ext',
  '1.0',
- true,
  'Test TLE Functions',
 $_pgtle_$
   CREATE FUNCTION fun()
@@ -331,12 +331,38 @@ $_pgtle_$
  t
 (1 row)
 
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- check available extension versions -- should be 1.0 and 1.1
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ---------+---------+-----------+---------+-------------+--------+----------+--------------------
- new_ext | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
- new_ext | 1.1     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+(2 rows)
+
+-- check avaialble version update paths -- should be 1.0<=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 1.1--1.0
 (2 rows)
 
 SELECT pgtle.uninstall_extension('new_ext', '1.1');
@@ -345,16 +371,290 @@ SELECT pgtle.uninstall_extension('new_ext', '1.1');
  t
 (1 row)
 
+-- check avaialble versions, should only be 1.0
 SELECT *
 FROM pgtle.available_extension_versions() x WHERE x.name = 'new_ext';
   name   | version | superuser | trusted | relocatable | schema | requires |      comment       
 ---------+---------+-----------+---------+-------------+--------+----------+--------------------
- new_ext | 1.0     | f         | t       | f           |        | {pg_tle} | Test TLE Functions
+ new_ext | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
 
+-- check avaialble version update paths -- should be none
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target | path 
+--------+--------+------
+(0 rows)
+
+-- add the update back in
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- check avaialble version update paths -- should be 1.0=>1.1
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+-- try to add a duplicate update path
+-- fail
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.0',
+ '1.1',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 2; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ERROR:  extension "new_ext" update path "1.0-1.1" already installed
+HINT:  To update this specific install path, first use "pgtle.uninstall_update_path".
+-- add a downgrade path
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 1.1--1.0
+(2 rows)
+
+-- only uninstall the downgrade path
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+ uninstall_update_path 
+-----------------------
+ t
+(1 row)
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+-- try uninstalling again
+-- fail
+SELECT pgtle.uninstall_update_path('new_ext', '1.1', '1.0');
+ERROR:  Extension new_ext does not exist
+CONTEXT:  PL/pgSQL function uninstall_update_path(text,text,text) line 16 at RAISE
+-- try ininstall with if exists, see false
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+ uninstall_update_path_if_exists 
+---------------------------------
+ f
+(1 row)
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+-- install again and uninstall with "if exists", see true
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 1.1--1.0
+(2 rows)
+
+SELECT pgtle.uninstall_update_path_if_exists('new_ext', '1.1', '1.0');
+ uninstall_update_path_if_exists 
+---------------------------------
+ t
+(1 row)
+
+-- check avaiable update paths
+SELECT *
+FROM pgtle.extension_update_paths('new_ext') x
+ORDER BY x.source;
+ source | target |   path   
+--------+--------+----------
+ 1.0    | 1.1    | 1.0--1.1
+ 1.1    | 1.0    | 
+(2 rows)
+
+-- ok, install it again
+SELECT pgtle.install_update_path
+(
+ 'new_ext',
+ '1.1',
+ '1.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION fun()
+  RETURNS INT AS $$ SELECT 1; $$ LANGUAGE SQL;
+$_pgtle_$
+);
+ install_update_path 
+---------------------
+ t
+(1 row)
+
+-- test the default version, should be 1.0
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+  name   | default_version |      comment       
+---------+-----------------+--------------------
+ new_ext | 1.0             | Test TLE Functions
+(1 row)
+
+-- set the new default
+SELECT pgtle.set_default_version('new_ext', '1.1');
+ set_default_version 
+---------------------
+ t
+(1 row)
+
+-- test the default version, should be 1.1
+SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
+  name   | default_version |      comment       
+---------+-----------------+--------------------
+ new_ext | 1.1             | Test TLE Functions
+(1 row)
+
+-- try setting a default version that does not exist
+-- fail
+SELECT pgtle.set_default_version('new_ext', '1.2');
+ERROR:  extension and version do not exist
+HINT:  Try installing the extension with "pgtle.install_extension".
+-- try setting a default version on an extension that does not exist
+-- fail
+SELECT pgtle.set_default_version('bogus', '1.2');
+ERROR:  extension and version do not exist
+HINT:  Try installing the extension with "pgtle.install_extension".
+-- uninstall
 SELECT pgtle.uninstall_extension('new_ext');
  uninstall_extension 
 ---------------------
+ t
+(1 row)
+
+-- OK let's try to install an extension with a control file that has errors
+SELECT pgtle.install_extension
+(
+ 'broken_ext',
+ '0.1',
+ $$Distance functions for two points'
+ directory = '/tmp/$$,
+$_pg_tle_$
+    CREATE FUNCTION dist(x1 numeric, y1 numeric, x2 numeric, y2 numeric, l numeric)
+    RETURNS numeric
+    AS $$
+      SELECT ((x2 ^ l - x1 ^ l) ^ (1 / l)) + ((y2 ^ l - y1 ^ l) ^ (1 / l));
+    $$ LANGUAGE SQL;
+$_pg_tle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- this should lead to a sytnax error that we catch
+-- fail
+SELECT * FROM pgtle.available_extensions();
+ERROR:  syntax error in extension control function for "broken_ext"
+DETAIL:  Could not parse extension control function "pgtle"."broken_ext.control".
+HINT:  You may need to reinstall the extension to correct this error.
+-- shoo shoo and uninstall
+SELECT pgtle.uninstall_extension('broken_ext');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+-- uninstall with a non-existent extension
+-- error
+SELECT pgtle.uninstall_extension('bogus');
+ERROR:  Extension bogus does not exist
+CONTEXT:  PL/pgSQL function uninstall_extension(text) line 18 at RAISE
+-- uninstall_if_exists with a non-existent extension
+-- returns false, no error
+SELECT pgtle.uninstall_extension_if_exists('bogus');
+ uninstall_extension_if_exists 
+-------------------------------
+ f
+(1 row)
+
+-- uninstall_if_exists with an extension that exists
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension_if_exists('test42');
+ uninstall_extension_if_exists 
+-------------------------------
  t
 (1 row)
 
@@ -388,13 +688,22 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE dbadmin;
+DO
+$$
+  DECLARE
+    objname text;
+    sql text;
+  BEGIN
+    SELECT current_database() INTO objname;
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM dbstaff;', objname);
+  END;
+$$ LANGUAGE plpgsql;
 DROP ROLE dbstaff;
 DROP ROLE dbstaff2;
 DROP ROLE dbguest;
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_staff;
-DROP ROLE pgtle_staff;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
 DROP ROLE pgtle_admin;
