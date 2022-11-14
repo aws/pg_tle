@@ -19,7 +19,7 @@
 PROGRAM_NAME=$(basename $0)
 PROGRAM_VERSION="1.0"
 
-SUPPORTED_ARGS=$(getopt -o c:a:p:n:hv --long pgconn:,action:,extpath:,extname:,help,version --name ${PROGRAM_NAME} -- "$@")
+SUPPORTED_ARGS=$(getopt -o c:a:p:n:hv --long connection:,action:,extpath:,name:,help,version --name ${PROGRAM_NAME} -- "$@")
 
 PGCLI=$(which psql)
 PGFLAGS_DML="--quiet --no-align --tuples-only"
@@ -44,25 +44,25 @@ USAGE:
   Install:
     ${PROGRAM_NAME} \\
       --action install \\
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" \\
-      --extname <ExtensionName> \\
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer" \\
+      --name <ExtensionName> \\
       --extpath <ExtensionPath>
 
   Remove:
     ${PROGRAM_NAME} \\
       --action uninstall \\
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" \\
-      --extname <ExtensionName>
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer" \\
+      --name <ExtensionName>
 
   List:
     ${PROGRAM_NAME} \\
       --action list \\
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer"
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer"
 
   List Versions along wtih Extensions:
     ${PROGRAM_NAME} \\
       --action list-versions \\
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer"
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer"
 
 OPTIONS:
 
@@ -74,11 +74,11 @@ OPTIONS:
           list - list extension
           list-versions - list extension along with available versions
 
-    -c, --pgconn <PG Connection>
+    -c, --connection <PG Connection>
           A required parameter.
           PostgreSQL connection string (URI or "Name=Value Name1=V1" format)
 
-    -n, --extname <Extension Name>
+    -n, --name <Extension Name>
           A required parameter for install and uninstall actions.
           Name of the extension
 
@@ -109,12 +109,12 @@ RUN_PGSQL(){
 eval set -- "$SUPPORTED_ARGS"
 while true; do
   case "$1" in
-    -c | --pgconn)
+    -c | --connection)
         pgConn=$2
         shift 2
         continue
         ;;
-    -n | --extname)
+    -n | --name)
         ExtName=$2
         shift 2
         continue
@@ -161,7 +161,7 @@ if [ -z "${Action}" ] ; then
 fi
 
 if [ -z "${pgConn}" ] ; then
-  printf "\nMissing argument(s) --pgconn is required\n" >&2
+  printf "\nMissing argument(s) --connection is required\n" >&2
   usage >&2
   exit 2
 fi
@@ -169,7 +169,7 @@ fi
 case "$Action" in
   install|update)
     if [ -z "${ExtName}" ] || [ -z "${ExtPath}" ] ; then
-      printf "\nMissing argument(s) --extname --extpath are required for install\n" >&2
+      printf "\nMissing argument(s) --name --extpath are required for install\n" >&2
       usage >&2
       exit 2
     fi
@@ -233,7 +233,7 @@ case "$Action" in
     ;;
   uninstall)
     if [ -z "${ExtName}" ] ; then
-      printf "\nMissing argument(s) --extname is required for uninstall\n" >&2
+      printf "\nMissing argument(s) --name is required for uninstall\n" >&2
       usage >&2
       exit 2
     fi

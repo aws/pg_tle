@@ -35,25 +35,25 @@ USAGE:
   Install:
     pg_tle_manage_local_extension.sh \
       --action install \
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" \
-      --extname <ExtensionName> \
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer" \
+      --name <ExtensionName> \
       --extpath <ExtensionPath>
 
   Remove:
     pg_tle_manage_local_extension.sh \
       --action uninstall \
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" \
-      --extname <ExtensionName>
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer" \
+      --name <ExtensionName>
 
   List:
     pg_tle_manage_local_extension.sh \
       --action list \
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer"
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer"
 
   List Versions along wtih Extensions:
     pg_tle_manage_local_extension.sh \
       --action list-versions \
-      --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer"
+      --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer"
 
 OPTIONS:
 
@@ -65,11 +65,11 @@ OPTIONS:
           list - list extension
           list-versions - list extension along with available versions
 
-    -c, --pgconn <PG Connection>
+    -c, --connection <PG Connection>
           A required parameter.
           PostgreSQL connection string (URI or "Name=Value Name1=V1" format)
 
-    -n, --extname <Extension Name>
+    -n, --name <Extension Name>
           A required parameter for install and uninstall actions.
           Name of the extension
 
@@ -101,7 +101,7 @@ pg_tle_manage_local_extension.sh 1.0
 
 ## Install extension
 
-`./pg_tle_manage_local_extension.sh --action install --pgconn "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --extname mv_stats --extpath ~/mv_stats`
+`./pg_tle_manage_local_extension.sh --action install --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --name mv_stats --extpath ~/mv_stats`
 
 ```
 Installing mv_stats  from ~/mv_stats in postgresql://myuser@localhost:5432/mydb?sslmode=prefer
@@ -111,20 +111,20 @@ install compeleted succefully.
 
 ## Update extension
 
-`./pg_tle_manage_local_extension.sh --action update --pgconn "postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer" --extname mv_stats --extpath ~/gitwork/mv_stats`
+`./pg_tle_manage_local_extension.sh --action update --connection "postgresql://postgres@localhost:5432/postgres?sslmode=prefer" --name mv_stats --extpath ~/gitwork/mv_stats`
 
 ```
-Updating mv_stats from /home/sharyogi/gitwork/mv_stats in postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer
+Updating mv_stats from /home/sharyogi/gitwork/mv_stats in postgresql://postgres@localhost:5432/postgres?sslmode=prefer
 
 update compeleted succefully.
 ```
 
 ## List extension(s)
 
-`./pg_tle_manage_local_extension.sh --action list --pgconn "postgresql://myuser@localhost:5432/mydb?sslmode=prefer"`
+`./pg_tle_manage_local_extension.sh --action list --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer"`
 
 ```
-List pg_tle installed extension(s) from postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer
+List pg_tle installed extension(s) from postgresql://postgres@localhost:5432/postgres?sslmode=prefer
 
    name   | default_version |                                comment                                
 ----------+-----------------+-----------------------------------------------------------------------
@@ -134,11 +134,11 @@ List pg_tle installed extension(s) from postgresql://sharyogi@localhost:5414/pos
 
 ## List installed versions of all extensions
 
-`./pg_tle_manage_local_extension.sh --action list-versions --pgconn "postgresql://myuser@localhost:5432/mydb?sslmode=prefer"`
+`./pg_tle_manage_local_extension.sh --action list-versions --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer"`
 
 
 ```
-List pg_tle installed extension(s) from postgresql://sharyogi@localhost:5414/postgres?sslmode=prefer
+List pg_tle installed extension(s) from postgresql://postgres@localhost:5432/postgres?sslmode=prefer
 
    name   | version | superuser | trusted | relocatable | schema | requires |                                comment                                
 ----------+---------+-----------+---------+-------------+--------+----------+-----------------------------------------------------------------------
@@ -148,7 +148,7 @@ List pg_tle installed extension(s) from postgresql://sharyogi@localhost:5414/pos
 
 ## Uninstall extension
 
-`./pg_tle_manage_local_extension.sh --action uninstall --pgconn "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --extname mv_stats`
+`./pg_tle_manage_local_extension.sh --action uninstall --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --name mv_stats`
 
 ```
 Removing mv_stats  from postgresql://myuser@localhost:5432/mydb?sslmode=prefer
