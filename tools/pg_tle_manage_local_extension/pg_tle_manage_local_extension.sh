@@ -208,14 +208,14 @@ case "$Action" in
         SUFLAG="$(sed -ne "s/ //g;s/^trusted=\(.*\)/\1/p" < ${ExtControl})"
         SUFLAG=${SUFLAG:-false}
         if [ ${Action} == "update" ]; then
-          SQL_WHERE=" WHERE NOT EXISTS (SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE pg_proc.proname LIKE '${ExtName}.control'::pg_catalog.name AND pg_proc.pronamespace = 'pgtle'::regnamespace::oid)"
+          SQL_WHERE=" WHERE NOT EXISTS (SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE pg_proc.proname LIKE '${ExtName}.control'::pg_catalog.name AND pg_proc.pronamespace OPERATOR(pg_catalog.=) 'pgtle'::regnamespace::oid)"
         else
           SQL_WHERE=""
         fi
         SQL_QUERY="SELECT FROM pgtle.install_extension('${ExtName}', '${v1}', '"$(sed -ne "s/^comment.*=.*'\(.*\)'/\1/p" < ${ExtControl})"', \$_PG_TLE_SQL_\$$(cat ${v2})\$_PG_TLE_SQL_\$) ${SQL_WHERE};"
       else
         if [ ${Action} == "update" ]; then
-          SQL_WHERE=" WHERE NOT EXISTS (SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE pg_proc.proname LIKE '${ExtName}--${v1}--${v2}.sql'::pg_catalog.name AND pg_proc.pronamespace = 'pgtle'::regnamespace::oid)"
+          SQL_WHERE=" WHERE NOT EXISTS (SELECT pg_proc.proname FROM pg_catalog.pg_proc WHERE pg_proc.proname LIKE '${ExtName}--${v1}--${v2}.sql'::pg_catalog.name AND pg_proc.pronamespace OPERATOR(pg_catalog.=) 'pgtle'::regnamespace::oid)"
         else
           SQL_WHERE=""
         fi
