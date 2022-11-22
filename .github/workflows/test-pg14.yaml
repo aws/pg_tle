@@ -25,17 +25,17 @@ jobs:
     - name: download postgresql
       run:  >
         cd ~ &&
-        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz &&
-        curl -O https://ftp.postgresql.org/pub/source/v14.5/postgresql-14.5.tar.gz.sha256
+        curl -O https://ftp.postgresql.org/pub/source/v14.6/postgresql-14.6.tar.gz &&
+        curl -O https://ftp.postgresql.org/pub/source/v14.6/postgresql-14.6.tar.gz.sha256
     - name: verify postgresql
       run:  >
         cd ~ &&
-        sha256sum --check postgresql-14.5.tar.gz.sha256
+        sha256sum --check postgresql-14.6.tar.gz.sha256
     - name: build postgresql
       run:  >
         cd ~ &&
-        tar xzf postgresql-14.5.tar.gz &&
-        cd postgresql-14.5 &&
+        tar xzf postgresql-14.6.tar.gz &&
+        cd postgresql-14.6 &&
         ./configure --enable-tap-tests --enable-cassert --enable-debug --with-openssl --with-perl &&
         make &&
         sudo PATH=$PATH make install &&
@@ -59,7 +59,7 @@ jobs:
       run:  pg_ctl -D ~/data restart
     - name: Run pg_tle regression tests
       id:   regression-tests
-      run:  PERL5LIB="${HOME}/postgresql-14.5/src/test/perl:${PERL5LIB}" make installcheck
+      run:  PERL5LIB="${HOME}/postgresql-14.6/src/test/perl:${PERL5LIB}" make installcheck
     - name: Print regression.diffs if regression tests failed
       if:   failure() && steps.regression-tests.outcome != 'success'
       run:  cat regression.diffs
