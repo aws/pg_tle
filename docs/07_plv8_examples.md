@@ -66,7 +66,7 @@ $_pgtle_$
     ('dragon');
   CREATE UNIQUE INDEX ON password_check.bad_passwords (plaintext);
 
-  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     let pws;
 
@@ -75,28 +75,30 @@ $_pgtle_$
         pws = plv8.execute(
           "SELECT EXISTS(SELECT 1 FROM password_check.bad_passwords bp WHERE ('md5' || md5(bp.plaintext || $1)) = $2)",
           [username, password]);
-        if (pws.exists) {
-          plv8.elog(ERROR, "password must not be found on a common password dictionary");
+        if (pws[0].exists) {
+          plv8.elog(ERROR, "password must not be found in a common password dictionary");
         }
         break;
       case "PASSWORD_TYPE_PLAINTEXT":
         pws = plv8.execute(
           "SELECT EXISTS(SELECT 1 FROM password_check.bad_passwords bp WHERE bp.plaintext = $1)",
           [password]);
-        if (pws.exists) {
-          plv8.elog(ERROR, "password must not be found on a common password dictionary");
+        if (pws[0].exists) {
+          plv8.elog(ERROR, "password must not be found in a common password dictionary");
         }
         break;
       default: // for now just return if it is SCRAM.
         plv8.elog(WARNING, "password check skipped. password type: " + password_type);
     }
-  $$ LANGUAGE plv8;
+  $$ LANGUAGE plv8 SECURITY DEFINER;
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
   SELECT pgtle.register_feature('password_check.passcheck_hook', 'passcheck');
 $_pgtle_$
 );
+
+CREATE EXTENSION my_password_check_rules;
 
 ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
 SELECT pg_catalog.pg_reload_conf();

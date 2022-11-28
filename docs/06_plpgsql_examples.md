@@ -71,7 +71,7 @@ $_pgtle_$
     ('dragon');
   CREATE UNIQUE INDEX ON password_check.bad_passwords (plaintext);
 
-  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     DECLARE
       invalid bool := false;
@@ -83,7 +83,7 @@ $_pgtle_$
           WHERE ('md5' || md5(bp.plaintext || username)) = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       ELSIF password_type = 'PASSWORD_TYPE_PLAINTEXT' THEN
         SELECT EXISTS(
@@ -92,17 +92,19 @@ $_pgtle_$
           WHERE bp.plaintext = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       END IF;
     END
-  $$ LANGUAGE plpgsql;
+  $$ LANGUAGE plpgsql SECURITY DEFINER;
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
   SELECT pgtle.register_feature('password_check.passcheck_hook', 'passcheck');
 $_pgtle_$
 );
+
+CREATE EXTENSION my_password_check_rules;
 
 ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
 SELECT pg_catalog.pg_reload_conf();

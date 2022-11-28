@@ -70,32 +70,32 @@ $_pgtle_$
     ('dragon');
   CREATE UNIQUE INDEX ON password_check.bad_passwords (plaintext);
 
-  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     my ($username, $password, $password_type, $validuntil_time, $validuntil_null) = @_;
     my $prep, $rv;
 
-    if ($password_type == 'PASSWORD_TYPE_MD5') {
+    if ($password_type eq 'PASSWORD_TYPE_MD5') {
       $prep = spi_prepare(
         'SELECT EXISTS(SELECT 1 FROM password_check.bad_passwords bp WHERE (\'md5\' || md5(bp.plaintext || $1)) = $2)',
         'TEXT', 'TEXT');
       $rv = spi_query_prepared($prep, $username, $password);
 
       if (spi_fetchrow($rv)->{exists} eq "t") {
-        elog(ERROR, "password must not be found on a common password dictionary");
+        elog(ERROR, "password must not be found in a common password dictionary");
       }
 
       spi_cursor_close($rv);
       spi_freeplan($prep);
     }
-    elsif ($password_type == "PASSWORD_TYPE_PLAINTEXT") {
+    elsif ($password_type eq 'PASSWORD_TYPE_PLAINTEXT') {
       $prep = spi_prepare(
         'SELECT EXISTS(SELECT 1 FROM password_check.bad_passwords bp WHERE bp.plaintext = $1)',
         'TEXT');
       $rv = spi_query_prepared($prep, $password);
 
       if (spi_fetchrow($rv)->{exists} eq "t") {
-        elog(ERROR, "password must not be found on a common password dictionary");
+        elog(ERROR, "password must not be found in a common password dictionary");
       }
 
       spi_cursor_close($rv);
@@ -111,6 +111,8 @@ $_pgtle_$
   SELECT pgtle.register_feature('password_check.passcheck_hook', 'passcheck');
 $_pgtle_$
 );
+
+CREATE EXTENSION my_password_check_rules;
 
 ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
 SELECT pg_catalog.pg_reload_conf();

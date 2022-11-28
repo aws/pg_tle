@@ -44,7 +44,7 @@ You can use the password check hook (`passcheck`) to provide additional validati
 
 A `passcheck` hook function takes the following arguments
 
-passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
 
 * `username` (`text`) - the name of the role that is setting a password.
 * `password` (`text`) - the password. This may be in plaintext or a hashed format (see `password_type`).
@@ -105,7 +105,7 @@ $_pgtle_$
           WHERE ('md5' || md5(bp.plaintext || username)) = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       ELSIF password_type = 'PASSWORD_TYPE_PLAINTEXT' THEN
         SELECT EXISTS(
@@ -114,7 +114,7 @@ $_pgtle_$
           WHERE bp.plaintext = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       END IF;
     END
@@ -163,12 +163,12 @@ Here is example output of the above `passcheck` hook in action:
 CREATE EXTENSION my_password_check_rules;
 
 CREATE ROLE test_role PASSWORD 'password';
-ERROR:  password must not be found on a common password dictionary
+ERROR:  password must not be found in a common password dictionary
 
 CREATE ROLE test_role;
 SET SESSION AUTHORIZATION test_role;
 SET password_encryption TO 'md5';
 \password
 -- set to "password"
-ERROR:  password must not be found on a common password dictionary
+ERROR:  password must not be found in a common password dictionary
 ```
