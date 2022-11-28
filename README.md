@@ -14,9 +14,9 @@ Trusted Language Extensions (TLE) for PostgreSQL (`pg_tle`) is an open source pr
 
 PostgreSQL provides an [extension framework](https://www.postgresql.org/docs/current/extend-extensions.html) for adding more functionality to PostgreSQL without having to fork the codebase. This powerful mechanism lets developers build new functionality for PostgreSQL, such as new data types, the ability to communicate with other database systems, and more. It also lets developers consolidate code that is functionally related and apply a version to each change. This makes it easier to bundle and distribute software across many unique PostgreSQL databases.
 
-Installing a new PostgreSQL extension involves having access to the underlying filesystem. Many managed service providers or systems running databases in containers disallow users from accessing the filesystem for security and safety reasons. This makes it challenging to add new extensions in environments, as users either need to request for a managed service provider to build an extension or rebuild a container image.
+Installing a new PostgreSQL extension involves having access to the underlying filesystem. Many managed service providers or systems running databases in containers disallow users from accessing the filesystem for security and safety reasons. This makes it challenging to add new extensions in these environments, as users either need to request for a managed service provider to build an extension or rebuild a container image.
 
-Trusted Language Extensions for PostgreSQL, or `pg_tle`, is an extension to help developers install and manage extensions in environments that do not provide access to the filesystem. PostgreSQL provides "trusted languages" for development that have certain safety attributes, including restrictions on accessing the filesystem directly and certain networking properties. With these security guarantees in place, a PostgreSQL administrator can let unprivileged users write stored procedures in their preferred programming languages, such as JavaScript, Perl, or Rust. PostgreSQL also provides the ability to mark an extension as "trusted" and let unprivileged users install and use extensions that do not contain code that could potentially impact the security of a system.
+Trusted Language Extensions for PostgreSQL, or `pg_tle`, is an extension to help developers install and manage extensions in environments that do not provide access to the filesystem. PostgreSQL provides "trusted languages" for development that have certain safety attributes, including restrictions on accessing the filesystem directly and certain networking properties. With these security guarantees in place, a PostgreSQL administrator can let unprivileged users write stored procedures in their preferred programming languages, such as PL/pgSQL, JavaScript, or Perl. PostgreSQL also provides the ability to mark an extension as "trusted" and let unprivileged users install and use extensions that do not contain code that could potentially impact the security of a system.
 
 ## Getting started
 
@@ -29,7 +29,7 @@ You can also find detailed information about the `pg_tle` [extension management 
 There are examples for writing TLEs in several languages, including:
 
 * [SQL](./docs/05_sql_examples.md)
-* [PL/pgSQL](./docs/06_plsql_examples.md)
+* [PL/pgSQL](./docs/06_plpgsql_examples.md)
 * [JavaScript](./docs/07_plv8_examples.md)
 * [Perl](./docs/08_plperl_examples.md)
 
