@@ -102,7 +102,11 @@ USAGE_EOF
 }
 
 RUN_PGSQL(){
-  PG_OUTPUT=$(psql ${pgConn} ${PGFLAGS} --command="${SQL_QUERY}" 2>&1)
+  if [[ "$1" = "" ]]; then
+    PG_OUTPUT=$(psql ${pgConn} ${PGFLAGS} --command="${SQL_QUERY}" 2>&1)
+  else
+    PG_OUTPUT=$(psql ${pgConn} ${PGFLAGS} -f "${1}" 2>&1)
+  fi
   PG_EXIT=$?
 }
 
@@ -221,7 +225,10 @@ case "$Action" in
         fi
         SQL_QUERY="SELECT FROM pgtle.install_update_path('${ExtName}', '${v1}', '${v2}', \$_PG_TLE_SQL_\$$(cat ${v3})\$_PG_TLE_SQL_\$) ${SQL_WHERE};"
       fi
-      RUN_PGSQL
+      SQL_FILE=$(mktemp .$$.XXXXXXXXXXXXXXXXXXX.sql)
+      echo ${SQL_QUERY} >${SQL_FILE}
+      RUN_PGSQL ${SQL_FILE}
+      rm -f ${SQL_FILE}
       if [ ${PG_EXIT} -gt 0 ]; then
         break
       fi
