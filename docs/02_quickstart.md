@@ -32,7 +32,7 @@ Let's use these functions to create a Trusted Language Extension.
 
 First, we need to install the `pg_tle` extension into our database. This command must be executed as a PostgreSQL superuser (e.g. `postgres`):
 
-```shell
+```sql
 CREATE EXTENSION pg_tle;
 ```
 

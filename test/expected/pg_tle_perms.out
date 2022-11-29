@@ -42,7 +42,7 @@ SELECT pgtle.install_extension
  '1.0',
  'Yes special features',
 $_bcd_$
-  CREATE FUNCTION passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     BEGIN
       RETURN; -- just pass through
@@ -141,7 +141,7 @@ CREATE EXTENSION yes_features;
 ERROR:  permission denied for function register_feature
 -- create a function and try to insert directly into pgtle.feature_info
 -- fail
-CREATE FUNCTION other_passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+CREATE FUNCTION other_passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
 RETURNS void AS $$
 BEGIN
   RETURN; -- just pass through

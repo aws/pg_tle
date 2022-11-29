@@ -1,18 +1,18 @@
 # Trusted Language Extensions hooks
 
-PostgreSQL provides hooks for extending its functionality without creating a fork. These hooks range from performing checks on user-supplied passwords to being able to modify queries.
+PostgreSQL provides hooks for extending its functionality without creating a fork. These hooks range from performing checks on user-supplied passwords to being able to modify queries. To use hooks, you have to write a "hook function" and register it with PostgreSQL. Once a hook function is registered, PostgreSQL then knows to execute the hook when that particular action is run (e.g. when checking a password).
 
-`pg_tle` enables you to build Trusted Language Extensions that make use of hooks from a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
+`pg_tle` enables you to build Trusted Language Extensions that can let you write hook functions and registered them through a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
 
-<!-- ## Scope
+## Scope
 
-Note that some hooks are available globally across a PostgreSQL cluster (e.g. `check_password_hook`). If you use a global hook, you will need to ensure you run `CREATE EXTENSION pg_tle;` in all of the databases. -->
+Note that some hooks are available globally across a PostgreSQL cluster (e.g. `check_password_hook`). If you use register a global hook function, you will need to ensure you run `CREATE EXTENSION pg_tle;` in all of your databases.
 
 ## General information
 
-All hooks need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
+All hook functions need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
 
-You can register a `pg_tle` hook using the `pgtle.register_feature` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
+You can register a `pg_tle` hook function using the `pgtle.register_feature` function. For example, if you want to register a function called `my_password_check_rules` to be called when the password check hook `passcheck`, you would run the following query:
 
 ```sql
 SELECT pgtle.register_feature('my_password_check_rules', 'passcheck');
@@ -44,7 +44,7 @@ You can use the password check hook (`passcheck`) to provide additional validati
 
 A `passcheck` hook function takes the following arguments
 
-passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
 
 * `username` (`text`) - the name of the role that is setting a password.
 * `password` (`text`) - the password. This may be in plaintext or a hashed format (see `password_type`).
@@ -52,7 +52,7 @@ passcheck_hook(username text, password text, password_type pgtle.password_types,
   * `PASSWORD_TYPE_PLAINTEXT` - a plaintext password.
   * `PASSWORD_TYPE_MD5` - a md5 hashed password.
   * `PASSWORD_TYPE_SCRAM_SHA_256` - a SCRAM-SHA-256 hashed password.
-* `valid_until` (`timestamp`) - if set, the time until the password on the account no longer works.
+* `valid_until` (`timestamptz`) - if set, the time until the password on the account no longer works.
 * `valid_null` (`bool`) - if true, `valid_until` is set to `NULL`.
 
 #### Configuration
@@ -66,6 +66,8 @@ Controls whether a `passcheck` hook is enabled. There are three settings:
 * `require` — requires a password check hook to be defined.
 
 #### Example
+
+The following examples demonstrates how to write a hook function that checks to see if a user-supplied password is in a common password dictionary. After writing this function, the example shows how to register the hook function as part of the `passcheck` hook.
 
 ```sql
 SELECT pgtle.install_extension (
@@ -91,7 +93,7 @@ $_pgtle_$
     ('dragon');
   CREATE UNIQUE INDEX ON password_check.bad_passwords (plaintext);
 
-  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamp, valid_null boolean)
+  CREATE FUNCTION password_check.passcheck_hook(username text, password text, password_type pgtle.password_types, valid_until timestamptz, valid_null boolean)
   RETURNS void AS $$
     DECLARE
       invalid bool := false;
@@ -103,7 +105,7 @@ $_pgtle_$
           WHERE ('md5' || md5(bp.plaintext || username)) = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       ELSIF password_type = 'PASSWORD_TYPE_PLAINTEXT' THEN
         SELECT EXISTS(
@@ -112,11 +114,11 @@ $_pgtle_$
           WHERE bp.plaintext = password
         ) INTO invalid;
         IF invalid THEN
-          RAISE EXCEPTION 'password must not be found on a common password dictionary';
+          RAISE EXCEPTION 'password must not be found in a common password dictionary';
         END IF;
       END IF;
     END
-  $$ LANGUAGE plpgsql SECURITY DEFINER;
+  $$ LANGUAGE plpgsql;
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
@@ -132,7 +134,7 @@ ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
 SELECT pg_catalog.pg_reload_conf();
 ```
 
-If you are using Amazon RDS or Amazon Aurora, you will need to adjust the parameter group. For example, if you are using a parameter group called `pgtle-pg` that was referenced in the [installation instructions]('./01_insall.md'), you can run this command:
+If you are using Amazon RDS or Amazon Aurora, you will need to adjust the parameter group. For example, if you are using a parameter group called `pgtle-pg` that was referenced in the [installation instructions]('01_install.md'), you can run this command:
 
 ```shell
 aws rds modify-db-parameter-group \
@@ -161,12 +163,12 @@ Here is example output of the above `passcheck` hook in action:
 CREATE EXTENSION my_password_check_rules;
 
 CREATE ROLE test_role PASSWORD 'password';
-ERROR:  password must not be found on a common password dictionary
+ERROR:  password must not be found in a common password dictionary
 
 CREATE ROLE test_role;
 SET SESSION AUTHORIZATION test_role;
 SET password_encryption TO 'md5';
 \password
 -- set to "password"
-ERROR:  password must not be found on a common password dictionary
+ERROR:  password must not be found in a common password dictionary
 ```
