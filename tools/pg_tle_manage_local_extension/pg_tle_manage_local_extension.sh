@@ -273,7 +273,7 @@ if [ "${PG_EXIT}" -eq 0 ] ; then
       printf "\n${PG_OUTPUT}\n"
     fi
   else
-    printf "\n$Action compeleted succefully.\n"
+    printf "\n$Action completed successfully.\n"
   fi
   exit 0
 else

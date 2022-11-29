@@ -106,7 +106,7 @@ pg_tle_manage_local_extension.sh 1.0
 ```
 Installing mv_stats  from ~/mv_stats in postgresql://myuser@localhost:5432/mydb?sslmode=prefer
 
-install compeleted succefully.
+install completed successfully.
 ```
 
 ## Update extension
@@ -116,7 +116,7 @@ install compeleted succefully.
 ```
 Updating mv_stats from /home/sharyogi/gitwork/mv_stats in postgresql://postgres@localhost:5432/postgres?sslmode=prefer
 
-update compeleted succefully.
+update completed successfully.
 ```
 
 ## List extension(s)
@@ -153,6 +153,6 @@ List pg_tle installed extension(s) from postgresql://postgres@localhost:5432/pos
 ```
 Removing mv_stats  from postgresql://myuser@localhost:5432/mydb?sslmode=prefer
 
-uninstall compeleted succefully.
+uninstall completed successfully.
 ```
 
