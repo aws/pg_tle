@@ -19,7 +19,7 @@
 PROGRAM_NAME=$(basename $0)
 PROGRAM_VERSION="1.0"
 
-SUPPORTED_ARGS=$(getopt -o c:a:p:n:hv --long connection:,action:,extpath:,name:,help,version --name ${PROGRAM_NAME} -- "$@")
+SUPPORTED_ARGS=$(getopt -o c:a:p:n:d:mhv --long connection:,action:,extpath:,name:,sqldir:,runmake,help,version --name ${PROGRAM_NAME} -- "$@")
 
 PGCLI=$(which psql)
 PGFLAGS_DML="--quiet --no-align --tuples-only"
@@ -92,6 +92,12 @@ OPTIONS:
     -V, --version
           Print version information
 
+    -m, --runmake
+          Run make to generate SQL file 
+
+    -d, --sqldir <subdir where SQL is present>
+          set subdir where extension SQL files are
+
 EXIT_CODES:
   1 - PostgreSQL command line tool psql is missing
   2 - Missing argument or Invalid arguments value
@@ -109,7 +115,8 @@ RUN_PGSQL(){
   fi
   PG_EXIT=$?
 }
-
+runmake=0
+SQLDir=""
 eval set -- "$SUPPORTED_ARGS"
 while true; do
   case "$1" in
@@ -130,6 +137,16 @@ while true; do
         ;;
     -a | --action)
         Action=$2
+        shift 2
+        continue
+        ;;
+    -m | --runmake)
+        runmake=1
+        shift 1
+        continue
+        ;;
+    -d | --sqldir)
+        SQLDir=$2
         shift 2
         continue
         ;;
@@ -181,8 +198,13 @@ case "$Action" in
       printf "\nFATAL: Extension path %s is missing.\n" ${ExtPath} >&2
       exit 3
     fi
+    if [ ${runmake} -gt 0 ]; then
+      pushd ${ExtPath}
+      make
+      popd
+    fi
     ExtControl="${ExtPath}/${ExtName}.control"
-    ExtSQL_Template="${ExtPath}/${ExtName}--%s.sql"
+    ExtSQL_Template="${ExtPath}/${SQLDir}/${ExtName}--%s.sql"
     if [ ! -f "${ExtControl}" ] ; then
       printf "\nFATAL: Extension control file %s is missing.\n" ${ExtControl} >&2
       exit 3
@@ -191,9 +213,16 @@ case "$Action" in
     printf -v ExtSQL "${ExtSQL_Template}" "*"
     for file in ${ExtSQL}
     do
+      if [ "${file}" = "${ExtSQL}" ]; then
+        break
+      fi
       parsed=$(sed -e "s:.*${ExtName}--::g;s:.sql::g;s:--:,:g; s:$:,${file}:g" <<< ${file} )
       ExtensionsList="${ExtensionsList} ${parsed}"
     done
+    if [ -z "${ExtensionsList}" ] ; then
+      printf "\nFATAL: Extension SQL files %s are missing.\n" ${ExtSQL} >&2
+      exit 3
+    fi
     if [ ${Action} == "update" ]; then
       printf "\nUpdating ${ExtName} from ${ExtPath} in ${pgConn}\n"
     else
@@ -226,15 +255,16 @@ case "$Action" in
         SQL_QUERY="SELECT FROM pgtle.install_update_path('${ExtName}', '${v1}', '${v2}', \$_PG_TLE_SQL_\$$(cat ${v3})\$_PG_TLE_SQL_\$) ${SQL_WHERE};"
       fi
       SQL_FILE=$(mktemp .$$.XXXXXXXXXXXXXXXXXXX.sql)
-      echo ${SQL_QUERY} >${SQL_FILE}
+      (echo "\\set ON_ERROR_STOP true";echo ${SQL_QUERY}) >${SQL_FILE}
       RUN_PGSQL ${SQL_FILE}
       rm -f ${SQL_FILE}
       if [ ${PG_EXIT} -gt 0 ]; then
+        echo "Failed to run SQL from ${SQL_FILE}"
         break
       fi
     done
     if [ ${PG_EXIT} -eq 0 ]; then
-      SQL_QUERY="SELECT FROM pgtle.set_default_version('${ExtName}', ${DefaultRev});"
+      SQL_QUERY="SELECT FROM pgtle.set_default_version('${ExtName}', ${DefaultRev}::text);"
       RUN_PGSQL
     fi
     ;;

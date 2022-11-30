@@ -83,12 +83,17 @@ OPTIONS:
     -V, --version
           Print version information
 
+    -m, --runmake
+          Run make to generate SQL file 
+
+    -d, --sqldir <subdir where SQL is present>
+          set subdir where extension SQL files are
+
 EXIT_CODES:
   1 - PostgreSQL command line tool psql is missing
   2 - Missing argument or Invalid arguments value
   3 - Extension source code folder (--extpath) not found
   4 - Error running conencting to PostgreSQL or error executiong SQL query
-
 ```
 
 ## Version info
