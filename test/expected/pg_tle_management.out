@@ -60,24 +60,6 @@ $_pgtle_$
  t
 (1 row)
 
-SELECT pgtle.install_extension
-(
- 'test_superuser_only_when_untrusted',
- '1.0',
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
-  RETURNS INT AS $$
-  (
-    SELECT 101
-  )$$ LANGUAGE sql;
-$_pgtle_$
-);
- install_extension 
--------------------
- t
-(1 row)
-
 -- install a trusted extension that calls functions requiring superuser privilege
 SELECT pgtle.install_extension
 (
@@ -94,16 +76,16 @@ $_pgtle_$
 (1 row)
 
 SET search_path TO public;
--- superuser can create extensions that are not trusted and do not require superuser privilege
+-- superuser can create and use extensions that do not require superuser privilege
 RESET SESSION AUTHORIZATION;
-CREATE EXTENSION test_superuser_only_when_untrusted;
-SELECT test_superuser_only_when_untrusted_func();
- test_superuser_only_when_untrusted_func 
------------------------------------------
-                                     101
+CREATE EXTENSION test123;
+SELECT test123_func();
+ test123_func 
+--------------
+           42
 (1 row)
 
-DROP EXTENSION test_superuser_only_when_untrusted;
+DROP EXTENSION test123;
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
  current_user 
@@ -111,7 +93,7 @@ SELECT CURRENT_USER;
  dbstaff
 (1 row)
 
--- unprivileged role can create and use trusted extensions that do not require superuser privilege
+-- unprivileged role can create and use extensions that do not require superuser privilege
 CREATE EXTENSION test123;
 SELECT test123_func();
  test123_func 
@@ -239,8 +221,7 @@ SELECT * FROM pgtle.available_extensions() ORDER BY name;
 ------------------------------------------+-----------------+--------------------
  test123                                  | 1.0             | Test TLE Functions
  test_no_switch_to_superuser_when_trusted | 1.0             | Test TLE Functions
- test_superuser_only_when_untrusted       | 1.0             | Test TLE Functions
-(3 rows)
+(2 rows)
 
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
                    name                   | version | superuser | trusted | relocatable | schema | requires |      comment       
@@ -248,8 +229,7 @@ SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
  test123                                  | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
  test123                                  | 1.1     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
  test_no_switch_to_superuser_when_trusted | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
- test_superuser_only_when_untrusted       | 1.0     | f         | f       | f           |        | {pg_tle} | Test TLE Functions
-(4 rows)
+(3 rows)
 
 DROP EXTENSION test123;
 -- negative tests, run as superuser
@@ -668,12 +648,6 @@ SELECT CURRENT_USER;
 (1 row)
 
 SELECT pgtle.uninstall_extension('test123');
- uninstall_extension 
----------------------
- t
-(1 row)
-
-SELECT pgtle.uninstall_extension('test_superuser_only_when_untrusted');
  uninstall_extension 
 ---------------------
  t

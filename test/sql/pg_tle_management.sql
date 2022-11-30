@@ -62,20 +62,6 @@ $_pgtle_$
 $_pgtle_$
 );
 
-SELECT pgtle.install_extension
-(
- 'test_superuser_only_when_untrusted',
- '1.0',
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION test_superuser_only_when_untrusted_func()
-  RETURNS INT AS $$
-  (
-    SELECT 101
-  )$$ LANGUAGE sql;
-$_pgtle_$
-);
-
 -- install a trusted extension that calls functions requiring superuser privilege
 SELECT pgtle.install_extension
 (
@@ -90,15 +76,15 @@ $_pgtle_$
 
 SET search_path TO public;
 
--- superuser can create extensions that are not trusted and do not require superuser privilege
+-- superuser can create and use extensions that do not require superuser privilege
 RESET SESSION AUTHORIZATION;
-CREATE EXTENSION test_superuser_only_when_untrusted;
-SELECT test_superuser_only_when_untrusted_func();
-DROP EXTENSION test_superuser_only_when_untrusted;
+CREATE EXTENSION test123;
+SELECT test123_func();
+DROP EXTENSION test123;
 
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
--- unprivileged role can create and use trusted extensions that do not require superuser privilege
+-- unprivileged role can create and use extensions that do not require superuser privilege
 CREATE EXTENSION test123;
 SELECT test123_func();
 
@@ -458,7 +444,6 @@ SELECT pgtle.uninstall_extension_if_exists('test42');
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
 SELECT pgtle.uninstall_extension('test123');
-SELECT pgtle.uninstall_extension('test_superuser_only_when_untrusted');
 SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 
 -- clean up
