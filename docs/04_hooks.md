@@ -118,7 +118,7 @@ $_pgtle_$
         END IF;
       END IF;
     END
-  $$ LANGUAGE plpgsql;
+  $$ LANGUAGE plpgsql SECURITY DEFINER;
 
   GRANT EXECUTE ON FUNCTION password_check.passcheck_hook TO PUBLIC;
 
