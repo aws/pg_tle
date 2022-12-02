@@ -15,11 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+DEBUG=0
 PROGRAM_NAME=$(basename $0)
-PROGRAM_VERSION="1.0"
-
-SUPPORTED_ARGS=$(getopt -o c:a:p:n:d:mhv --long connection:,action:,extpath:,name:,sqldir:,runmake,help,version --name ${PROGRAM_NAME} -- "$@")
+PROGRAM_VERSION="1.1"
 
 PGCLI=$(which psql)
 PGFLAGS_DML="--quiet --no-align --tuples-only"
@@ -95,7 +93,7 @@ OPTIONS:
     -m, --runmake
           Run make to generate SQL file 
 
-    -d, --sqldir <subdir where SQL is present>
+    -s, --sqldir <subdir where SQL is present>
           set subdir where extension SQL files are
 
 EXIT_CODES:
@@ -103,6 +101,9 @@ EXIT_CODES:
   2 - Missing argument or Invalid arguments value
   3 - Extension source code folder (--extpath) not found
   4 - Error running conencting to PostgreSQL or error executiong SQL query
+  9 - Unsupported OS
+
+* Long Options are not supported on MACOS
 
 USAGE_EOF
 }
@@ -115,7 +116,27 @@ RUN_PGSQL(){
   fi
   PG_EXIT=$?
 }
-runmake=0
+OS_TYPE=$(uname)
+if [ "${OS_TYPE}" = "Linux" ]; then
+  SUPPORTED_ARGS=$(getopt -o c:a:p:n:s:mhvd --long connection:,action:,extpath:,name:,sqldir:,runmake,help,version,debug -- "$@")
+  EX=$?
+elif [ "${OS_TYPE}" = "Darwin" ]; then
+  SUPPORTED_ARGS=$(getopt c:a:p:n:s:mhvd $*)
+  EX=$?
+else
+  echo "Unsupport OS"
+  exit 9
+fi
+if [ $EX -gt 0 ]; then
+  printf "\nError parsing argument(s)\n" >&2
+  if [ "${OS_TYPE}" = "Darwin" ]; then
+    printf "\nLong arguments are not supported on MACOS\n" >&2
+  fi
+  usage >&2
+  exit 2
+fi
+
+RUNMAKE=0
 SQLDir=""
 eval set -- "$SUPPORTED_ARGS"
 while true; do
@@ -141,13 +162,18 @@ while true; do
         continue
         ;;
     -m | --runmake)
-        runmake=1
+        RUNMAKE=1
         shift 1
         continue
         ;;
-    -d | --sqldir)
+    -s | --sqldir)
         SQLDir=$2
         shift 2
+        continue
+        ;;
+    -d | --debug)
+        DEBUG=1
+        shift 1
         continue
         ;;
     -h | --help)
@@ -198,7 +224,7 @@ case "$Action" in
       printf "\nFATAL: Extension path %s is missing.\n" ${ExtPath} >&2
       exit 3
     fi
-    if [ ${runmake} -gt 0 ]; then
+    if [ ${RUNMAKE} -gt 0 ]; then
       pushd ${ExtPath}
       make
       popd
@@ -234,10 +260,17 @@ case "$Action" in
       printf "\nFATAL: default_version not defined in %s.\n" ${ExtControl} >&2
       exit 3
     fi
+    printf -v DefaultSQL "${ExtSQL_Template}" ${DefaultRev//\'/}
+    [ ${DEBUG} -gt 0 ] && echo "\$DefaultSQL is ${DefaultSQL}"
     for revs in $ExtensionsList
     do
-      IFS=, read -r v1 v2 v3 <<< $revs
+      [ ${DEBUG} -gt 0 ] && echo "Working on ${revs}"
+      IFS=, read -r v1 v2 v3 <<< "${revs}"
       if [ -z "${v3}" ]; then
+        if [ "${DefaultSQL}" != "${v2}" ]; then
+          [ "${DEBUG}" -gt 0 ] && echo "Skip loading: ${v2}"
+          continue
+        fi
         SUFLAG="$(sed -ne "s/ //g;s/^trusted=\(.*\)/\1/p" < ${ExtControl})"
         SUFLAG=${SUFLAG:-false}
         if [ ${Action} == "update" ]; then
