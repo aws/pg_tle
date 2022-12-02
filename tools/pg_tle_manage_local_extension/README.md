@@ -86,7 +86,7 @@ OPTIONS:
     -m, --runmake
           Run make to generate SQL file 
 
-    -d, --sqldir <subdir where SQL is present>
+    -s, --sqldir <subdir where SQL is present>
           set subdir where extension SQL files are
 
 EXIT_CODES:
