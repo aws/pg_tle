@@ -22,6 +22,7 @@
  */
 #include "postgres.h"
 
+#include <assert.h>
 #include <dirent.h>
 #include <limits.h>
 #include <sys/file.h>
@@ -52,6 +53,7 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
 #include "commands/comment.h"
@@ -2163,9 +2165,9 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	DefElem		   *d_cascade = NULL;
 	char		   *schemaName = NULL;
 	char		   *versionName = NULL;
-	bool			cascade = false;
+	bool		   cascade = false;
 	ListCell	   *lc;
-	ObjectAddress	retobj;
+	ObjectAddress	   retobj;
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2243,6 +2245,103 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 									 cascade,
 									 NIL,
 									 true);
+
+	int	   	   spi_rc;
+	char	   	   *sqlFuncIdSql = NULL;
+	char	   	   *ctlFuncIdSql = NULL;
+	char	   	   *extname = NULL;
+	char	   	   *ctlname = NULL;
+	char	   	   *sqlname = NULL;
+	char	   	   *funcIdStr = NULL;
+	Oid	   	   ctlFuncId = InvalidOid;
+	Oid	   	   sqlFuncId = InvalidOid;
+	Oid	   	   schemaOid = InvalidOid;
+	ObjectAddress	   ctlFunc, sqlFunc;
+	ExtensionControlFile *pcontrol = NULL;
+
+	/*
+	 * Build appropriate function names for the control and sql functions 
+	 * based on extension name and version
+	 */
+	extname = stmt->extname;
+
+	if (versionName == NULL)
+	{
+		pcontrol = read_extension_control_file(extname);
+		if (pcontrol->default_version)
+			versionName = pcontrol->default_version;
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("version to install must be specified")));
+	}
+
+	sqlname = psprintf("%s--%s.sql", extname, versionName);
+	ctlname = psprintf("%s.control", extname);
+	schemaOid = get_namespace_oid(PG_TLE_NSPNAME, false);
+
+	/* Look up the control and sql functions for this extension.
+	 * Add dependencies for this extension to depend on those functions.
+	 * This is to inform pg_dump/pg_restore that the functions are prerequisites for
+	 * creating the extension. Because otherwise, the default order of objects dumped 
+	 * puts all function objects after extension objects.
+	 */
+
+	if (SPI_connect() != SPI_OK_CONNECT)
+		elog(ERROR, "SPI_connect failed");
+
+	ctlFuncIdSql = psprintf("SELECT pg_proc.oid FROM pg_catalog.pg_proc WHERE "
+				   "pg_proc.pronamespace = '%d' AND pg_proc.proname = '%s'",
+				   schemaOid, ctlname);
+
+	spi_rc = SPI_execute(ctlFuncIdSql, true, 1);
+
+	if (spi_rc != SPI_OK_SELECT)	/* internal error */
+		elog(ERROR, "search for %s in schema %s failed", quote_identifier(ctlname), PG_TLE_NSPNAME);
+
+	if (SPI_processed == 0)
+		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(ctlname), extname, PG_TLE_NSPNAME);
+
+	/* this should be unreachable code, if not then it's a bug */
+	if (SPI_processed > 1)
+		elog(ERROR, "multiple entries found for sql function %s for extension %s in schema %s, this may be a bug", quote_identifier(ctlname), extname, PG_TLE_NSPNAME);
+
+	funcIdStr = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1);
+	sscanf(funcIdStr, "%d", &ctlFuncId);
+
+	sqlFuncIdSql = psprintf("SELECT pg_proc.oid FROM pg_catalog.pg_proc WHERE "
+				   "pg_proc.pronamespace = '%d' AND pg_proc.proname = '%s'",
+				   schemaOid, sqlname);
+
+	spi_rc = SPI_execute(sqlFuncIdSql, true, 1);
+
+	if (spi_rc != SPI_OK_SELECT)
+		elog(ERROR, "search for %s in schema %s failed", quote_identifier(sqlname), PG_TLE_NSPNAME);
+
+	if (SPI_processed == 0)
+		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), extname, PG_TLE_NSPNAME);
+
+	/* this should be unreachable code, if not then it's a bug */
+	if (SPI_processed > 1)
+		elog(ERROR, "multiple entries found for sql function %s for extension %s in schema %s, this may be a bug", quote_identifier(sqlname), extname, PG_TLE_NSPNAME);
+
+	funcIdStr = SPI_getvalue(SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1);
+	sscanf(funcIdStr, "%d", &sqlFuncId);
+
+	SPI_freetuptable(SPI_tuptable);
+	if (SPI_finish() != SPI_OK_FINISH)
+		elog(ERROR, "SPI_finish failed");
+
+	ctlFunc.classId = ProcedureRelationId;
+	ctlFunc.objectId = ctlFuncId;
+	ctlFunc.objectSubId = 0;
+
+	sqlFunc.classId = ProcedureRelationId;
+	sqlFunc.objectId = sqlFuncId;
+	sqlFunc.objectSubId = 0;
+
+	recordDependencyOn(&retobj, &ctlFunc, DEPENDENCY_NORMAL);
+	recordDependencyOn(&retobj, &sqlFunc, DEPENDENCY_NORMAL);
 
 	/* end pg_tle extensions */
 	UNSET_TLEEXT;
