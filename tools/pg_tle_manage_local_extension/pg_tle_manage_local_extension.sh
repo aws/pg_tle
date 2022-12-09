@@ -290,7 +290,7 @@ case "$Action" in
       SQL_FILE=$(mktemp .$$.XXXXXXXXXXXXXXXXXXX.sql)
       (echo "\\set ON_ERROR_STOP true";echo ${SQL_QUERY}) >${SQL_FILE}
       RUN_PGSQL ${SQL_FILE}
-      rm -f ${SQL_FILE}
+      [ ${DEBUG} -eq 0 ] && rm -f ${SQL_FILE}
       if [ ${PG_EXIT} -gt 0 ]; then
         echo "Failed to run SQL from ${SQL_FILE}"
         break
