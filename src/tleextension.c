@@ -22,6 +22,7 @@
  */
 #include "postgres.h"
 
+#include <assert.h>
 #include <dirent.h>
 #include <limits.h>
 #include <sys/file.h>
@@ -52,6 +53,7 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
 #include "commands/comment.h"
@@ -63,7 +65,9 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
+#include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
+#include "parser/parse_func.h"
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -72,6 +76,7 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/regproc.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -2153,6 +2158,23 @@ get_required_extension(char *reqExtensionName,
 }
 
 /*
+ * Given a TLE extension .control or .sql function name,
+ * get the Oid
+ */
+static Oid get_tlefunc_oid(const char *funcname)
+{
+	char	   *qualname = NULL;
+	List	   *namelist = NULL;
+		
+	qualname = psprintf("%s.%s",
+			    quote_identifier(PG_TLE_NSPNAME),
+			    quote_identifier(funcname));
+	namelist = stringToQualifiedNameList(qualname);
+
+	return LookupFuncName(namelist, 0, NULL, false /* missing_ok */);
+}
+
+/*
  * CREATE EXTENSION
  */
 ObjectAddress
@@ -2163,9 +2185,9 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	DefElem		   *d_cascade = NULL;
 	char		   *schemaName = NULL;
 	char		   *versionName = NULL;
-	bool			cascade = false;
+	bool		   cascade = false;
 	ListCell	   *lc;
-	ObjectAddress	retobj;
+	ObjectAddress	   retobj;
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2243,6 +2265,58 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 									 cascade,
 									 NIL,
 									 true);
+
+	char	   	   *ctlname = NULL;
+	char	   	   *sqlname = NULL;
+	Oid	   	   ctlfuncid = InvalidOid;
+	Oid	   	   sqlfuncid = InvalidOid;
+	ObjectAddress	   ctlfunc, sqlfunc;
+	ExtensionControlFile *pcontrol = NULL;
+
+	/*
+	 * Build appropriate function names for the control and sql functions 
+	 * based on extension name and version
+	 */
+	char *extname = stmt->extname;
+
+	if (versionName == NULL)
+	{
+		pcontrol = read_extension_control_file(extname);
+		if (pcontrol->default_version)
+			versionName = pcontrol->default_version;
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("version to install must be specified")));
+	}
+
+	/* Look up the control and sql functions for this extension.
+	 * Add dependencies to pg_depend for this extension to depend on those functions.
+	 * This is to inform pg_dump/pg_restore that the functions are prerequisites for
+	 * creating the extension. Because otherwise, the default order of objects dumped 
+	 * puts creation of all function objects after creation of all extension objects.
+	 */
+
+	ctlname = psprintf("%s.control", extname);
+	ctlfuncid = get_tlefunc_oid(ctlname);
+	if (ctlfuncid == InvalidOid)
+		elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
+
+	sqlname = psprintf("%s--%s.sql", extname, versionName);
+	sqlfuncid = get_tlefunc_oid(sqlname);
+	if (sqlfuncid == InvalidOid)
+		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
+
+	ctlfunc.classId = ProcedureRelationId;
+	ctlfunc.objectId = ctlfuncid;
+	ctlfunc.objectSubId = 0;
+
+	sqlfunc.classId = ProcedureRelationId;
+	sqlfunc.objectId = sqlfuncid;
+	sqlfunc.objectSubId = 0;
+
+	recordDependencyOn(&retobj, &ctlfunc, DEPENDENCY_NORMAL);
+	recordDependencyOn(&retobj, &sqlfunc, DEPENDENCY_NORMAL);
 
 	/* end pg_tle extensions */
 	UNSET_TLEEXT;
