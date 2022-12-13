@@ -232,15 +232,14 @@ SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
 (3 rows)
 
 DROP EXTENSION test123;
--- negative tests, run as superuser
-RESET SESSION AUTHORIZATION;
+-- negative tests, run as unprivileged role
 -- should fail
 -- attempt to create a function in pgtle directly
 CREATE OR REPLACE FUNCTION pgtle.foo()
 RETURNS TEXT AS $$
 SELECT 'ok'
 $$ LANGUAGE sql;
-ERROR:  pgtle schema reserved for pg_tle functions
+ERROR:  permission denied for schema pgtle
 -- create a function in public and then attempt alter to pg_tle
 -- this works
 CREATE OR REPLACE FUNCTION public.pg_tlefoo()
@@ -252,6 +251,8 @@ ALTER FUNCTION public.pg_tlefoo() SET SCHEMA pgtle;
 ERROR:  pgtle schema reserved for pg_tle functions
 -- clean up, should work
 DROP FUNCTION public.pg_tlefoo();
+-- negative tests, run as superuser
+RESET SESSION AUTHORIZATION;
 -- attempt to shadow existing file-based extension
 -- fail
 SELECT pgtle.install_extension

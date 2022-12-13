@@ -162,9 +162,7 @@ SELECT * FROM pgtle.available_extensions() ORDER BY name;
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
 DROP EXTENSION test123;
 
--- negative tests, run as superuser
-RESET SESSION AUTHORIZATION;
-
+-- negative tests, run as unprivileged role
 -- should fail
 -- attempt to create a function in pgtle directly
 CREATE OR REPLACE FUNCTION pgtle.foo()
@@ -184,6 +182,9 @@ ALTER FUNCTION public.pg_tlefoo() SET SCHEMA pgtle;
 
 -- clean up, should work
 DROP FUNCTION public.pg_tlefoo();
+
+-- negative tests, run as superuser
+RESET SESSION AUTHORIZATION;
 
 -- attempt to shadow existing file-based extension
 -- fail
