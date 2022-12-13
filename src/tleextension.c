@@ -2159,9 +2159,10 @@ get_required_extension(char *reqExtensionName,
 
 /*
  * Given a TLE extension .control or .sql function name,
- * get the Oid
+ * get the Oid if the function exists. If the function
+ * doesn't exist, return InvalidOid.
  */
-static Oid get_tlefunc_oid(const char *funcname)
+static Oid get_tlefunc_oid_if_exists(const char *funcname)
 {
 	char	   *qualname = NULL;
 	List	   *namelist = NULL;
@@ -2171,7 +2172,7 @@ static Oid get_tlefunc_oid(const char *funcname)
 			    quote_identifier(funcname));
 	namelist = stringToQualifiedNameList(qualname);
 
-	return LookupFuncName(namelist, 0, NULL, false /* missing_ok */);
+	return LookupFuncName(namelist, 0, NULL, true /* missing_ok */);
 }
 
 /*
@@ -2298,12 +2299,12 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	 */
 
 	ctlname = psprintf("%s.control", extname);
-	ctlfuncid = get_tlefunc_oid(ctlname);
+	ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
 	if (ctlfuncid == InvalidOid)
 		elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
 
 	sqlname = psprintf("%s--%s.sql", extname, versionName);
-	sqlfuncid = get_tlefunc_oid(sqlname);
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
 	if (sqlfuncid == InvalidOid)
 		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
 
@@ -4004,9 +4005,11 @@ _PU_HOOK
 			nspid = QualifiedNameGetCreationNamespace(n->funcname,
 													  &funcname);
 			nspname = get_namespace_name(nspid);
-
 			/*
-			 * We only care about functions being created in the
+			 * We only care about functions that don't already exist
+			 * i.e. functions being created and not pre-existing functions
+			 * being replaced.
+			 * We only care about functions that are being created in the
 			 * private pg_tle schema which are not under the control
 			 * of the pg_tle artifact manipulation functions.
 			 */
@@ -4028,7 +4031,7 @@ _PU_HOOK
 						ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("control file not found for the %s extension", PG_TLE_EXTNAME)));
 				}
-				else if (!IsBinaryUpgrade)
+				else if (!IsBinaryUpgrade && OidIsValid(get_tlefunc_oid_if_exists(funcname)))
 				{
 					/*
 					 * This is not a pg_tle extension artifact, so it does not
@@ -4355,6 +4358,42 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		elog(ERROR, "SPI_finish failed");
 		PG_RETURN_BOOL(false);
 	}
+
+	/* .sql and .control functions must depend on pg_tle extension */
+	ObjectAddress	   pgtleobj;
+	ObjectAddress	   ctlfunc;
+	ObjectAddress	   sqlfunc;
+	Oid	   	   pgtleExtId;
+	Oid	   	   ctlfuncid;
+	Oid	   	   sqlfuncid;
+
+	pgtleExtId = get_extension_oid(PG_TLE_EXTNAME, true /* missing_ok */);
+	if (pgtleExtId == InvalidOid)
+		elog(ERROR, "could not find extension %s", PG_TLE_EXTNAME);
+  
+	ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
+	if (ctlfuncid == InvalidOid)
+		elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), PG_TLE_NSPNAME);
+
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+	if (sqlfuncid == InvalidOid)
+		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), PG_TLE_NSPNAME);
+
+
+	pgtleobj.classId = ExtensionRelationId;
+	pgtleobj.objectId = pgtleExtId;
+	pgtleobj.objectSubId = 0;;
+
+	ctlfunc.classId = ProcedureRelationId;
+	ctlfunc.objectId = ctlfuncid;
+	ctlfunc.objectSubId = 0;
+
+	sqlfunc.classId = ProcedureRelationId;
+	sqlfunc.objectId = sqlfuncid;
+	sqlfunc.objectSubId = 0;
+
+	recordDependencyOn(&ctlfunc, &pgtleobj, DEPENDENCY_NORMAL);
+	recordDependencyOn(&sqlfunc, &pgtleobj, DEPENDENCY_NORMAL);
 
 	/* done manipulating pg_tle artifacts */
 	UNSET_TLEART;
