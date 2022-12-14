@@ -18,7 +18,15 @@ A PostgreSQL superuser (e.g. the `postgres` user) has the privileges of `pgtle_a
 
 The `pgtle` schema contains all of the helper functions used to manage a `pg_tle`-compatible extension. Additionally, the `pgtle` schema contains a protected table called `pgtle.feature_info` that contains information about functions used for hooks.
 
-If a schema is not specified in a `pg_tle`-compatible extensions, all objects (e.g. functions) in a `pg_tle`-compatible extensions are installed into the current schema (`SELECT CURRENT_SCHEMA`) by default. Different extensions that have objects of the same name that are installed into the same schema will fail to install when `CREATE EXTENSION` is called.
+The only users that can create objects in the `pgtle` schema are:
+
+* superusers
+
+* `pgtle_admin` role and any users and roles with membership in the `pgtle_admin` role
+
+* any roles explicitly given CREATE privilege on the `pgtle` schema and roles with membership in those roles
+
+If a schema is not specified in a `pg_tle`-compatible extension, all objects (e.g. functions) in a `pg_tle`-compatible extension are installed into the current schema (`SELECT CURRENT_SCHEMA`) by default. Different extensions that have objects of the same name that are installed into the same schema will fail to install when `CREATE EXTENSION` is called.
 
 ## Functions
 
