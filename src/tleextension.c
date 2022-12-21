@@ -670,7 +670,6 @@ get_extension_script_filename(ExtensionControlFile *control,
 	return result;
 }
 
-
 /*
  * Parse contents of primary or auxiliary control file or string, and fill in
  * fields of *control.  We parse primary file or string if version == NULL,
@@ -2186,9 +2185,16 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	DefElem		   *d_cascade = NULL;
 	char		   *schemaName = NULL;
 	char		   *versionName = NULL;
+	char	   	   *ctlname = NULL;
+	char	   	   *sqlname = NULL;
+	char	   	   *extname = NULL;
 	bool		   cascade = false;
 	ListCell	   *lc;
 	ObjectAddress	   retobj;
+	ObjectAddress	   ctlfunc, sqlfunc;
+	Oid	   	   ctlfuncid = InvalidOid;
+	Oid	   	   sqlfuncid = InvalidOid;
+	ExtensionControlFile *pcontrol = NULL;
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2267,18 +2273,11 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 									 NIL,
 									 true);
 
-	char	   	   *ctlname = NULL;
-	char	   	   *sqlname = NULL;
-	Oid	   	   ctlfuncid = InvalidOid;
-	Oid	   	   sqlfuncid = InvalidOid;
-	ObjectAddress	   ctlfunc, sqlfunc;
-	ExtensionControlFile *pcontrol = NULL;
-
 	/*
 	 * Build appropriate function names for the control and sql functions 
 	 * based on extension name and version
 	 */
-	char *extname = stmt->extname;
+	extname = stmt->extname;
 
 	if (versionName == NULL)
 	{
@@ -4179,7 +4178,12 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	ListCell	*req;
 	bool		has_ext = false;
 	ExtensionControlFile	*control;
-
+	ObjectAddress	   pgtleobj;
+	ObjectAddress	   ctlfunc;
+	ObjectAddress	   sqlfunc;
+	Oid	   	   pgtleExtId;
+	Oid	   	   ctlfuncid;
+	Oid	   	   sqlfuncid;
 
 	if (PG_ARGISNULL(0)) {
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
@@ -4360,13 +4364,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	}
 
 	/* .sql and .control functions must depend on pg_tle extension */
-	ObjectAddress	   pgtleobj;
-	ObjectAddress	   ctlfunc;
-	ObjectAddress	   sqlfunc;
-	Oid	   	   pgtleExtId;
-	Oid	   	   ctlfuncid;
-	Oid	   	   sqlfuncid;
-
 	pgtleExtId = get_extension_oid(PG_TLE_EXTNAME, true /* missing_ok */);
 	if (pgtleExtId == InvalidOid)
 		elog(ERROR, "could not find extension %s", PG_TLE_EXTNAME);
