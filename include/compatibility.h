@@ -118,8 +118,9 @@ _PU_HOOK;
 #define GETOBJECTDESCRIPTION(a)		getObjectDescription(a, false)
 #endif
 
-/* if prior to pg13, upgrade to newer macro defs */
-#ifndef PG_FINALLY
+/* if prior to pg13, upgrade to newer macro defs.
+ * This also adds support for PG_FINALLY  */
+#if PG_VERSION_NUM < 130000
 #ifdef PG_TRY
 #undef PG_TRY
 #endif
@@ -153,7 +154,7 @@ _PU_HOOK;
 		error_context_stack = _save_context_stack; \
 	} while (0)
 
-#endif	/* PG_FINALLY not defined */
+#endif	/* macro defs (e.g. PG_FINALLY) */
 
 /* also prior to pg13, add some newer macro defs */
 #ifndef TYPALIGN_CHAR
