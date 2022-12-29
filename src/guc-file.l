@@ -20,7 +20,7 @@
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "utils/guc.h"
-
+#include "utils/memutils.h"
 
 /*
  * flex emits a yy_fatal_error() function that it calls in response to
