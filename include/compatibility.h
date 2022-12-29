@@ -89,9 +89,6 @@
 #error "This extension only builds with PostgreSQL 9.4 or later"
 #endif
 
-/* Use our version-specific static declaration here */
-_PU_HOOK;
-
 /* additional compatibility hacks */
 #if PG_VERSION_NUM >= 150000
 #define PG_ANALYZE_AND_REWRITE		pg_analyze_and_rewrite_fixedparams
@@ -124,6 +121,9 @@ _PU_HOOK;
 #ifdef PG_TRY
 #undef PG_TRY
 #endif
+#ifdef PG_CATCH
+#undef PG_CATCH
+#endif
 #ifdef PG_END_TRY
 #undef PG_END_TRY
 #endif
@@ -137,6 +137,13 @@ _PU_HOOK;
 		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) \
 		{ \
 			PG_exception_stack = &_local_sigjmp_buf
+
+#define PG_CATCH()	\
+		} \
+		else \
+		{ \
+			PG_exception_stack = _save_exception_stack; \
+			error_context_stack = _save_context_stack
 
 #define PG_FINALLY() \
 		} \
@@ -162,6 +169,18 @@ _PU_HOOK;
 #endif
 #ifndef TYPALIGN_INT
 #define  TYPALIGN_INT			'i' /* int alignment (typically 4 bytes) */
+#endif
+
+/*
+ * PostgreSQL 13 changed the SPI interface to include a "numvals" attribute that
+ * lists out the total number of values returned in a SPITupleTable. This is
+ * meant to replace "SPI_processed" as a means of getting the row count. This
+ * macros allows for this transition to occur
+ */
+#if PG_VERSION_NUM < 130000
+#define SPI_NUMVALS(tuptable)	(SPI_processed)
+#else
+#define SPI_NUMVALS(tuptable)	(tuptable->numvals)
 #endif
 
 /* prior to pg12 some additional missing macros */

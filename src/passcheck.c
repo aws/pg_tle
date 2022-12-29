@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "postgres.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/user.h"
@@ -29,6 +30,7 @@
 #include "constants.h"
 #include "miscadmin.h"
 #include "tleextension.h"
+#include "compatibility.h"
 
 void		passcheck_init(void);
 
@@ -185,7 +187,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		tuptable = SPI_tuptable;
 		tupdesc = tuptable->tupdesc;
 
-		for (j = 0; j < tuptable->numvals; j++)
+		for (j = 0; j < SPI_NUMVALS(tuptable); j++)
 		{
 			HeapTuple	tuple = tuptable->vals[j];
 			int			i;
