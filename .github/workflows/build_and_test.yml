@@ -1,0 +1,84 @@
+name: pg_tle CI
+on:
+  schedule:
+    # Runs at 00:00 UTC on every Sunday.
+    - cron: '0 0 * * Sun'
+  push:
+  pull_request:
+jobs:
+  build-and-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        version: [REL_15_STABLE, REL_14_STABLE, REL_13_STABLE]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Test details
+        run: echo Build and test pg_tle on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
+
+      - name: Checkout and build PostgreSQL code
+        run: |
+          sudo apt-get update -qq
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+          sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache libperl-dev
+          sudo cpan -i "IPC::Run"
+          rm -rf postgres
+          git clone --branch ${{ matrix.version }} https://github.com/postgres/postgres.git
+          pushd postgres
+          git branch
+          ./configure --prefix=$PWD/inst/ --enable-tap-tests --enable-cassert --enable-debug --with-openssl --with-perl
+          make -j4 install
+      - name: Make contrib
+        run: |
+          pushd postgres/contrib
+          make install
+          popd
+      - name: Make Perl 
+        run: |
+          pushd postgres/src/test/perl
+          make install
+          popd
+      - name: Start Postgres
+        run: |
+          pushd postgres
+          cd inst/bin
+          ./initdb -D data
+          ./pg_ctl -D data -l logfile start
+          ./pg_ctl -D data stop
+          cd ../..
+          mkdir contrib/pg_tle
+          popd
+
+      - name: Checkout pg_tle extension code
+        uses: actions/checkout@v3
+        with:
+          path: postgres/contrib/pg_tle
+      
+      - name: Build and test pg_tle extension
+        run: |
+          pushd postgres
+          export PATH="${PWD}/inst/bin:$PATH"
+          cd contrib/pg_tle
+          make install
+      - name: Add pg_tle to shared_preload_libraries
+        run:  |
+          pushd postgres
+          echo "shared_preload_libraries = 'pg_tle'" >> ./inst/bin/data/postgresql.conf
+      - name: Start Postgres
+        run: |
+          pushd postgres
+          cd inst/bin
+          ./pg_ctl -D data -l logfile start
+          popd
+      - name: Build and test pg_tle extension
+        id:   regression-tests
+        run:  |
+          pushd postgres
+          export PATH="${PWD}/inst/bin:$PATH"
+          cd contrib/pg_tle
+          PERL5LIB="../../src/test/perl:${PERL5LIB}"  make installcheck
+          popd
+      - name: Print regression.diffs if regression tests failed
+        if:   failure() && steps.regression-tests.outcome != 'success'
+        run:  cat regression.diffs
