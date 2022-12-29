@@ -18,7 +18,7 @@ PROVE_TESTS = test/t/*.pl
 
 PG_CPPFLAGS += -I./include
 
-PG_CONFIG = pg_config
+PG_CONFIG ?= pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 

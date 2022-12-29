@@ -27,10 +27,22 @@ cd pg_tle
 make
 ```
 
+Note that `pg_config` mustbe in your `PATH` for the above command to work. Otherwise, the build will fail. If you do not want to add `pg_config` to your `PATH`, you can set the `PG_CONFIG` variable when calling `make`, for example:
+
+```shell
+PG_CONFIG=/path/to/pg_config make
+```
+
 3. Install `pg_tle` to your PostgreSQL installation using the following command:
 
 ```shell
 sudo make install
+```
+
+Note that `pg_config` mustbe in your `PATH` for the above command to work. Otherwise, the build will fail. If you do not want to add `pg_config` to your `PATH`, you can set the `PG_CONFIG` variable when calling `make`, for example:
+
+```shell
+sudo PG_CONFIG=/path/to/pg_config make install
 ```
 
 ### Method #2: Amazon RDS for PostgreSQL / Amazon Aurora PostgreSQL-compatible edition
