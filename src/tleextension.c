@@ -2180,7 +2180,7 @@ static Oid get_tlefunc_oid_if_exists(const char *funcname)
 	qualname = psprintf("%s.%s",
 			    quote_identifier(PG_TLE_NSPNAME),
 			    quote_identifier(funcname));
-	namelist = stringToQualifiedNameList(qualname);
+	namelist = STRING_TO_QUALIFIED_NAME_LIST(qualname);
 
 	return LookupFuncName(namelist, 0, argtypes, true /* missing_ok */);
 }
