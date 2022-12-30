@@ -89,6 +89,12 @@
 #include "tleextension.h"
 #include "compatibility.h"
 
+/* 
+ * Use our version-specific static declaration here for the
+ * process utility hook.
+ */
+_PU_HOOK;
+
 extern bool tleParseConfigFp(FILE *fp, const char *config_file,
 							int depth, int elevel, ConfigVariable **head_p,
 							ConfigVariable **tail_p);
@@ -2169,13 +2175,14 @@ static Oid get_tlefunc_oid_if_exists(const char *funcname)
 {
 	char	   *qualname = NULL;
 	List	   *namelist = NULL;
-		
+	Oid	     argtypes[1];
+
 	qualname = psprintf("%s.%s",
 			    quote_identifier(PG_TLE_NSPNAME),
 			    quote_identifier(funcname));
 	namelist = stringToQualifiedNameList(qualname);
 
-	return LookupFuncName(namelist, 0, NULL, true /* missing_ok */);
+	return LookupFuncName(namelist, 0, argtypes, true /* missing_ok */);
 }
 
 /*

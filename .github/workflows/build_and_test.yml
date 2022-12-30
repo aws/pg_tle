@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        version: [REL_15_STABLE, REL_14_STABLE, REL_13_STABLE]
+        version: [REL_15_STABLE, REL_14_STABLE, REL_13_STABLE, REL_12_STABLE]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -81,4 +81,6 @@ jobs:
           popd
       - name: Print regression.diffs if regression tests failed
         if:   failure() && steps.regression-tests.outcome != 'success'
-        run:  cat regression.diffs
+        run: |
+          pushd postgres
+          cat contrib/pg_tle/regression.diffs
