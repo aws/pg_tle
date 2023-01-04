@@ -192,6 +192,53 @@
 #endif
 #endif
 
+/*
+ * a8671545 introduced a syntax change for ereport et al. that was backpatched
+ * to PostgreSQL 12, but not all. This overwrites those macros for compatibility
+ * with PostgreSQL 11.
+ */
+#if PG_VERSION_NUM < 120000
+#ifdef ereport
+#undef ereport
+#endif
+#ifdef ereport_domain
+#undef ereport_domain
+#endif
+
+#if defined(errno) && defined(__linux__)
+#define pg_prevent_errno_in_scope() int __errno_location pg_attribute_unused()
+#elif defined(errno) && (defined(__darwin__) || defined(__freebsd__))
+#define pg_prevent_errno_in_scope() int __error pg_attribute_unused()
+#else
+#define pg_prevent_errno_in_scope()
+#endif
+
+#ifdef HAVE__BUILTIN_CONSTANT_P
+#define ereport_domain(elevel, domain, ...)	\
+	do { \
+		pg_prevent_errno_in_scope(); \
+		if (errstart(elevel, __FILE__, __LINE__, PG_FUNCNAME_MACRO, domain)) \
+			__VA_ARGS__, errfinish(0); \
+		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) \
+			pg_unreachable(); \
+	} while(0)
+#else							/* !HAVE__BUILTIN_CONSTANT_P */
+#define ereport_domain(elevel, domain, ...)	\
+	do { \
+		const int elevel_ = (elevel); \
+		pg_prevent_errno_in_scope(); \
+		if (errstart(elevel_, __FILE__, __LINE__, PG_FUNCNAME_MACRO, domain)) \
+			__VA_ARGS__, errfinish(0); \
+		if (elevel_ >= ERROR) \
+			pg_unreachable(); \
+	} while(0)
+#endif							/* HAVE__BUILTIN_CONSTANT_P */
+
+#define ereport(elevel, ...)	\
+	ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
+	
+#endif
+
 #if (PG_VERSION_NUM < 160000)
 #define PG_DATABASE_ACLCHECK(DatabaseId, UserId, Operation) pg_database_aclcheck(DatabaseId, UserId, Operation)
 #define PG_EXTENSION_OWNERCHECK(ExtensionOid, UserId) pg_extension_ownercheck(ExtensionOid, UserId)

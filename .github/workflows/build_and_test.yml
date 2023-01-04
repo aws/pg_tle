@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        version: [master, REL_15_STABLE, REL_14_STABLE, REL_13_STABLE, REL_12_STABLE]
+        version: [master, REL_15_STABLE, REL_14_STABLE, REL_13_STABLE, REL_12_STABLE, REL_11_STABLE]
     runs-on: ${{ matrix.os }}
 
     steps:
