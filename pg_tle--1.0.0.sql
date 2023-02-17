@@ -340,7 +340,7 @@ GRANT EXECUTE ON FUNCTION pgtle.uninstall_update_path_if_exists
   tovers text
 ) TO pgtle_admin;
 
-CREATE TYPE pgtle.pg_tle_features as ENUM ('passcheck');
+CREATE TYPE pgtle.pg_tle_features as ENUM ('passcheck', 'clientauth');
 CREATE TYPE pgtle.password_types as ENUM ('PASSWORD_TYPE_PLAINTEXT', 'PASSWORD_TYPE_MD5', 'PASSWORD_TYPE_SCRAM_SHA_256');
 
 CREATE TABLE pgtle.feature_info(

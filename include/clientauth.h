@@ -12,29 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * clientauth.h
+ *
+ * contains the changes needed by uni_api to load the functionality for
+ * clientauth.
  */
-#include "postgres.h"
-
-#include "tleextension.h"
-#include "clientauth.h"
-#include "passcheck.h"
-#include "fmgr.h"
-
-PG_MODULE_MAGIC;
-
-void		_PG_init(void);
-void		_PG_fini(void);
-
-void
-_PG_init(void)
-{
-    pg_tle_init();
-    clientauth_init();
-    passcheck_init();
-}
-
-void
-_PG_fini(void)
-{
-    pg_tle_fini();
-}
+void		clientauth_init();
