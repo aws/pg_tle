@@ -4,7 +4,7 @@ EXTVERSION = 1.0.1
 SCHEMA = pgtle
 MODULE_big = $(EXTENSION)
 
-OBJS = src/tleextension.o src/guc-file.o src/passcheck.o src/uni_api.o
+OBJS = src/tleextension.o src/guc-file.o src/feature.o src/passcheck.o src/uni_api.o
 
 EXTRA_CLEAN	= src/guc-file.c pg_tle.control pg_tle--$(EXTVERSION).sql
 DATA = pg_tle.control pg_tle--1.0.0.sql pg_tle--1.0.0--1.0.1.sql
