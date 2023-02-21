@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "postgres.h"
+#include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/user.h"
