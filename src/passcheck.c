@@ -96,14 +96,11 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 				 errhidestmt(true)));
 	}
 
-
 	PG_TRY();
 	{
 		ListCell   *item;
-		List	   *proc_names = NIL;
 		int			ret;
-
-		feature_proc(&proc_names, password_check_feature);
+		List	   *proc_names = feature_proc(password_check_feature);
 
 		if (list_length(proc_names) <= 0)
 		{

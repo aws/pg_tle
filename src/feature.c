@@ -35,15 +35,18 @@
 
 static bool check_valid_name(char *val, const char *featurename);
 
-void
-feature_proc(List **proc_names, const char *featurename)
+List *
+feature_proc(const char *featurename)
 {
+	List		   *procs = NIL;
+	MemoryContext oldcontext = CurrentMemoryContext;
+	MemoryContext spicontext;
+
 	PG_TRY();
 	{
 		SPITupleTable *tuptable;
 		TupleDesc	tupdesc;
 		char	   *query;
-		List	   *procs = NIL;
 		uint64		j;
 		int			ret;
 		Oid			featargtypes[SPI_NARGS_1] = { TEXTOID };
@@ -80,25 +83,30 @@ feature_proc(List **proc_names, const char *featurename)
 		{
 			HeapTuple	tuple = tuptable->vals[j];
 			int			i;
+			StringInfoData buf;
 
-			StringInfo buf = makeStringInfo();
+			initStringInfo(&buf);
 
 			for (i = 1; i <= tupdesc->natts; i++)
 			{
 				char	   *res = SPI_getvalue(tuple, tupdesc, i);
 
 				check_valid_name(res, featurename);
-				appendStringInfo(buf, "%s", quote_identifier(res));
+				appendStringInfoString(&buf, quote_identifier(res));
 
 				if (i != tupdesc->natts)
-					appendStringInfo(buf, ".");
+					appendStringInfoString(&buf, ".");
 			}
-			procs = lappend(procs, pstrdup(buf->data));
+
+			spicontext = CurrentMemoryContext;
+			MemoryContextSwitchTo(oldcontext);
+
+			procs = lappend(procs, pstrdup(buf.data));
+
+			MemoryContextSwitchTo(spicontext);
 		}
 
 		SPI_finish();
-
-		*proc_names = procs;
 	}
 	PG_CATCH();
 	{
@@ -115,6 +123,7 @@ feature_proc(List **proc_names, const char *featurename)
 	}
 	PG_END_TRY();
 
+	return procs;
 }
 
 /*  Check for semi-colon to prevent SPI_exec from running multiple queries accidentally */

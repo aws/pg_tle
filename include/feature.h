@@ -56,6 +56,6 @@ static const struct config_enum_entry feature_mode_options[] = {
 
 #define FEATURE_TABLE "feature_info"
 
-void feature_proc(List **proc_names, const char *featurename);
+List * feature_proc(const char *featurename);
 
 #endif							/* FEATURE_H */
