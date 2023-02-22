@@ -73,7 +73,7 @@ feature_proc(const char *featurename)
 
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
-					errmsg("Unable to query \"%s.feature_info\"", PG_TLE_NSPNAME));
+					errmsg("Unable to query \"%s.%s\"", PG_TLE_NSPNAME, FEATURE_TABLE));
 
 		/* Build a list of functions to call out to */
 		tuptable = SPI_tuptable;
