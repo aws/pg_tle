@@ -75,7 +75,7 @@ OPTIONS:
 
     -p, --extpath <Extension Path>
           A required parameter for install action.
-          Local path of the extension.
+          Local path of the extension
 
     -h, --help
           Print help information
