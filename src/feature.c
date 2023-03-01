@@ -33,7 +33,7 @@
 #include "feature.h"
 #include "tleextension.h"
 
-static bool check_valid_name(char *val, const char *featurename);
+static void check_valid_name(char *val, const char *featurename);
 
 List *
 feature_proc(const char *featurename)
@@ -127,7 +127,7 @@ feature_proc(const char *featurename)
 }
 
 /*  Check for semi-colon to prevent SPI_exec from running multiple queries accidentally */
-static bool
+static void
 check_valid_name(char *val, const char *featurename)
 {
 	char		ch;
@@ -150,6 +150,4 @@ check_valid_name(char *val, const char *featurename)
 		i++;
 		ch = val[i];
 	}
-
-	return true;
 }
