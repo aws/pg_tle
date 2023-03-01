@@ -9,6 +9,7 @@ There are a few ways you can install Trusted Language Extensions for PostgreSQL 
 #### Prerequisites
 
 - [`git`](https://git-scm.com/)
+- PostgreSQL 11 or later
 - [`pg_config`](https://www.postgresql.org/docs/current/app-pgconfig.html)
 - PostgreSQL development files
 
