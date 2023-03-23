@@ -106,7 +106,8 @@ pg_tle_manage_local_extension.sh 1.0
 
 ## Install extension
 
-`./pg_tle_manage_local_extension.sh --action install --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --name mv_stats --extpath ~/mv_stats`
+- Linux: `./pg_tle_manage_local_extension.sh --action install --connection "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" --name mv_stats --extpath ~/mv_stats`
+- MacOS: `./pg_tle_manage_local_extension.sh -a install -c "postgresql://myuser@localhost:5432/mydb?sslmode=prefer" -n mv_stats -p ~/mv_stats`
 
 ```
 Installing mv_stats  from ~/mv_stats in postgresql://myuser@localhost:5432/mydb?sslmode=prefer
