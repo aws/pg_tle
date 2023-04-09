@@ -381,10 +381,14 @@ funcstat(char *procedureName)
 	return found;
 }
 
+#if (PG_VERSION_NUM < 160000)
 /*
  * get_extension_schema - given an extension OID, fetch its extnamespace
  *
  * Returns InvalidOid if no such extension.
+ *
+ * Note: e20b1ea157 makes this an external function, so we do not need
+ * to define this for newer version of PostgreSQL.
  */
 static Oid
 get_extension_schema(Oid ext_oid)
@@ -419,6 +423,7 @@ get_extension_schema(Oid ext_oid)
 
 	return result;
 }
+#endif
 
 /*
  * Utility functions to check validity of extension and version names
