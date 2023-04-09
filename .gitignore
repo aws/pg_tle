@@ -1,6 +1,9 @@
 *.so
 *.o
+*.dylib
 pg_tle*.control
 regression.*
 results/*
 src/guc-file.c
+.deps
+
