@@ -1538,7 +1538,11 @@ get_ext_ver_list(ExtensionControlFile *control)
 		dir = AllocateDir(location);
 
 		while ((de = ReadDir(dir, location)) != NULL)
-			fnames = lappend(fnames, makeString(de->d_name));
+		{
+			char *s;
+			s = pstrdup(de->d_name);
+			fnames = lappend(fnames, makeString(s));
+		}
 
 		FreeDir(dir);
 	}
