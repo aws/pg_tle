@@ -3928,6 +3928,25 @@ pg_tle_fini(void)
 _PU_HOOK
 {
 	bool	cmd_done = false;
+	Oid		tleExtensionOid;
+
+	/*
+	 * We should only execute this hook if the pg_tle extension is installed.
+	 */
+	tleExtensionOid = get_extension_oid(PG_TLE_EXTNAME, true);
+
+	if (!OidIsValid(tleExtensionOid))
+	{
+		if (prev_hook)
+		{
+			_prev_hook;
+		}
+		else
+		{
+			_standard_ProcessUtility;
+		}
+		return;
+	}
 
 	switch (nodeTag(pu_parsetree))
 	{
