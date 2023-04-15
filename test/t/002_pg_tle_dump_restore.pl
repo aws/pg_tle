@@ -18,7 +18,7 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-use Test::More tests => 8;
+use Test::More;
 
 my $node = PostgreSQL::Test::Cluster->new('dump_restore_test');
 $node->init;

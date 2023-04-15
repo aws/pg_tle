@@ -18,7 +18,7 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-use Test::More tests => 3;
+use Test::More;
 
 my $node = PostgreSQL::Test::Cluster->new('no_hook_until_create');
 $node->init;

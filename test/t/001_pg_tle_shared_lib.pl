@@ -19,7 +19,7 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
-use Test::More tests => 1;
+use Test::More;
 
 my $psql_err = '';
 my $node = PostgreSQL::Test::Cluster->new('passcheck_test');
