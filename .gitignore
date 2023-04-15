@@ -6,4 +6,4 @@ regression.*
 results/*
 src/guc-file.c
 .deps
-
+tmp_check
