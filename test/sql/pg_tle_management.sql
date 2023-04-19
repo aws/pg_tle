@@ -447,6 +447,111 @@ SELECT CURRENT_USER;
 SELECT pgtle.uninstall_extension('test123');
 SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 
+RESET SESSION AUTHORIZATION;
+
+ALTER EXTENSION pg_tle UPDATE TO '1.0.4';
+
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.available_extension_versions();
+
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.available_extension_versions();
+
+-- install an already installed version
+-- fails
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.available_extension_versions();
+
+-- uninstall default version
+-- fails
+SELECT pgtle.uninstall_extension('test42', '1.0');
+SELECT pgtle.available_extension_versions();
+
+-- uninstall a version that is not the default version
+-- succeeds
+SELECT pgtle.uninstall_extension('test42', '2.0');
+SELECT pgtle.available_extension_versions();
+
+-- uninstall non-existent version
+-- fails
+SELECT pgtle.uninstall_extension('test42', '3.0');
+SELECT pgtle.available_extension_versions();
+
+-- uninstall the only installed and  default version
+SELECT pgtle.uninstall_extension('test42', '1.0');
+SELECT pgtle.available_extension_versions();
+
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+
+SELECT pgtle.available_extension_versions();
+
+-- uninstall extension with multiple versions
+SELECT pgtle.uninstall_extension('test42');
+
+SELECT pgtle.available_extension_versions();
+
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();

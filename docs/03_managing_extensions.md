@@ -113,7 +113,7 @@ SELECT * FROM pgtle.extension_update_paths('pg_tle_test');
 
 `install_extension` lets users install a `pg_tle`-compatible extensions and make them available within a database.
 
-This functions returns `'OK'` on success and `NULL` on error.
+This functions returns `'OK'` on success and an error otherwise..
 
 #### Role
 
@@ -141,6 +141,41 @@ $_pgtle_$
   RETURNS INT
   AS $$
     SELECT 42;
+  $$ LANGUAGE SQL IMMUTABLE;
+$_pgtle_$
+);
+```
+
+### `pgtle.install_extension_version_sql(name text, version text, ext text)`
+
+`install_extension_version_sql` lets users install a new version of a `pg_tle`-compatible extension that is already installed  in a database and make the new version available within the database.
+
+This functions returns `'OK'` on success and an error otherwise.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `version`: The version of the extension. This is the value of <version> used when calling 'CREATE EXTENSION <name> VERSION <version>' 
+* `ext`: The contents of the extension version. This contains objects such as functions. This is a full extension script provided as a standalone and is not an update applied to an older version of the extension. 
+
+The extension control file for the specified extension must already be installed, and is unchanged by this function. The 'ext' parameter provides a value for the extension version sql file, and it is a standalone sql file and not an incremental update applied after a previously installed version.
+
+#### Example
+
+```sql
+SELECT pgtle.install_extension(
+ 'pg_tle_test',
+ '0.2',
+ 'A new version of my pg_tle extension',
+$_pgtle_$
+  CREATE FUNCTION my_test()
+  RETURNS INT
+  AS $$
+    SELECT 4242;
   $$ LANGUAGE SQL IMMUTABLE;
 $_pgtle_$
 );
@@ -261,6 +296,10 @@ SELECT pgtle.uninstall_extension('pg_tle_test');
 ### `pgtle.uninstall_extension(extname text, version text)`
 
 `uninstall_extension` removes the specific version of an extension from the database. This prevents `CREATE EXTENSION` and `ALTER EXTENSION` from installing or updating to this version of the extension. This also removes all update paths that use this extension version.
+
+If this version is the default version of an extension and there are other versions of the extension, `uninstall_extension` **does not** remove the specific version of the extension from the database. It returns an error and hint to use `set_default_verion` to update the default version to another version and retry.
+
+If this version is the default version and the only version of an extension, `uninstall_extension` removes the specified extension completely from the database.
 
 If this version of the extension is currently active within a database, `uninstall_extension` **does not** drop it. You must explicitly call `DROP EXTENSION` to remove the extension.
 
