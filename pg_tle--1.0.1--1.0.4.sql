@@ -37,7 +37,6 @@ AS $_pgtleie_$
   DECLARE
     ctrpattern         text;
     sqlpattern         text;
-    sqlverpattern      text;
     countverssql       text;
     vers_count         bigint;
     defaultversql      text;
@@ -51,7 +50,6 @@ AS $_pgtleie_$
   BEGIN
     ctrpattern := format('%s%%.control', extname);
     sqlpattern := format('%s--%%%s%%.sql', extname, version);
-    sqlverpattern := format('%s--%s.sql', extname, version);
     countverssql := format('SELECT COUNT(*) FROM %s.%s WHERE name = $1', pgtlensp, func_available_vers);
     defaultversql := format('SELECT default_version FROM %s.%s WHERE name = $1', pgtlensp, func_available_ext);
     searchsql := 'SELECT proname FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace WHERE proname LIKE $1 AND n.nspname = $2';
@@ -65,7 +63,7 @@ AS $_pgtleie_$
         RAISE EXCEPTION 'Can not uninstall default version of extension %, use set_default_version to update the default to another available version and retry', extname;
       ELSE
         -- remove the specified version sql file function only, don't remove control file function
-        FOR func IN EXECUTE searchsql USING sqlverpattern, pgtlensp LOOP
+        FOR func IN EXECUTE searchsql USING sqlpattern, pgtlensp LOOP
           dropsql := format('DROP FUNCTION %I()', func);
           EXECUTE dropsql;
         END LOOP;

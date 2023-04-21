@@ -736,7 +736,7 @@ SELECT pgtle.available_extension_versions();
 -- fails
 SELECT pgtle.uninstall_extension('test42', '1.0');
 ERROR:  Can not uninstall default version of extension test42, use set_default_version to update the default to another available version and retry
-CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 30 at RAISE
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 28 at RAISE
 SELECT pgtle.available_extension_versions();
            available_extension_versions            
 ---------------------------------------------------
@@ -762,7 +762,7 @@ SELECT pgtle.available_extension_versions();
 -- fails
 SELECT pgtle.uninstall_extension('test42', '3.0');
 ERROR:  Version test42 of extension 3.0 is not installed and therefore can not be uninstalled
-CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 52 at RAISE
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 50 at RAISE
 SELECT pgtle.available_extension_versions();
            available_extension_versions            
 ---------------------------------------------------
