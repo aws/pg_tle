@@ -449,8 +449,6 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
 
 RESET SESSION AUTHORIZATION;
 
-ALTER EXTENSION pg_tle UPDATE TO '1.0.4';
-
 SELECT pgtle.install_extension
 (
  'test42',
