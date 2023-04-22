@@ -660,6 +660,180 @@ SELECT pgtle.uninstall_extension('test_no_switch_to_superuser_when_trusted');
  t
 (1 row)
 
+RESET SESSION AUTHORIZATION;
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(1 row)
+
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension_version_sql 
+-------------------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+ (test42,2.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(2 rows)
+
+-- install an already installed version
+-- fails
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ERROR:  version "2.0" of extension "test42" already installed
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+ (test42,2.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(2 rows)
+
+-- uninstall default version
+-- fails
+SELECT pgtle.uninstall_extension('test42', '1.0');
+ERROR:  Can not uninstall default version of extension test42, use set_default_version to update the default to another available version and retry
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 28 at RAISE
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+ (test42,2.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(2 rows)
+
+-- uninstall a version that is not the default version
+-- succeeds
+SELECT pgtle.uninstall_extension('test42', '2.0');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(1 row)
+
+-- uninstall non-existent version
+-- fails
+SELECT pgtle.uninstall_extension('test42', '3.0');
+ERROR:  Version test42 of extension 3.0 is not installed and therefore can not be uninstalled
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 50 at RAISE
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(1 row)
+
+-- uninstall the only installed and  default version
+SELECT pgtle.uninstall_extension('test42', '1.0');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+ available_extension_versions 
+------------------------------
+(0 rows)
+
+SELECT pgtle.install_extension
+(
+ 'test42',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.install_extension_version_sql
+(
+ 'test42',
+ '2.0',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION test42_func()
+  RETURNS INT AS $$
+  (
+    SELECT 4242
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension_version_sql 
+-------------------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+           available_extension_versions            
+---------------------------------------------------
+ (test42,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
+ (test42,2.0,f,f,f,,{pg_tle},"Test TLE Functions")
+(2 rows)
+
+-- uninstall extension with multiple versions
+SELECT pgtle.uninstall_extension('test42');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extension_versions();
+ available_extension_versions 
+------------------------------
+(0 rows)
+
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();

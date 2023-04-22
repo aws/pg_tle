@@ -4437,6 +4437,169 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(true);
 }
 
+Datum pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(pg_tle_install_extension_version_sql);
+Datum
+pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
+{
+	int		spi_rc;
+	char		*extname;
+	char		*extvers;
+	char		*sql_str;
+	char		*ctlname;
+	char		*sqlname;
+	char		*sqlsql;
+	char		*filename;
+	ObjectAddress	   pgtleobj;
+	ObjectAddress	   sqlfunc;
+	Oid	   	   pgtleExtId;
+	Oid	   	   sqlfuncid;
+	Oid	   	   ctlfuncid;
+
+	if (PG_ARGISNULL(0)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"name\" is a required argument")));
+	}
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
+
+	/*
+	 * Verify that the extension is not a standard file-based extension.
+	 */
+	filename = get_extension_control_filename(extname);
+	if (filestat(filename)) {
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("extension %s is not a tle extension", quote_identifier(extname))));
+	}
+
+	/*
+	 * Verify that the tle extension control file function exists.
+	 */
+	ctlname = psprintf("%s.control", extname);
+	ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
+	if (ctlfuncid == InvalidOid)
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), PG_TLE_NSPNAME)));
+
+	if (PG_ARGISNULL(1)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"version\" is a required argument")));
+	}
+
+	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1))	;
+	check_valid_version_name(extvers);
+
+	if (PG_ARGISNULL(2)) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+			errmsg("\"ext\" is a required argument")));
+	}
+
+	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(2));
+
+	/*
+	 * Build appropriate function names based on extension name
+	 * and version
+	 */
+	sqlname = psprintf("%s--%s.sql", extname, extvers);
+
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!validate_tle_sql(sql_str)) {
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid character in extension definition"),
+				 errdetail("Use of string delimiters \"%s\" and \"%s\" are forbidden in extension definitions.",
+			 		PG_TLE_OUTER_STR, PG_TLE_INNER_STR),
+				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
+	}
+
+	/*
+	 * Create the sql string returning function
+	 *
+	 */
+
+	sqlsql = psprintf(
+		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			PG_TLE_NSPNAME, quote_identifier(sqlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			sql_str,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
+
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
+
+	if (SPI_connect() != SPI_OK_CONNECT) {
+		elog(ERROR, "SPI_connect failed");
+		PG_RETURN_BOOL(false);
+	}
+
+	/*
+	 * Try to create the sql-string function - if it 
+	 * fails because of ERRCODE_DUPLICATE_FUNCTION, we 
+	 * convert the error to a more user-friendly form.
+	 */
+	PG_TRY();
+	{
+	  /* create the sql function */
+	  spi_rc = SPI_exec(sqlsql, 0);
+	  if (spi_rc != SPI_OK_UTILITY) {
+	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
+	    PG_RETURN_BOOL(false);
+	  }
+	}
+	PG_CATCH();
+	{
+
+	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
+	  {
+	    FlushErrorState();
+	    ereport(ERROR,
+		    (errcode(ERRCODE_DUPLICATE_OBJECT),
+		     errmsg("version \"%s\" of extension \"%s\" already installed", extvers, extname)));
+	  }
+	  else
+	  {
+	    PG_RE_THROW();
+	  }
+	}
+	PG_END_TRY();
+
+	if (SPI_finish() != SPI_OK_FINISH) {
+		elog(ERROR, "SPI_finish failed");
+		PG_RETURN_BOOL(false);
+	}
+
+	/* .sql and .control functions must depend on pg_tle extension */
+	pgtleExtId = get_extension_oid(PG_TLE_EXTNAME, true /* missing_ok */);
+	if (pgtleExtId == InvalidOid) {
+		elog(ERROR, "could not find extension %s", PG_TLE_EXTNAME);
+  		PG_RETURN_BOOL(false);
+	}
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+	if (sqlfuncid == InvalidOid) {
+		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), PG_TLE_NSPNAME);
+		PG_RETURN_BOOL(false);
+	}
+
+	pgtleobj.classId = ExtensionRelationId;
+	pgtleobj.objectId = pgtleExtId;
+	pgtleobj.objectSubId = 0;;
+
+	sqlfunc.classId = ProcedureRelationId;
+	sqlfunc.objectId = sqlfuncid;
+	sqlfunc.objectSubId = 0;
+
+	recordDependencyOn(&sqlfunc, &pgtleobj, DEPENDENCY_NORMAL);
+
+	/* done manipulating pg_tle artifacts */
+	UNSET_TLEART;
+
+	PG_RETURN_BOOL(true);
+}
+
 Datum pg_tle_install_update_path(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(pg_tle_install_update_path);
 Datum
