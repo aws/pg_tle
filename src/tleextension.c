@@ -381,14 +381,48 @@ funcstat(char *procedureName)
 	return found;
 }
 
-#if (PG_VERSION_NUM < 160000)
+#if (PG_VERSION_NUM < 160000) || (CATALOG_VERSION_NO < 202303081)
 /*
  * get_extension_schema - given an extension OID, fetch its extnamespace
  *
  * Returns InvalidOid if no such extension.
  *
- * Note: e20b1ea157 makes this an external function, so we do not need
- * to define this for newer version of PostgreSQL.
+ * Note: This code is borrowed from Postgres sources. Postgres' commit
+ * e20b1ea157 makes this an external function, so we do not need to define this
+ * function for Postgres versions 16 and later.
+ *
+ * But while Postgres version 16 is in development, we need a way to build this
+ * extension against the pre-release versions of Postgres 16. While in
+ * development, the value of PG_VERSION_NUM is not granular enough to tell us
+ * if the commit we're interested in is present in the Postgres development
+ * version we're working with.
+ *
+ * Ideally, when building against Postgres commit e20b1ea157, or any descendant
+ * commits, we should not define this function. But we do not have the ability
+ * to target a range of commits in the preprocessor directives. So we use the
+ * Catalog version identifier as a proxy to get as close to that commit, as
+ * possible. Postgres commit 30a53b7929 is the first commit after e20b1ea157
+ * that changes the Catalog version number, and sets it to 202303081. So we use
+ * that Catalog version number in the preprocessor condition, to demarcate
+ * which range of commits in v16 development version should this function be
+ * hidden from, and for which ones we should define it.
+ *
+ * There are still 14 commits in the range [e20b1ea157, 30a53b7929) that this
+ * function _should_ be hidden from, but due to lack of a better method, we
+ * compromise and live with the undesired effect (of defining this function
+ * when building against those commits), rather than not supporting any
+ * development version of Postgres 16 at all.
+ *
+ * For these 14 commits, we get the following error, which is expected. This
+ * is because, in these 14 commits, Postgres header files have an 'extern'
+ * declaration of this function, whereas we are declaring the same function as
+ * 'static'.
+ *
+ * > error: static declaration of 'get_extension_schema' follows non-static declaration
+ *
+ * If we used the 'extern' qualifier instead, or no qualifier at all, we'll run
+ * into either a linker error, or a loader error, that would complain about
+ * redefinition of this function.
  */
 static Oid
 get_extension_schema(Oid ext_oid)
