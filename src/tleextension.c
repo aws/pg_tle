@@ -4370,14 +4370,12 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	  spi_rc = SPI_exec(ctlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
 	    elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
-	    PG_RETURN_BOOL(false);
 	  }
 
 	  /* create the sql function */
 	  spi_rc = SPI_exec(sqlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
 	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
-	    PG_RETURN_BOOL(false);
 	  }
 	}
 	PG_CATCH();
@@ -4547,7 +4545,6 @@ pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
 	  spi_rc = SPI_exec(sqlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
 	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
-	    PG_RETURN_BOOL(false);
 	  }
 	}
 	PG_CATCH();
@@ -4695,7 +4692,6 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 		spi_rc = SPI_exec(sqlsql, 0);
 		if (spi_rc != SPI_OK_UTILITY) {
 			elog(ERROR, "failed to install pg_tle extension, %s, upgrade sql string", extname);
-			PG_RETURN_BOOL(false);
 		}
 	}
 	PG_CATCH();
