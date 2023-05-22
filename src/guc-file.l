@@ -209,6 +209,14 @@ tleParseConfigFp(FILE *fp, const char *config_file, int depth, int elevel,
 	int			token;
 	const char *cf = NULL;
 
+    /*
+     * Since tleParseConfigFp() is always called with elevel == ERROR, the
+     * ereport(elevel) and elog(elevel) calls will never return. Hence the code
+     * within their respective code blocks that is after those calls is
+     * unreachable. But we keep that code intact to maintain parity with the
+     * upstream Postgres version of this function, where it was copied from.
+     */
+
 	if (fp)
 		cf = config_file;
 

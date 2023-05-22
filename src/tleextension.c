@@ -4355,7 +4355,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (SPI_connect() != SPI_OK_CONNECT) {
 		elog(ERROR, "SPI_connect failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/*
@@ -4397,7 +4396,6 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/* .sql and .control functions must depend on pg_tle extension */
@@ -4531,7 +4529,6 @@ pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
 
 	if (SPI_connect() != SPI_OK_CONNECT) {
 		elog(ERROR, "SPI_connect failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/*
@@ -4566,19 +4563,16 @@ pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/* .sql and .control functions must depend on pg_tle extension */
 	pgtleExtId = get_extension_oid(PG_TLE_EXTNAME, true /* missing_ok */);
 	if (pgtleExtId == InvalidOid) {
 		elog(ERROR, "could not find extension %s", PG_TLE_EXTNAME);
-  		PG_RETURN_BOOL(false);
 	}
 	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
 	if (sqlfuncid == InvalidOid) {
 		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), PG_TLE_NSPNAME);
-		PG_RETURN_BOOL(false);
 	}
 
 	pgtleobj.classId = ExtensionRelationId;
@@ -4677,7 +4671,6 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (SPI_connect() != SPI_OK_CONNECT) {
 		elog(ERROR, "SPI_connect failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/*
@@ -4712,7 +4705,6 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/* done manipulating pg_tle artifacts */
@@ -4769,7 +4761,6 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	 */
  	if (SPI_connect() != SPI_OK_CONNECT) {
  		elog(ERROR, "SPI_connect failed");
- 		PG_RETURN_BOOL(false);
  	}
 
 	verargs[0] = CStringGetTextDatum(extname);
@@ -4836,12 +4827,10 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 			(errcode(ERRCODE_INTERNAL_ERROR),
 			 errmsg("failed to updated default version for \"%s\"", extname)));
-		PG_RETURN_BOOL(false);
   }
 
 	if (SPI_finish() != SPI_OK_FINISH) {
 		elog(ERROR, "SPI_finish failed");
-		PG_RETURN_BOOL(false);
 	}
 
 	/* flag that we are done manipulating pg_tle artifacts */
