@@ -18,7 +18,7 @@
 \echo Use "CREATE EXTENSION pg_tle" to load this file. \quit
 
 
--- uninstall an extension for a specific version
+-- install an extension for a specific version
 CREATE FUNCTION pgtle.install_extension_version_sql
 (
   name text,
@@ -30,6 +30,7 @@ SET search_path TO 'pgtle'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension_version_sql'
 LANGUAGE C;
 
+-- uninstall an extension for a specific version
 CREATE OR REPLACE FUNCTION pgtle.uninstall_extension(extname text, version text)
 RETURNS boolean
 SET search_path TO 'pgtle'
