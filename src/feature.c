@@ -70,7 +70,6 @@ feature_proc(const char *featurename)
 
 		ret = SPI_execute_with_args(query, 1, featargtypes, featargs, NULL, true, 0);
 
-
 		if (ret != SPI_OK_SELECT)
 			ereport(ERROR,
 					errmsg("Unable to query \"%s.%s\"", PG_TLE_NSPNAME, FEATURE_TABLE));

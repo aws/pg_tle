@@ -490,6 +490,7 @@ check_valid_extension_name(const char *extensionname)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid extension name: \"%s\"", extensionname),
 				 errdetail("Extension names must only contain alphanumeric characters or valid separators.")));
+
 		idx++;
 	}
 }
@@ -2926,9 +2927,11 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
 			arrayLength < 0 ||
 			ARR_HASNULL(a) ||
 			ARR_ELEMTYPE(a) != OIDOID)
+        {
 			elog(ERROR, "extconfig is not a 1-D Oid array");
-		arrayData = (Oid *) ARR_DATA_PTR(a);
+        }
 
+		arrayData = (Oid *) ARR_DATA_PTR(a);
 		arrayIndex = arrayLength + 1;	/* set up to add after end */
 
 		for (i = 0; i < arrayLength; i++)
@@ -2973,7 +2976,10 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
 			ARR_LBOUND(a)[0] != 1 ||
 			ARR_HASNULL(a) ||
 			ARR_ELEMTYPE(a) != TEXTOID)
+        {
 			elog(ERROR, "extcondition is not a 1-D text array");
+        }
+
 		if (ARR_DIMS(a)[0] != arrayLength)
 			elog(ERROR, "extconfig and extcondition arrays do not match");
 
@@ -3064,9 +3070,11 @@ extension_config_remove(Oid extensionoid, Oid tableoid)
 			arrayLength < 0 ||
 			ARR_HASNULL(a) ||
 			ARR_ELEMTYPE(a) != OIDOID)
+        {
 			elog(ERROR, "extconfig is not a 1-D Oid array");
-		arrayData = (Oid *) ARR_DATA_PTR(a);
+        }
 
+		arrayData = (Oid *) ARR_DATA_PTR(a);
 		arrayIndex = -1;		/* flag for no deletion needed */
 
 		for (i = 0; i < arrayLength; i++)
@@ -3133,7 +3141,10 @@ extension_config_remove(Oid extensionoid, Oid tableoid)
 			ARR_LBOUND(a)[0] != 1 ||
 			ARR_HASNULL(a) ||
 			ARR_ELEMTYPE(a) != TEXTOID)
+        {
 			elog(ERROR, "extcondition is not a 1-D text array");
+        }
+
 		if (ARR_DIMS(a)[0] != arrayLength)
 			elog(ERROR, "extconfig and extcondition arrays do not match");
 	}
@@ -3420,6 +3431,7 @@ tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 						 RelationGetDescr(extRel), &isnull);
 	if (isnull)
 		elog(ERROR, "extversion is null");
+
 	oldVersionName = text_to_cstring(DatumGetTextPP(datum));
 
 	systable_endscan(extScan);
@@ -3470,6 +3482,7 @@ tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("version to install must be specified")));
+
 		versionName = NULL;		/* keep compiler quiet */
 	}
 	check_valid_version_name(versionName);
@@ -3856,6 +3869,7 @@ read_whole_file(const char *filename, int *length)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("file \"%s\" is too large", filename)));
+
 	bytes_to_read = (size_t) fst.st_size;
 
 	if ((file = AllocateFile(filename, PG_BINARY_R)) == NULL)
@@ -4549,7 +4563,6 @@ pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
 	}
 	PG_CATCH();
 	{
-
 	  if (geterrcode() == ERRCODE_DUPLICATE_FUNCTION)
 	  {
 	    FlushErrorState();
