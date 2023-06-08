@@ -414,6 +414,31 @@ GRANT EXECUTE ON FUNCTION pgtle.uninstall_update_path_if_exists
   tovers text
 ) TO pgtle_admin;
 
+
+CREATE FUNCTION pgtle.create_shell_type
+(
+  p_typnamespace regnamespace,
+  p_typname name
+)
+RETURNS boolean
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type'
+LANGUAGE C;
+
+REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type
+(
+  p_typnamespace regnamespace,
+  p_typname name
+) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_shell_type
+(
+  p_typnamespace regnamespace,
+  p_typname name
+) TO pgtle_admin;
+
+
 CREATE TYPE pgtle.pg_tle_features as ENUM ('passcheck');
 CREATE TYPE pgtle.password_types as ENUM ('PASSWORD_TYPE_PLAINTEXT', 'PASSWORD_TYPE_MD5', 'PASSWORD_TYPE_SCRAM_SHA_256');
 
