@@ -1,4 +1,4 @@
-/*
+\/*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -412,6 +412,52 @@ GRANT EXECUTE ON FUNCTION pgtle.uninstall_update_path_if_exists
   extname text,
   fromvers text,
   tovers text
+) TO pgtle_admin;
+
+CREATE FUNCTION pgtle.create_shell_type
+(
+  typenamespace regnamespace,
+  typename name
+)
+RETURNS void
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type'
+LANGUAGE C;
+
+CREATE FUNCTION pgtle.create_shell_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name
+)
+RETURNS boolean
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type_if_not_exists'
+LANGUAGE C;
+
+REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type
+(
+  typenamespace regnamespace,
+  typename name
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name
+) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_shell_type
+(
+  typenamespace regnamespace,
+  typename name
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_shell_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name
 ) TO pgtle_admin;
 
 CREATE TYPE pgtle.pg_tle_features as ENUM ('passcheck');

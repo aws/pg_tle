@@ -17,60 +17,71 @@
 
 #include "access/genam.h"
 #include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_type.h"
+#include "fmgr.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 #include "compatibility.h"
+#include "tleextension.h"
+
+
+/* Local functions */
+static void check_is_pgtle_admin(void);
+static bool create_shell_type(Oid typeNamespace, const char *typeName, bool if_not_exists);
 
 
 static void
 check_is_pgtle_admin(void)
 {
 	HeapTuple	tuple;
-	Form_pg_authid roleform;
 	Oid			tleadminoid;
 
-	tuple = SearchSysCache1(AUTHNAME, CStringGetDatum("pgtle_admin"));
+	tuple = SearchSysCache1(AUTHNAME, CStringGetDatum(PG_TLE_ADMIN));
 	if (!HeapTupleIsValid(tuple))
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("role \"%s\" does not exist", "pgtle_admin")));
+				 errmsg("role \"%s\" does not exist", PG_TLE_ADMIN)));
 	}
 
-	roleform = (Form_pg_authid) GETSTRUCT(tuple);
-	tleadminoid = roleform->oid;
+#if PG_VERSION_NUM >= 120000
+	tleadminoid = ((Form_pg_authid) GETSTRUCT(tuple))->oid;
+#else
+	tleadminoid = HeapTupleGetOid(tuple);
+#endif
 	ReleaseSysCache(tuple);
 
-    CHECK_CAN_SET_ROLE(GetUserId(), tleadminoid);
+	CHECK_CAN_SET_ROLE(GetUserId(), tleadminoid);
 }
 
 /*
- * Registers a new shell type.
- * 
+ *
+ * Creates a new shell type, returns true when a new shell type is successfully created.
+ *
+ * if_not_exists: if true, don't fail on duplicate name, just print a notice and return false.
+ * Otherwise, fail on duplicate name.
  */
-PG_FUNCTION_INFO_V1(pg_tle_create_shell_type);
-Datum
-pg_tle_create_shell_type(PG_FUNCTION_ARGS)
+static bool
+create_shell_type(Oid typeNamespace, const char *typeName, bool if_not_exists)
 {
-	Oid			typeNamespace = PG_GETARG_OID(0);
-	char	   *typeName =  NameStr(*PG_GETARG_NAME(1));
 	AclResult	aclresult;
 	Oid			typoid;
 	ObjectAddress address;
 
-	/* 
-	 * Even though the SQL function is locked down so only a member of 
-	 * pgtle_admin can run this function, let's check and make sure there
-	 * is not a way to bypass that
+	/*
+	 * Even though the SQL function is locked down so only a member of
+	 * pgtle_admin can run this function, let's check and make sure there is
+	 * not a way to bypass that
 	 */
 	check_is_pgtle_admin();
 
-	/* 
+	/*
 	 * Check we have creation rights in target namespace
 	 */
 	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
@@ -81,15 +92,30 @@ pg_tle_create_shell_type(PG_FUNCTION_ARGS)
 	/*
 	 * Look to see if type already exists
 	 */
+#if PG_VERSION_NUM >= 120000
 	typoid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
 							 CStringGetDatum(typeName),
 							 ObjectIdGetDatum(typeNamespace));
+#else
+	typoid = GetSysCacheOid2(TYPENAMENSP,
+							 CStringGetDatum(typeName),
+							 ObjectIdGetDatum(typeNamespace));
+#endif
 
 	if (OidIsValid(typoid))
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("type \"%s\" already exists", typeName)));
+		if (if_not_exists)
+		{
+			ereport(NOTICE,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("type \"%s\" already exists, skipping", typeName)));
+
+			return false;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("type \"%s\" already exists", typeName)));
 	}
 
 	address = TypeShellMake(typeName, typeNamespace, GetUserId());
@@ -99,8 +125,33 @@ pg_tle_create_shell_type(PG_FUNCTION_ARGS)
 	 */
 	CommandCounterIncrement();
 
-	if (OidIsValid(address.objectId))
-		PG_RETURN_BOOL(true);
+	if (!OidIsValid(address.objectId))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("type \"%s\" cannot be created", typeName)));
 
-	PG_RETURN_BOOL(false);
+	return true;
+}
+
+/*
+ * Registers a new shell type, fail if the type already exists.
+ *
+ */
+PG_FUNCTION_INFO_V1(pg_tle_create_shell_type);
+Datum
+pg_tle_create_shell_type(PG_FUNCTION_ARGS)
+{
+	create_shell_type(PG_GETARG_OID(0), NameStr(*PG_GETARG_NAME(1)), false);
+	PG_RETURN_VOID();
+}
+
+/*
+ * Registers a new shell type if not exists; Otherwise do nothing.
+ *
+ */
+PG_FUNCTION_INFO_V1(pg_tle_create_shell_type_if_not_exists);
+Datum
+pg_tle_create_shell_type_if_not_exists(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_BOOL(create_shell_type(PG_GETARG_OID(0), NameStr(*PG_GETARG_NAME(1)), true));
 }

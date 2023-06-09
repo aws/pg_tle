@@ -18,20 +18,29 @@ GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
 SET search_path TO pgtle,public;
 
--- unprivileged role cannot call pgtle.create_shell_type
+-- unprivileged role cannot execute pgtle.create_shell_type and create_shell_type_if_not_exists
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
 SELECT pgtle.create_shell_type('public', 'test_citext');
+SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 
--- superuser can call pgtle.create_shell_type
+-- superuser can execute pgtle.create_shell_type and create_shell_type_if_not_exists
 RESET SESSION AUTHORIZATION;
-SELECT CURRENT_USER;
 SELECT pgtle.create_shell_type('public', 'test_citext');
+SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 DROP TYPE public.test_citext;
 
--- pgtle_admin role can call pgtle.create_shell_type 
+-- pgtle_admin role can execute pgtle.create_shell_type and create_shell_type_if_not_exists
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
+SELECT pgtle.create_shell_type('public', 'test_citext');
+-- create_shell_type_if_not_exists returns false if the type already exists
+SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
+DROP TYPE public.test_citext;
+
+-- create_shell_type_if_not_exists returns true if the type is successfully created
+SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
+-- create_shell_type fails if the type already exists
 SELECT pgtle.create_shell_type('public', 'test_citext');
 DROP TYPE public.test_citext;
 

@@ -23,6 +23,7 @@
 #define PG_TLE_EXTNAME				"pg_tle"
 #define PG_TLE_OUTER_STR			"$_pgtle_o_$"
 #define PG_TLE_INNER_STR			"$_pgtle_i_$"
+#define PG_TLE_ADMIN				"pgtle_admin"
 
 /*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER
