@@ -39,24 +39,9 @@ static bool create_shell_type(Oid typeNamespace, const char *typeName, bool if_n
 static void
 check_is_pgtle_admin(void)
 {
-	HeapTuple	tuple;
 	Oid			tleadminoid;
 
-	tuple = SearchSysCache1(AUTHNAME, CStringGetDatum(PG_TLE_ADMIN));
-	if (!HeapTupleIsValid(tuple))
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("role \"%s\" does not exist", PG_TLE_ADMIN)));
-	}
-
-#if PG_VERSION_NUM >= 120000
-	tleadminoid = ((Form_pg_authid) GETSTRUCT(tuple))->oid;
-#else
-	tleadminoid = HeapTupleGetOid(tuple);
-#endif
-	ReleaseSysCache(tuple);
-
+	tleadminoid = get_role_oid(PG_TLE_ADMIN, false);
 	CHECK_CAN_SET_ROLE(GetUserId(), tleadminoid);
 }
 
