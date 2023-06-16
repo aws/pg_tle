@@ -30,6 +30,9 @@
 #define TLE_EXT_CONTROL_SUFFIX    ".control"
 #define TLE_EXT_SQL_SUFFIX        ".sql"
 
+#define TLE_BASE_TYPE_IN         "pg_tle_base_type_in"
+#define TLE_BASE_TYPE_OUT        "pg_tle_base_type_out"
+
 /*
  * Sets the limit on how many entries can be in a requires.
  * This is an arbitrary limit and could be changed or dropped in the future.

@@ -13,6 +13,7 @@
 #define SET_USER_COMPAT_H
 
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "tcop/utility.h"
 
 /*
@@ -244,12 +245,16 @@
 #define PG_DATABASE_ACLCHECK(DatabaseId, UserId, Operation) pg_database_aclcheck(DatabaseId, UserId, Operation)
 #define PG_EXTENSION_OWNERCHECK(ExtensionOid, UserId) pg_extension_ownercheck(ExtensionOid, UserId)
 #define PG_NAMESPACE_ACLCHECK(NamespaceOid, UserId, Operation) pg_namespace_aclcheck(NamespaceOid, UserId, Operation)
+#define PG_PROC_OWNERCHECK(ProcOid, UserId) pg_proc_ownercheck(ProcOid, UserId)
+#define PG_TYPE_OWNERCHECK(TypeOid, UserId) pg_type_ownercheck(TypeOid, UserId)
 #define STRING_TO_QUALIFIED_NAME_LIST(string) stringToQualifiedNameList(string)
 #define CHECK_CAN_SET_ROLE(member, role) check_is_member_of_role(member, role)
 #else
 #define PG_DATABASE_ACLCHECK(DatabaseId, UserId, Operation) object_aclcheck(DatabaseRelationId, DatabaseId, UserId, Operation);
 #define PG_EXTENSION_OWNERCHECK(ExtensionOid, UserId) object_ownercheck(ExtensionRelationId, ExtensionOid, UserId)
 #define PG_NAMESPACE_ACLCHECK(NamespaceOid, UserId, Operation) object_aclcheck(NamespaceRelationId, NamespaceOid, UserId, Operation)
+#define PG_PROC_OWNERCHECK(ProcOid, UserId) object_ownercheck(ProcedureRelationId, ProcOid, UserId)
+#define PG_TYPE_OWNERCHECK(TypeOid, UserId) object_ownercheck(TypeRelationId, TypeOid, UserId)
 #define STRING_TO_QUALIFIED_NAME_LIST(string) stringToQualifiedNameList(string, NULL)
 #define CHECK_CAN_SET_ROLE(member, role) check_can_set_role(member, role)
 #endif

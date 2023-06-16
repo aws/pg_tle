@@ -75,6 +75,154 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 SELECT pgtle.create_shell_type('public', 'test_citext');
 ERROR:  type "test_citext" already exists
 DROP TYPE public.test_citext;
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+-- Test custom base type
+CREATE FUNCTION public.test_citext_in(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_out(input bytea) RETURNS text AS
+$$
+  SELECT pg_catalog.convert_from(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+-- Creating base type without shell type
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+ERROR:  type "test_citext" does not exist
+HINT:  Create the type as a shell type, then create its I/O functions, then do a full CREATE TYPE.
+SELECT pgtle.create_shell_type('public', 'test_citext');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+-- Invalid length
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -2);
+ERROR:  invalid type internal length -2
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 0);
+ERROR:  invalid type internal length 0
+-- Valid
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_citext);
+-- Insert a regular string
+INSERT INTO test_dt VALUES ('TEST');
+SELECT * FROM test_dt;
+  c1  
+------
+ TEST
+(1 row)
+
+DELETE FROM test_dt;
+-- Insert NULL
+INSERT INTO test_dt VALUES (NULL);
+SELECT * FROM test_dt;
+ c1 
+----
+ 
+(1 row)
+
+-- create_base_type fails on duplicates
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+ERROR:  type "test_citext" already exists
+-- create_base_type_if_not_exists returns false on duplicates
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+NOTICE:  type "test_citext" already exists, skipping
+ create_base_type_if_not_exists 
+--------------------------------
+ f
+(1 row)
+
+-- Drop the user-defined I/O function will dropping the custom type in cascade
+DROP FUNCTION test_citext_in(text);
+ERROR:  cannot drop function test_citext_in(text) because other objects depend on it
+DETAIL:  function test_citext_in(cstring) depends on function test_citext_in(text)
+type test_citext depends on function test_citext_in(cstring)
+function test_citext_out(test_citext) depends on type test_citext
+column c1 of table test_dt depends on type test_citext
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+DROP FUNCTION test_citext_out(bytea);
+ERROR:  cannot drop function test_citext_out(bytea) because other objects depend on it
+DETAIL:  function test_citext_out(test_citext) depends on function test_citext_out(bytea)
+type test_citext depends on function test_citext_out(test_citext)
+function test_citext_in(cstring) depends on type test_citext
+column c1 of table test_dt depends on type test_citext
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+DROP FUNCTION test_citext_in(text) CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_citext_in(cstring)
+drop cascades to type test_citext
+drop cascades to function test_citext_out(test_citext)
+drop cascades to column c1 of table test_dt
+DROP FUNCTION test_citext_out(bytea) CASCADE;
+DROP TABLE test_dt;
+-- A fixed length custom type int2: a 2-element vector of one byte integer value
+SELECT pgtle.create_shell_type('public', 'test_int2');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+CREATE FUNCTION public.test_int2_in(input text) RETURNS bytea AS
+$$
+DECLARE
+  pos integer;
+  result bytea; 
+BEGIN
+  result := '00'::bytea;
+  pos := position(',' IN input);
+  result := set_byte(result, 0, CAST(substring(input, 1, pos - 1) AS INTEGER));
+  result := set_byte(result, 1, CAST(substring(input, pos + 1) AS INTEGER));
+  RETURN result;
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_int2_out(input bytea) RETURNS text AS
+$$
+BEGIN
+  return format('%s,%s', get_byte(input, 0), get_byte(input, 1));
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_int2);
+-- Insert a regular value
+INSERT INTO test_dt VALUES ('11,22');
+SELECT * FROM test_dt;
+  c1   
+-------
+ 11,22
+(1 row)
+
+DELETE FROM test_dt;
+-- Insert NULL
+INSERT INTO test_dt VALUES (NULL);
+SELECT * FROM test_dt;
+ c1 
+----
+ 
+(1 row)
+
+DROP FUNCTION test_int2_in(text) CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_int2_in(cstring)
+drop cascades to type test_int2
+drop cascades to function test_int2_out(test_int2)
+drop cascades to column c1 of table test_dt
+DROP FUNCTION test_int2_out(bytea) CASCADE;
+DROP TABLE test_dt;
 -- clean up
 RESET SESSION AUTHORIZATION;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;

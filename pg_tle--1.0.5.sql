@@ -436,6 +436,34 @@ STRICT
 AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type_if_not_exists'
 LANGUAGE C;
 
+CREATE FUNCTION pgtle.create_base_type
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+)
+RETURNS void
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_base_type'
+LANGUAGE C;
+
+CREATE FUNCTION pgtle.create_base_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+)
+RETURNS boolean
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_base_type_if_not_exists'
+LANGUAGE C;
+
 REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type
 (
   typenamespace regnamespace,
@@ -448,6 +476,24 @@ REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type_if_not_exists
   typename name
 ) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION pgtle.create_base_type
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION pgtle.create_base_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+) FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION pgtle.create_shell_type
 (
   typenamespace regnamespace,
@@ -458,6 +504,24 @@ GRANT EXECUTE ON FUNCTION pgtle.create_shell_type_if_not_exists
 (
   typenamespace regnamespace,
   typename name
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_base_type
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_base_type_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
 ) TO pgtle_admin;
 
 CREATE TYPE pgtle.pg_tle_features as ENUM ('passcheck');
