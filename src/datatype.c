@@ -367,7 +367,7 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	 * types) in ArrayType and in composite types in DatumTupleFields.  This
 	 * oid must be preserved by binary upgrades.
 	 */
-#if PG_VERSION_NUM >= 130000
+#if PG_VERSION_NUM >= 140000
 	address =
 		TypeCreate(InvalidOid,	/* no predetermined type OID */
 				   typeName,	/* type name */
@@ -442,7 +442,7 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	 */
 	array_type = makeArrayTypeName(typeName, typeNamespace);
 
-#if PG_VERSION_NUM >= 130000
+#if PG_VERSION_NUM >= 140000
 	TypeCreate(array_oid,		/* force assignment of this type OID */
 			   array_type,		/* type name */
 			   typeNamespace,	/* namespace */
