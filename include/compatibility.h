@@ -172,6 +172,12 @@
 #ifndef TYPALIGN_INT
 #define  TYPALIGN_INT			'i' /* int alignment (typically 4 bytes) */
 #endif
+#ifndef TYPSTORAGE_PLAIN
+#define  TYPSTORAGE_PLAIN		'p' /* type not prepared for toasting */
+#endif
+#ifndef TYPSTORAGE_EXTENDED
+#define  TYPSTORAGE_EXTENDED	'x' /* fully toastable */
+#endif
 
 /*
  * PostgreSQL 13 changed the SPI interface to include a "numvals" attribute that

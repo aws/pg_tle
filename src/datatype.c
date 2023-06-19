@@ -232,17 +232,6 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	Oid			inputFuncParamType;
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
-#if PG_VERSION_NUM >= 130000
-	char		alignment = TYPALIGN_INT;	/* default alignment */
-	char		storage_plain = TYPSTORAGE_PLAIN;	/* default TOAST storage
-													 * method */
-	char		storage_extended = TYPSTORAGE_EXTENDED; /* default ARRAY TOAST
-														 * storage method */
-#else
-	char		alignment = 'i';	/* default alignment */
-	char		storage_plain = 'p';	/* default TOAST storage method */
-	char		storage_extended = 'x'; /* default ARRAY TOAST storage method */
-#endif
 
 	/*
 	 * Even though the SQL function is locked down so only a member of
@@ -395,8 +384,8 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 				   NULL,		/* default type value */
 				   NULL,		/* no binary form available */
 				   false,		/* passed by value */
-				   alignment,	/* required alignment */
-				   storage_plain,	/* TOAST strategy */
+				   TYPALIGN_INT,	/* required alignment */
+				   TYPSTORAGE_PLAIN,	/* TOAST strategy */
 				   -1,			/* typMod (Domains only) */
 				   0,			/* Array Dimensions of typbasetype */
 				   false,		/* Type NOT NULL */
@@ -428,8 +417,8 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 				   NULL,		/* default type value */
 				   NULL,		/* no binary form available */
 				   false,		/* passed by value */
-				   alignment,	/* required alignment */
-				   storage_plain,	/* TOAST strategy */
+				   TYPALIGN_INT,	/* required alignment */
+				   TYPSTORAGE_PLAIN,	/* TOAST strategy */
 				   -1,			/* typMod (Domains only) */
 				   0,			/* Array Dimensions of typbasetype */
 				   false,		/* Type NOT NULL */
@@ -469,8 +458,8 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 			   NULL,			/* never a default type value */
 			   NULL,			/* binary default isn't sent either */
 			   false,			/* never passed by value */
-			   alignment,		/* see above */
-			   storage_extended,	/* ARRAY is always toastable */
+			   TYPALIGN_INT,	/* see above */
+			   TYPSTORAGE_EXTENDED, /* ARRAY is always toastable */
 			   -1,				/* typMod (Domains only) */
 			   0,				/* Array dimensions of typbasetype */
 			   false,			/* Type NOT NULL */
@@ -501,8 +490,8 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 			   NULL,			/* never a default type value */
 			   NULL,			/* binary default isn't sent either */
 			   false,			/* never passed by value */
-			   alignment,		/* see above */
-			   storage_extended,	/* ARRAY is always toastable */
+			   TYPALIGN_INT,	/* see above */
+			   TYPSTORAGE_EXTENDED, /* ARRAY is always toastable */
 			   -1,				/* typMod (Domains only) */
 			   0,				/* Array dimensions of typbasetype */
 			   false,			/* Type NOT NULL */
