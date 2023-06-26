@@ -248,7 +248,7 @@
 #endif
 
 #if PG_VERSION_NUM >= 140000
-#define TYPE_CREATE(array_type, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
+#define TYPE_CREATE(isArrayType, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
 	TypeCreate(newTypeOid, \
 			   typeName, \
 			   typeNamespace, \
@@ -267,7 +267,7 @@
 			   typmodinProcedure, \
 			   typmodoutProcedure, \
 			   analyzeProcedure, \
-			   array_type ? F_ARRAY_SUBSCRIPT_HANDLER : InvalidOid, /* subscript procedure */ \
+			   isArrayType ? F_ARRAY_SUBSCRIPT_HANDLER : InvalidOid, /* subscript procedure */ \
 			   elementType, \
 			   isImplicitArray, \
 			   arrayType, \
@@ -282,7 +282,7 @@
 			   typeNotNull, \
 			   typeCollation)
 #else
-#define TYPE_CREATE(array_type, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
+#define TYPE_CREATE(isArrayType, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
 	TypeCreate(newTypeOid, \
 			   typeName, \
 			   typeNamespace, \
