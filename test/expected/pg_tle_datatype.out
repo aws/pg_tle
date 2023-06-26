@@ -106,6 +106,8 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
 ERROR:  invalid type internal length -2
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 0);
 ERROR:  invalid type internal length 0
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 32767);
+ERROR:  invalid type internal length 32767, maximum size is 32763
 -- Valid
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
  create_base_type 

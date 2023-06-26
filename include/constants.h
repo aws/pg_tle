@@ -34,6 +34,12 @@
 #define TLE_BASE_TYPE_OUT        "pg_tle_base_type_out"
 
 /*
+ * TLE_BASE_TYPE_SIZE_LIMIT is the maximum allowed size of pg_tle type.
+ *
+ */
+#define TLE_BASE_TYPE_SIZE_LIMIT  PG_INT16_MAX - VARHDRSZ
+
+/*
  * Sets the limit on how many entries can be in a requires.
  * This is an arbitrary limit and could be changed or dropped in the future.
  */
