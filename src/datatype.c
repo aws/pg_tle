@@ -145,15 +145,14 @@ pg_tle_create_shell_type_if_not_exists(PG_FUNCTION_ARGS)
 }
 
 /*
- * pg_tle_create_base_type_if_not_exists
+ * pg_tle_create_base_type
  *
- * Create a new base type, returns true when a new base type is successfully created;
- * returns false if the type already exists.
+ * Create a new base type.
  *
  */
-PG_FUNCTION_INFO_V1(pg_tle_create_base_type_if_not_exists);
+PG_FUNCTION_INFO_V1(pg_tle_create_base_type);
 Datum
-pg_tle_create_base_type_if_not_exists(PG_FUNCTION_ARGS)
+pg_tle_create_base_type(PG_FUNCTION_ARGS)
 {
 	AclResult	aclresult;
 	Oid			inputOid;
@@ -215,14 +214,12 @@ pg_tle_create_base_type_if_not_exists(PG_FUNCTION_ARGS)
 	 */
 	if (OidIsValid(typeOid) && get_typisdefined(typeOid))
 	{
-		if (!moveArrayTypeName(typeOid, typeName, typeNamespace))
-		{
-			ereport(NOTICE,
+		if (moveArrayTypeName(typeOid, typeName, typeNamespace))
+			typeOid = InvalidOid;
+		else
+			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("type \"%s\" already exists", typeName)));
-			PG_RETURN_BOOL(false);
-		}
-		typeOid = InvalidOid;
 	}
 
 	/*
@@ -231,7 +228,7 @@ pg_tle_create_base_type_if_not_exists(PG_FUNCTION_ARGS)
 	 */
 	if (!OidIsValid(typeOid))
 		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("type \"%s\" does not exist", typeName),
 				 errhint("Create the type as a shell type, then create its I/O functions, then do a full CREATE TYPE.")));
 
@@ -369,7 +366,7 @@ pg_tle_create_base_type_if_not_exists(PG_FUNCTION_ARGS)
 
 	pfree(array_type);
 
-	PG_RETURN_BOOL(true);
+	PG_RETURN_VOID();
 }
 
 /*
@@ -485,7 +482,7 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 
 	if (OidIsValid(LookupFuncName(funcNameList, 1, funcArgList, true)))
 		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("function \"%s\" already exists", NameListToString(funcNameList))));
 }
 
