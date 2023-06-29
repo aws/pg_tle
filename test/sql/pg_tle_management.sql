@@ -117,25 +117,6 @@ SET search_path TO pgtle, public;
 -- installation of artifacts requires semi-privileged role
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
-SELECT pgtle.install_extension
-(
- 'test123',
- '1.1',
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION test123_func()
-  RETURNS INT AS $$
-  (
-    SELECT 42
-  )$$ LANGUAGE sql;
-  CREATE OR REPLACE FUNCTION test123_func_2()
-  RETURNS INT AS $$
-  (
-    SELECT 424242
-  )$$ LANGUAGE sql;
-$_pgtle_$
-);
-
 SELECT pgtle.install_update_path
 (
  'test123',
