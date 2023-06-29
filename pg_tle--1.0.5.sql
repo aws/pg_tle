@@ -436,20 +436,6 @@ STRICT
 AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type_if_not_exists'
 LANGUAGE C;
 
-CREATE FUNCTION pgtle.create_base_type
-(
-  typenamespace regnamespace,
-  typename name,
-  infunc regprocedure,
-  outfunc regprocedure,
-  internallength int4
-)
-RETURNS void
-SET search_path TO 'pgtle'
-STRICT
-AS 'MODULE_PATHNAME', 'pg_tle_create_base_type'
-LANGUAGE C;
-
 CREATE FUNCTION pgtle.create_base_type_if_not_exists
 (
   typenamespace regnamespace,
@@ -463,6 +449,28 @@ SET search_path TO 'pgtle'
 STRICT
 AS 'MODULE_PATHNAME', 'pg_tle_create_base_type_if_not_exists'
 LANGUAGE C;
+
+CREATE FUNCTION pgtle.create_base_type
+(
+  typenamespace regnamespace,
+  typename name,
+  infunc regprocedure,
+  outfunc regprocedure,
+  internallength int4
+)
+RETURNS void
+SET search_path TO 'pgtle'
+AS $_pgtleie_$
+  DECLARE
+    not_exists boolean;
+  BEGIN
+    not_exists = pgtle.create_base_type_if_not_exists(typenamespace, typename, infunc, outfunc, internallength);
+    IF NOT not_exists THEN
+      RAISE EXCEPTION 'type "%" already exists', typename;
+    END IF;
+  END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
 
 REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type
 (

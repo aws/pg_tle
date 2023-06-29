@@ -95,6 +95,7 @@ $$ IMMUTABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 ERROR:  type "test_citext" does not exist
 HINT:  Create the type as a shell type, then create its I/O functions, then do a full CREATE TYPE.
+CONTEXT:  PL/pgSQL function create_base_type(regnamespace,name,regprocedure,regprocedure,integer) line 5 at assignment
 SELECT pgtle.create_shell_type('public', 'test_citext');
  create_shell_type 
 -------------------
@@ -104,10 +105,13 @@ SELECT pgtle.create_shell_type('public', 'test_citext');
 -- Invalid length
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -2);
 ERROR:  invalid type internal length -2
+CONTEXT:  PL/pgSQL function create_base_type(regnamespace,name,regprocedure,regprocedure,integer) line 5 at assignment
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 0);
 ERROR:  invalid type internal length 0
+CONTEXT:  PL/pgSQL function create_base_type(regnamespace,name,regprocedure,regprocedure,integer) line 5 at assignment
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 32767);
 ERROR:  invalid type internal length 32767, maximum size is 32763
+CONTEXT:  PL/pgSQL function create_base_type(regnamespace,name,regprocedure,regprocedure,integer) line 5 at assignment
 -- Valid
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
  create_base_type 
@@ -135,10 +139,12 @@ SELECT * FROM test_dt;
 
 -- create_base_type fails on duplicates
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+NOTICE:  type "test_citext" already exists
 ERROR:  type "test_citext" already exists
+CONTEXT:  PL/pgSQL function create_base_type(regnamespace,name,regprocedure,regprocedure,integer) line 7 at RAISE
 -- create_base_type_if_not_exists returns false on duplicates
 SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-NOTICE:  type "test_citext" already exists, skipping
+NOTICE:  type "test_citext" already exists
  create_base_type_if_not_exists 
 --------------------------------
  f

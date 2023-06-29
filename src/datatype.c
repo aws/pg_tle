@@ -42,16 +42,11 @@
 /* Local functions */
 static void check_is_pgtle_admin(void);
 static bool create_shell_type(Oid typeNamespace, const char *typeName, bool if_not_exists);
-static bool create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId,
-							 Oid outputFuncId, int16 internalLength, char *funcProbin,
-							 bool if_not_exists);
 static Oid	create_c_func_internal(Oid namespaceId, Oid funcid,
 								   oidvector *parameterTypes, Oid prorettype, char *prosrc,
 								   char *probin);
-static Oid	find_user_input_func(List *procname);
-static Oid	find_user_output_func(List *procname);
-static void check_user_input_func(Oid funcid, Oid expectedNamespace);
-static void check_user_output_func(Oid funcid, Oid typeOid, Oid expectedNamespace);
+static Oid	find_user_defined_func(List *procname, bool typeInput);
+static void check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typeInput);
 static char *get_probin(Oid fn_oid);
 static List *get_qualified_funcname(Oid fn_oid);
 
@@ -118,11 +113,6 @@ create_shell_type(Oid typeNamespace, const char *typeName, bool if_not_exists)
 
 	address = TypeShellMake(typeName, typeNamespace, GetUserId());
 
-	/*
-	 * Make effects of commands visible
-	 */
-	CommandCounterIncrement();
-
 	if (!OidIsValid(address.objectId))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
@@ -155,66 +145,15 @@ pg_tle_create_shell_type_if_not_exists(PG_FUNCTION_ARGS)
 }
 
 /*
- * Registers a new base type, fails if the base type cannot be defined.
+ * pg_tle_create_base_type_if_not_exists
  *
- */
-PG_FUNCTION_INFO_V1(pg_tle_create_base_type);
-Datum
-pg_tle_create_base_type(PG_FUNCTION_ARGS)
-{
-	Oid			typeNamespace = PG_GETARG_OID(0);
-	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
-	Oid			inputFuncId = PG_GETARG_OID(2);
-	Oid			outputFuncId = PG_GETARG_OID(3);
-	int16		internalLength = PG_GETARG_INT16(4);
-	char	   *probin = get_probin(fcinfo->flinfo->fn_oid);
-
-	create_base_type(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, probin, false);
-
-	/*
-	 * Make effects of commands visible
-	 */
-	CommandCounterIncrement();
-
-	PG_RETURN_VOID();
-}
-
-/*
- * Registers a new base type if not exists (otherwise do nothing), fails if the base type cannot be defined.
+ * Create a new base type, returns true when a new base type is successfully created;
+ * returns false if the type already exists.
  *
  */
 PG_FUNCTION_INFO_V1(pg_tle_create_base_type_if_not_exists);
 Datum
 pg_tle_create_base_type_if_not_exists(PG_FUNCTION_ARGS)
-{
-	Oid			typeNamespace = PG_GETARG_OID(0);
-	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
-	Oid			inputFuncId = PG_GETARG_OID(2);
-	Oid			outputFuncId = PG_GETARG_OID(3);
-	int16		internalLength = PG_GETARG_INT16(4);
-	char	   *probin = get_probin(fcinfo->flinfo->fn_oid);
-	bool		result;
-
-	result = create_base_type(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, probin, true);
-
-	/*
-	 * Make effects of commands visible
-	 */
-	CommandCounterIncrement();
-
-	PG_RETURN_BOOL(result);
-}
-
-/*
- * create_base_type
- *
- * Create a new base type, returns true when a new base type is successfully created.
- *
- * if_not_exists: if true, don't fail on duplicate name, just print a notice and return false.
- * Otherwise, fail on duplicate name.
- */
-static bool
-create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputFuncId, int16 internalLength, char *funcProbin, bool if_not_exists)
 {
 	AclResult	aclresult;
 	Oid			inputOid;
@@ -226,6 +165,12 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	Oid			inputFuncParamType;
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			inputFuncId = PG_GETARG_OID(2);
+	Oid			outputFuncId = PG_GETARG_OID(3);
+	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
 
 	/*
 	 * Even though the SQL function is locked down so only a member of
@@ -244,7 +189,10 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("invalid type internal length %d, maximum size is %d", internalLength, TLE_BASE_TYPE_SIZE_LIMIT)));
 
-	/* As a bytea is of variable length, we need to allow for the header */
+	/*
+	 * Becase we use bytea as the internal type, and bytea is of variable
+	 * length, we need to allow for the header (VARHDRSZ).
+	 */
 	if (internalLength > 0)
 		internalLength += VARHDRSZ;
 
@@ -269,16 +217,10 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	{
 		if (!moveArrayTypeName(typeOid, typeName, typeNamespace))
 		{
-			if (if_not_exists)
-			{
-				ereport(NOTICE,
-						(errcode(ERRCODE_DUPLICATE_OBJECT),
-						 errmsg("type \"%s\" already exists, skipping", typeName)));
-				return false;
-			}
-			ereport(ERROR,
+			ereport(NOTICE,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("type \"%s\" already exists", typeName)));
+			PG_RETURN_BOOL(false);
 		}
 		typeOid = InvalidOid;
 	}
@@ -315,8 +257,8 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 	/*
 	 * Check the user-defined I/O functions meet pg_tle specific requirements.
 	 */
-	check_user_input_func(inputFuncId, typeNamespace);
-	check_user_output_func(outputFuncId, typeOid, typeNamespace);
+	check_user_defined_func(inputFuncId, typeOid, typeNamespace, true);
+	check_user_defined_func(outputFuncId, typeOid, typeNamespace, false);
 
 	/*
 	 * Create C-version I/O functions.
@@ -427,26 +369,28 @@ create_base_type(Oid typeNamespace, char *typeName, Oid inputFuncId, Oid outputF
 
 	pfree(array_type);
 
-	return true;
+	PG_RETURN_BOOL(true);
 }
 
 /*
- * find_user_input_func
+ * find_user_defined_func
  *
- * Given a qualified type input C function name, find the corresponding user-defined input function.
+ * Given a qualified user defined input/output C function name, find the corresponding
+ * user-defined input/output function.
  * Raise an error if such function cannot be found.
  */
 static Oid
-find_user_input_func(List *procname)
+find_user_defined_func(List *procname, bool typeInput)
 {
 	Oid			argList[1];
 	Oid			procOid;
 
 	/*
 	 * User-defined input functions always take a single argument of the text
-	 * and return bytea.
+	 * and return bytea. User-defined output functions always take a single
+	 * argument of the bytea and return text.
 	 */
-	argList[0] = TEXTOID;
+	argList[0] = typeInput ? TEXTOID : BYTEAOID;
 
 	procOid = LookupFuncName(procname, 1, argList, true);
 
@@ -457,42 +401,14 @@ find_user_input_func(List *procname)
 						func_signature_string(procname, 1, NIL, argList))));
 
 	/* User-defined input functions must return bytea. */
-	if (get_func_rettype(procOid) != BYTEAOID)
+	if (typeInput && get_func_rettype(procOid) != BYTEAOID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("type input function %s must return type %s",
 						NameListToString(procname), format_type_be(BYTEAOID))));
 
-	return procOid;
-}
-
-/*
- * find_user_output_func
- *
- * Given a qualified type output C function name, find the corresponding user-defined output function.
- * Raise an error if such function cannot be found.
- */
-static Oid
-find_user_output_func(List *procname)
-{
-	Oid			argList[1];
-	Oid			procOid;
-
-	/*
-	 * User-defined output functions always take a single argument of the
-	 * bytea and return text.
-	 */
-	argList[0] = BYTEAOID;
-
-	procOid = LookupFuncName(procname, 1, argList, true);
-	if (!OidIsValid(procOid))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_FUNCTION),
-				 errmsg("function %s does not exist",
-						func_signature_string(procname, 1, NIL, argList))));
-
 	/* User-defined output functions must return text. */
-	if (get_func_rettype(procOid) != TEXTOID)
+	if (!typeInput && get_func_rettype(procOid) != TEXTOID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("type output function %s must return type %s",
@@ -502,24 +418,26 @@ find_user_output_func(List *procname)
 }
 
 /*
- * check_user_input_func
+ * check_user_defined_func
  *
- * Check a user-defined type input function meets pg_tle specific requirements (before creating the base type):
+ * Check a user-defined type input/output function meets pg_tle specific requirements (before creating the base type):
  * 1. must be defined in a trusted language (We check it's not in C or internal for now);
- * 2. must accept a single argument of type text;
- * 3. must return type bytea;
+ * 2. must accept a single argument, type must be text for input and bytea for output;
+ * 3. must return type bytea for input and text for output;
  * 4. must be in the same namespace as the base type;
- * 5. the to-be-created C input function must not exist yet.
+ * 5. the to-be-created C function must not exist yet.
  *
  * Raise an error if any requirement is not met.
  */
 static void
-check_user_input_func(Oid funcid, Oid expectedNamespace)
+check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typeInput)
 {
 	HeapTuple	tuple;
 	Form_pg_proc proc;
-	Oid			inputFuncArgList[1];
-	List	   *inputFuncNameList;
+	Oid			funcArgList[1];
+	List	   *funcNameList;
+	Oid			argType;
+	Oid			retType;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -531,23 +449,25 @@ check_user_input_func(Oid funcid, Oid expectedNamespace)
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input function cannot be defined in C or internal")));
+				 errmsg("user defined function cannot be defined in C or internal")));
 	}
 
-	if (proc->pronargs != 1 || proc->proargtypes.values[0] != TEXTOID)
+	argType = typeInput ? TEXTOID : BYTEAOID;
+	if (proc->pronargs != 1 || proc->proargtypes.values[0] != argType)
 	{
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input function must accept one argument of type text")));
+				 errmsg("type input function must accept one argument of type %s", format_type_be(argType))));
 	}
 
-	if (proc->prorettype != BYTEAOID)
+	retType = typeInput ? BYTEAOID : TEXTOID;
+	if (proc->prorettype != retType)
 	{
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input functions must return type bytea")));
+				 errmsg("type input functions must return type %s", format_type_be(retType))));
 	}
 
 	if (proc->pronamespace != expectedNamespace)
@@ -558,75 +478,15 @@ check_user_input_func(Oid funcid, Oid expectedNamespace)
 				 errmsg("type input functions must exist in the same namespace as the type")));
 	}
 
-	inputFuncArgList[0] = CSTRINGOID;
-	inputFuncNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
-								   makeString(NameStr(proc->proname)));
-	if (OidIsValid(LookupFuncName(inputFuncNameList, 1, inputFuncArgList, true)))
+	funcArgList[0] = CSTRINGOID;
+	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
+							  makeString(NameStr(proc->proname)));
+	ReleaseSysCache(tuple);
+
+	if (OidIsValid(LookupFuncName(funcNameList, 1, funcArgList, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("function \"%s\" already exists", NameListToString(inputFuncNameList))));
-
-	ReleaseSysCache(tuple);
-}
-
-/*
- * check_user_output_func
- *
- * Check a user-defined type output function meets pg_tle specific requirements (before creating the base type):
- * 1. must be defined in a trusted language (We check it's not in C or internal for now);
- * 2. must accept a single argument of type bytea;
- * 3. must return type text;
- * 4. must be in the same namespace as the base type;
- * 5. the to-be-created C output function must not exist yet.
- *
- * Raise an error if any requirement is not met.
- */
-static void
-check_user_output_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
-{
-	HeapTuple	tuple;
-	Form_pg_proc proc;
-	Oid			outputFuncArgList[1];
-	List	   *outputFuncNameList;
-
-	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "cache lookup failed for function %u", funcid);
-	proc = (Form_pg_proc) GETSTRUCT(tuple);
-
-	if (proc->prolang == INTERNALlanguageId || proc->prolang == ClanguageId)
-	{
-		ReleaseSysCache(tuple);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type output function cannot be defined in C or internal")));
-	}
-
-	if (proc->pronargs != 1 || proc->proargtypes.values[0] != BYTEAOID)
-	{
-		ReleaseSysCache(tuple);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type output function must accept one argument of type bytea")));
-	}
-
-	if (proc->prorettype != TEXTOID)
-	{
-		ReleaseSysCache(tuple);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type output function must return type text")));
-	}
-
-	outputFuncArgList[0] = typeOid;
-	outputFuncNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
-									makeString(NameStr(proc->proname)));
-	if (OidIsValid(LookupFuncName(outputFuncNameList, 1, outputFuncArgList, true)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("function \"%s\" already exists", NameListToString(outputFuncNameList))));
-
-	ReleaseSysCache(tuple);
+				 errmsg("function \"%s\" already exists", NameListToString(funcNameList))));
 }
 
 /*
@@ -656,7 +516,7 @@ pg_tle_base_type_in(PG_FUNCTION_ARGS)
 	if (s == NULL)
 		PG_RETURN_NULL();
 
-	user_input_function = find_user_input_func(get_qualified_funcname(fcinfo->flinfo->fn_oid));
+	user_input_function = find_user_defined_func(get_qualified_funcname(fcinfo->flinfo->fn_oid), true);
 	typeOid = get_func_rettype(fcinfo->flinfo->fn_oid);
 	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
 	if (!HeapTupleIsValid(tuple))
@@ -702,7 +562,7 @@ pg_tle_base_type_out(PG_FUNCTION_ARGS)
 	Datum		result;
 	Oid			output_function;
 
-	output_function = find_user_output_func(get_qualified_funcname(fcinfo->flinfo->fn_oid));
+	output_function = find_user_defined_func(get_qualified_funcname(fcinfo->flinfo->fn_oid), false);
 	result = OidFunctionCall1Coll(output_function, InvalidOid, datum);
 
 	/*
