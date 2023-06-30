@@ -13,6 +13,7 @@
 #define SET_USER_COMPAT_H
 
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "tcop/utility.h"
 
 /*
@@ -171,6 +172,12 @@
 #ifndef TYPALIGN_INT
 #define  TYPALIGN_INT			'i' /* int alignment (typically 4 bytes) */
 #endif
+#ifndef TYPSTORAGE_PLAIN
+#define  TYPSTORAGE_PLAIN		'p' /* type not prepared for toasting */
+#endif
+#ifndef TYPSTORAGE_EXTENDED
+#define  TYPSTORAGE_EXTENDED	'x' /* fully toastable */
+#endif
 
 /*
  * PostgreSQL 13 changed the SPI interface to include a "numvals" attribute that
@@ -240,16 +247,181 @@
 	
 #endif
 
+#if PG_VERSION_NUM >= 140000
+#define TYPE_CREATE(isArrayType, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
+	TypeCreate(newTypeOid, \
+			   typeName, \
+			   typeNamespace, \
+			   relationOid, \
+			   relationKind, \
+			   ownerId, \
+			   internalSize, \
+			   typeType, \
+			   typeCategory, \
+			   typePreferred, \
+			   typDelim, \
+			   inputProcedure, \
+			   outputProcedure, \
+			   receiveProcedure, \
+			   sendProcedure, \
+			   typmodinProcedure, \
+			   typmodoutProcedure, \
+			   analyzeProcedure, \
+			   isArrayType ? F_ARRAY_SUBSCRIPT_HANDLER : InvalidOid, /* subscript procedure */ \
+			   elementType, \
+			   isImplicitArray, \
+			   arrayType, \
+			   baseType, \
+			   defaultTypeValue, \
+			   defaultTypeBin, \
+			   passedByValue, \
+			   alignment, \
+			   storage, \
+			   typeMod, \
+			   typNDims, \
+			   typeNotNull, \
+			   typeCollation)
+#else
+#define TYPE_CREATE(isArrayType, newTypeOid, typeName, typeNamespace, relationOid, relationKind, ownerId, internalSize, typeType, typeCategory, typePreferred, typDelim, inputProcedure, outputProcedure, receiveProcedure, sendProcedure, typmodinProcedure, typmodoutProcedure, analyzeProcedure, elementType, isImplicitArray, arrayType, baseType, defaultTypeValue, defaultTypeBin, passedByValue, alignment, storage, typeMod, typNDims, typeNotNull, typeCollation) \
+	TypeCreate(newTypeOid, \
+			   typeName, \
+			   typeNamespace, \
+			   relationOid, \
+			   relationKind, \
+			   ownerId, \
+			   internalSize, \
+			   typeType, \
+			   typeCategory, \
+			   typePreferred, \
+			   typDelim, \
+			   inputProcedure, \
+			   outputProcedure, \
+			   receiveProcedure, \
+			   sendProcedure, \
+			   typmodinProcedure, \
+			   typmodoutProcedure, \
+			   analyzeProcedure, \
+			   elementType, \
+			   isImplicitArray, \
+			   arrayType, \
+			   baseType, \
+			   defaultTypeValue, \
+			   defaultTypeBin, \
+			   passedByValue, \
+			   alignment, \
+			   storage, \
+			   typeMod, \
+			   typNDims, \
+			   typeNotNull, \
+			   typeCollation)
+#endif
+
+#if PG_VERSION_NUM >= 140000
+#define PROCEDURE_CREATE(procedureName, procNamespace, replace, returnsSet, returnType, proowner, languageObjectId, languageValidator, prosrc, probin, prokind, security_definer, isLeakProof, isStrict, volatility, parallel, parameterTypes, allParameterTypes, parameterModes, parameterNames, parameterDefaults, trftypes, proconfig, procost, prorows) \
+	ProcedureCreate(procedureName, \
+					procNamespace, \
+					replace, \
+					returnsSet, \
+					returnType, \
+					proowner, \
+					languageObjectId, \
+					languageValidator, \
+					prosrc, \
+					probin, \
+					NULL, /* prosqlbody */ \
+					prokind, \
+					security_definer, \
+					isLeakProof, \
+					isStrict, \
+					volatility, \
+					parallel, \
+					parameterTypes, \
+					allParameterTypes, \
+					parameterModes, \
+					parameterNames, \
+					parameterDefaults, \
+					trftypes, \
+					proconfig, \
+					InvalidOid,	/* prosupport */ \
+					procost, \
+					prorows)
+#elif PG_VERSION_NUM >= 120000
+#define PROCEDURE_CREATE(procedureName, procNamespace, replace, returnsSet, returnType, proowner, languageObjectId, languageValidator, prosrc, probin, prokind, security_definer, isLeakProof, isStrict, volatility, parallel, parameterTypes, allParameterTypes, parameterModes, parameterNames, parameterDefaults, trftypes, proconfig, procost, prorows) \
+	ProcedureCreate(procedureName, \
+					procNamespace, \
+					replace, \
+					returnsSet, \
+					returnType, \
+					proowner, \
+					languageObjectId, \
+					languageValidator, \
+					prosrc, \
+					probin, \
+					prokind, \
+					security_definer, \
+					isLeakProof, \
+					isStrict, \
+					volatility, \
+					parallel, \
+					parameterTypes, \
+					allParameterTypes, \
+					parameterModes, \
+					parameterNames, \
+					parameterDefaults, \
+					trftypes, \
+					proconfig, \
+					InvalidOid,	/* prosupport */ \
+					procost, \
+					prorows)
+#else
+#define PROCEDURE_CREATE(procedureName, procNamespace, replace, returnsSet, returnType, proowner, languageObjectId, languageValidator, prosrc, probin, prokind, security_definer, isLeakProof, isStrict, volatility, parallel, parameterTypes, allParameterTypes, parameterModes, parameterNames, parameterDefaults, trftypes, proconfig, procost, prorows) \
+	ProcedureCreate(procedureName, \
+					procNamespace, \
+					replace, \
+					returnsSet, \
+					returnType, \
+					proowner, \
+					languageObjectId, \
+					languageValidator, \
+					prosrc, \
+					probin, \
+					prokind, \
+					security_definer, \
+					isLeakProof, \
+					isStrict, \
+					volatility, \
+					parallel, \
+					parameterTypes, \
+					allParameterTypes, \
+					parameterModes, \
+					parameterNames, \
+					parameterDefaults, \
+					trftypes, \
+					proconfig, \
+					procost, \
+					prorows)
+#endif
+
+#if PG_VERSION_NUM >= 120000
+#define GET_TYPE_OID(cacheId, key1, key2)  GetSysCacheOid2(cacheId, Anum_pg_type_oid, key1, key2);
+#else
+#define GET_TYPE_OID(cacheId, key1, key2)  GetSysCacheOid2(cacheId, key1, key2);
+#endif
+
 #if (PG_VERSION_NUM < 160000)
 #define PG_DATABASE_ACLCHECK(DatabaseId, UserId, Operation) pg_database_aclcheck(DatabaseId, UserId, Operation)
 #define PG_EXTENSION_OWNERCHECK(ExtensionOid, UserId) pg_extension_ownercheck(ExtensionOid, UserId)
 #define PG_NAMESPACE_ACLCHECK(NamespaceOid, UserId, Operation) pg_namespace_aclcheck(NamespaceOid, UserId, Operation)
+#define PG_PROC_OWNERCHECK(ProcOid, UserId) pg_proc_ownercheck(ProcOid, UserId)
+#define PG_TYPE_OWNERCHECK(TypeOid, UserId) pg_type_ownercheck(TypeOid, UserId)
 #define STRING_TO_QUALIFIED_NAME_LIST(string) stringToQualifiedNameList(string)
 #define CHECK_CAN_SET_ROLE(member, role) check_is_member_of_role(member, role)
 #else
 #define PG_DATABASE_ACLCHECK(DatabaseId, UserId, Operation) object_aclcheck(DatabaseRelationId, DatabaseId, UserId, Operation);
 #define PG_EXTENSION_OWNERCHECK(ExtensionOid, UserId) object_ownercheck(ExtensionRelationId, ExtensionOid, UserId)
 #define PG_NAMESPACE_ACLCHECK(NamespaceOid, UserId, Operation) object_aclcheck(NamespaceRelationId, NamespaceOid, UserId, Operation)
+#define PG_PROC_OWNERCHECK(ProcOid, UserId) object_ownercheck(ProcedureRelationId, ProcOid, UserId)
+#define PG_TYPE_OWNERCHECK(TypeOid, UserId) object_ownercheck(TypeRelationId, TypeOid, UserId)
 #define STRING_TO_QUALIFIED_NAME_LIST(string) stringToQualifiedNameList(string, NULL)
 #define CHECK_CAN_SET_ROLE(member, role) check_can_set_role(member, role)
 #endif
