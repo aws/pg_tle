@@ -2215,6 +2215,11 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	Oid	   	   ctlfuncid = InvalidOid;
 	Oid	   	   sqlfuncid = InvalidOid;
 	ExtensionControlFile *pcontrol = NULL;
+	List	       *evi_list;
+	List           *updateVersions;
+	ExtensionVersionInfo *evi_start;
+	ExtensionVersionInfo *evi_target;
+
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2328,11 +2333,6 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	 * script and all upgrade scripts.
 	 */
 
-	List	   *evi_list;
-	List       *updateVersions;
-	ExtensionVersionInfo *evi_start;
-	ExtensionVersionInfo *evi_target;
-
 	/* Extract the version update graph from the script directory */
 	evi_list = get_ext_ver_list(pcontrol);
 
@@ -2370,11 +2370,12 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 
 		foreach(lcv, updateVersions)
 		{
+			ObjectAddress upgradesqlfunc;
+
 			versionName = (char *) lfirst(lcv);
 			sqlname = psprintf("%s--%s--%s.sql", extname, oldVersionName, versionName);
 			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
 
-			ObjectAddress upgradesqlfunc;
 			upgradesqlfunc.classId = ProcedureRelationId;
 			upgradesqlfunc.objectId = sqlfuncid;
 			upgradesqlfunc.objectSubId = 0;
