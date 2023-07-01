@@ -156,25 +156,6 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
-SELECT pgtle.install_extension
-(
- 'test123',
- '1.1',
- 'Test TLE Functions',
-$_pgtle_$
-  CREATE OR REPLACE FUNCTION test123_func()
-  RETURNS INT AS $$
-  (
-    SELECT 42
-  )$$ LANGUAGE sql;
-  CREATE OR REPLACE FUNCTION test123_func_2()
-  RETURNS INT AS $$
-  (
-    SELECT 424242
-  )$$ LANGUAGE sql;
-$_pgtle_$
-);
-ERROR:  extension "test123" already installed
 SELECT pgtle.install_update_path
 (
  'test123',

@@ -2215,6 +2215,11 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	Oid	   	   ctlfuncid = InvalidOid;
 	Oid	   	   sqlfuncid = InvalidOid;
 	ExtensionControlFile *pcontrol = NULL;
+	List	       *evi_list;
+	List           *updateVersions;
+	ExtensionVersionInfo *evi_start;
+	ExtensionVersionInfo *evi_target;
+
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2322,11 +2327,31 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	if (ctlfuncid == InvalidOid)
 		elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
 
-	sqlname = psprintf("%s--%s.sql", extname, versionName);
-	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-	if (sqlfuncid == InvalidOid)
+	/* The sql script for the installed version may not exist if the version was
+	 * installed via an upgrade script. Look for a starting version that does have
+	 * an existing install script, and then record a dependency on the install
+	 * script and all upgrade scripts.
+	 */
+
+	/* Extract the version update graph from the script directory */
+	evi_list = get_ext_ver_list(pcontrol);
+
+	/* Identify the target version */
+	evi_target = get_ext_ver_info(versionName, &evi_list);
+
+	/* Identify best path to reach target */
+	evi_start = find_install_path(evi_list, evi_target, &updateVersions);
+
+	/* Fail if no path ... */
+	if (evi_start == NULL)
 		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
 
+	/* Otherwise, use the best starting version */
+	versionName = evi_start->name;
+	sqlname = psprintf("%s--%s.sql", extname, versionName);
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+	/* Record dependencies on control function and sql function for base version */
 	ctlfunc.classId = ProcedureRelationId;
 	ctlfunc.objectId = ctlfuncid;
 	ctlfunc.objectSubId = 0;
@@ -2337,6 +2362,27 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 
 	recordDependencyOn(&retobj, &ctlfunc, DEPENDENCY_NORMAL);
 	recordDependencyOn(&retobj, &sqlfunc, DEPENDENCY_NORMAL);
+
+	/* If necessary update scripts are found, record dependency on each script */
+	if (updateVersions != NULL) {
+		const char *oldVersionName = versionName;
+		ListCell   *lcv;
+
+		foreach(lcv, updateVersions)
+		{
+			ObjectAddress upgradesqlfunc;
+
+			versionName = (char *) lfirst(lcv);
+			sqlname = psprintf("%s--%s--%s.sql", extname, oldVersionName, versionName);
+			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+			upgradesqlfunc.classId = ProcedureRelationId;
+			upgradesqlfunc.objectId = sqlfuncid;
+			upgradesqlfunc.objectSubId = 0;
+
+			recordDependencyOn(&retobj, &upgradesqlfunc, DEPENDENCY_NORMAL);
+		}
+	}
 
 	/* end pg_tle extensions */
 	UNSET_TLEEXT;
@@ -4327,27 +4373,29 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	/*
 	 * Create the control and sql string returning function
 	 *
-	 * NOTE: we used to build a CREATE OR REPLACE statement here
-	 *       but that would silently replace the control-string
-	 *       function and the sql-string function. We've removed
-	 *       the "OR REPLACE" clause because we now assume that
-	 *       a "duplicate function" error means that the extension
-	 *       has already been installed.
+	 * NOTE: we used to build a CREATE OR REPLACE statement for
+	 *       the sql-string function, but that would silently
+	 *       replace it in case of a "duplicate function" error.
+	 *       We've removed the "OR REPLACE" clause but kept it in
+	 *       the statement for the control-string function to allow
+	 *       installing multiple versions of the same extension.
+	 *       The sql-string statement is executed first to detect
+	 *       whether a duplicate or new version is being installed.
 	 */
 
-	ctlsql = psprintf(
-		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
-		"SELECT %s%s%s%s LANGUAGE SQL",
-			PG_TLE_NSPNAME, quote_identifier(ctlname),
-			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
-			ctlstr->data,
-			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 	sqlsql = psprintf(
 		"CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
 		"SELECT %s%s%s%s LANGUAGE SQL",
 			PG_TLE_NSPNAME, quote_identifier(sqlname),
 			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
 			sql_str,
+			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
+	ctlsql = psprintf(
+		"CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+		"SELECT %s%s%s%s LANGUAGE SQL",
+			PG_TLE_NSPNAME, quote_identifier(ctlname),
+			PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+			ctlstr->data,
 			PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
 
 	/* flag that we are manipulating pg_tle artifacts */
@@ -4366,16 +4414,16 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	 */
 	PG_TRY();
 	{
-	  /* create the control function */
-	  spi_rc = SPI_exec(ctlsql, 0);
-	  if (spi_rc != SPI_OK_UTILITY) {
-	    elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
-	  }
-
 	  /* create the sql function */
 	  spi_rc = SPI_exec(sqlsql, 0);
 	  if (spi_rc != SPI_OK_UTILITY) {
 	    elog(ERROR, "failed to install pg_tle extension, %s, sql string", extname);
+	  }
+
+	  /* create the control function */
+	  spi_rc = SPI_exec(ctlsql, 0);
+	  if (spi_rc != SPI_OK_UTILITY) {
+	    elog(ERROR, "failed to install pg_tle extension, %s, control string", extname);
 	  }
 	}
 	PG_CATCH();
