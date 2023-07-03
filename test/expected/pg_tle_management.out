@@ -815,6 +815,18 @@ SELECT pgtle.available_extension_versions();
 ------------------------------
 (0 rows)
 
+-- Skip TransactionStmts
+BEGIN;
+SELECT pgtle.available_extension_versions();
+ available_extension_versions 
+------------------------------
+(0 rows)
+
+SELECT 1/0;
+ERROR:  division by zero
+SELECT pgtle.available_extension_versions();
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
