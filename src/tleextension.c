@@ -3977,6 +3977,27 @@ _PU_HOOK
 	Oid		tleExtensionOid;
 
 	/*
+	 * Explicitly skip TransactionStmts before calling get_extension_oid().
+	 *
+	 * In an aborted transaction, TransactionStmts (e.g. ROLLBACK) will still
+	 * be passed to process utility hooks. However, relcache lookup must be
+	 * done in a transaction state. Because we don't handle TransactionStmts
+	 * in this hook anyway, TransactionStmts can be skipped.
+	 */
+	if (pu_parsetree && IsA(pu_parsetree, TransactionStmt))
+	{
+		if (prev_hook)
+		{
+			_prev_hook;
+		}
+		else
+		{
+			_standard_ProcessUtility;
+		}
+		return;
+	}
+
+	/*
 	 * We should only execute this hook if the pg_tle extension is installed.
 	 */
 	tleExtensionOid = get_extension_oid(PG_TLE_EXTNAME, true);
