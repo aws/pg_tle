@@ -343,77 +343,56 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
+-- Drop user-defined operator functions
+DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_cmp(test_citext,test_citext)
+drop cascades to operator class test_citext_ops for access method btree
+DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_eq(test_citext,test_citext)
+drop cascades to operator =(test_citext,test_citext)
+DROP FUNCTION test_citext_ne(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_ne(test_citext,test_citext)
+drop cascades to operator <>(test_citext,test_citext)
+DROP FUNCTION test_citext_lt(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_lt(test_citext,test_citext)
+drop cascades to operator <(test_citext,test_citext)
+DROP FUNCTION test_citext_le(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_le(test_citext,test_citext)
+drop cascades to operator <=(test_citext,test_citext)
+DROP FUNCTION test_citext_gt(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_gt(test_citext,test_citext)
+drop cascades to operator >(test_citext,test_citext)
+DROP FUNCTION test_citext_ge(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_ge(test_citext,test_citext)
+drop cascades to operator >=(test_citext,test_citext)
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
 ERROR:  cannot drop function test_citext_in(text) because other objects depend on it
 DETAIL:  function test_citext_in(cstring) depends on function test_citext_in(text)
 type test_citext depends on function test_citext_in(cstring)
 function test_citext_out(test_citext) depends on type test_citext
-function test_citext_cmp(test_citext,test_citext) depends on type test_citext
-function test_citext_lt(test_citext,test_citext) depends on type test_citext
-function test_citext_le(test_citext,test_citext) depends on type test_citext
-function test_citext_eq(test_citext,test_citext) depends on type test_citext
-function test_citext_ne(test_citext,test_citext) depends on type test_citext
-function test_citext_gt(test_citext,test_citext) depends on type test_citext
-function test_citext_ge(test_citext,test_citext) depends on type test_citext
-operator >(test_citext,test_citext) depends on type test_citext
-operator >=(test_citext,test_citext) depends on type test_citext
-operator <(test_citext,test_citext) depends on type test_citext
-operator <=(test_citext,test_citext) depends on type test_citext
-operator <>(test_citext,test_citext) depends on type test_citext
-operator =(test_citext,test_citext) depends on type test_citext
-operator class test_citext_ops for access method btree depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_out(bytea);
 ERROR:  cannot drop function test_citext_out(bytea) because other objects depend on it
 DETAIL:  function test_citext_out(test_citext) depends on function test_citext_out(bytea)
 type test_citext depends on function test_citext_out(test_citext)
 function test_citext_in(cstring) depends on type test_citext
-function test_citext_cmp(test_citext,test_citext) depends on type test_citext
-function test_citext_lt(test_citext,test_citext) depends on type test_citext
-function test_citext_le(test_citext,test_citext) depends on type test_citext
-function test_citext_eq(test_citext,test_citext) depends on type test_citext
-function test_citext_ne(test_citext,test_citext) depends on type test_citext
-function test_citext_gt(test_citext,test_citext) depends on type test_citext
-function test_citext_ge(test_citext,test_citext) depends on type test_citext
-operator >(test_citext,test_citext) depends on type test_citext
-operator >=(test_citext,test_citext) depends on type test_citext
-operator <(test_citext,test_citext) depends on type test_citext
-operator <=(test_citext,test_citext) depends on type test_citext
-operator <>(test_citext,test_citext) depends on type test_citext
-operator =(test_citext,test_citext) depends on type test_citext
-operator class test_citext_ops for access method btree depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_in(text) CASCADE;
-NOTICE:  drop cascades to 17 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to function test_citext_in(cstring)
 drop cascades to type test_citext
 drop cascades to function test_citext_out(test_citext)
-drop cascades to function test_citext_cmp(test_citext,test_citext)
-drop cascades to function test_citext_lt(test_citext,test_citext)
-drop cascades to function test_citext_le(test_citext,test_citext)
-drop cascades to function test_citext_eq(test_citext,test_citext)
-drop cascades to function test_citext_ne(test_citext,test_citext)
-drop cascades to function test_citext_gt(test_citext,test_citext)
-drop cascades to function test_citext_ge(test_citext,test_citext)
-drop cascades to operator >(test_citext,test_citext)
-drop cascades to operator >=(test_citext,test_citext)
-drop cascades to operator <(test_citext,test_citext)
-drop cascades to operator <=(test_citext,test_citext)
-drop cascades to operator <>(test_citext,test_citext)
-drop cascades to operator =(test_citext,test_citext)
-drop cascades to operator class test_citext_ops for access method btree
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
 ERROR:  table "test_dt" does not exist
--- Drop user-defined operator functions
-DROP FUNCTION test_citext_cmp;
-DROP FUNCTION test_citext_eq;
-DROP FUNCTION test_citext_ne;
-DROP FUNCTION test_citext_lt;
-DROP FUNCTION test_citext_le;
-DROP FUNCTION test_citext_gt;
-DROP FUNCTION test_citext_ge;
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');
  create_shell_type 

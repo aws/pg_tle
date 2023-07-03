@@ -804,6 +804,7 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 	Form_pg_proc proc;
 	List	   *funcNameList;
 	Oid		   *argTypes;
+	int			nargs;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -818,8 +819,9 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 				 errmsg("type operator function cannot be defined in C or internal")));
 	}
 
-	if (!((proc->pronargs == 1 && proc->proargtypes.values[0] == BYTEAOID) ||
-		  (proc->pronargs == 2 && proc->proargtypes.values[0] == BYTEAOID && proc->proargtypes.values[1] == BYTEAOID)))
+	nargs = proc->pronargs;
+	if (!((nargs == 1 && proc->proargtypes.values[0] == BYTEAOID) ||
+		  (nargs == 2 && proc->proargtypes.values[0] == BYTEAOID && proc->proargtypes.values[1] == BYTEAOID)))
 	{
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
@@ -835,19 +837,18 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 				 errmsg("type operator functions must exist in the same namespace as the type")));
 	}
 
-	argTypes = (Oid *) palloc(proc->pronargs * sizeof(Oid));
+	argTypes = (Oid *) palloc(nargs * sizeof(Oid));
 	argTypes[0] = typeOid;
-	if (proc->pronargs == 2)
+	if (nargs == 2)
 		argTypes[1] = typeOid;
 
 	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
 							  makeString(NameStr(proc->proname)));
-	if (OidIsValid(LookupFuncName(funcNameList, proc->pronargs, argTypes, true)))
+	ReleaseSysCache(tuple);
+	if (OidIsValid(LookupFuncName(funcNameList, nargs, argTypes, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("function \"%s\" already exists", NameListToString(funcNameList))));
-
-	ReleaseSysCache(tuple);
 }
 
 /*

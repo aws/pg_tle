@@ -246,21 +246,21 @@ DROP TABLE test_dt;
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
 
+-- Drop user-defined operator functions
+DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_ne(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_lt(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_le(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_gt(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_ge(bytea, bytea) CASCADE;
+
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
 DROP FUNCTION test_citext_out(bytea);
 DROP FUNCTION test_citext_in(text) CASCADE;
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
-
--- Drop user-defined operator functions
-DROP FUNCTION test_citext_cmp;
-DROP FUNCTION test_citext_eq;
-DROP FUNCTION test_citext_ne;
-DROP FUNCTION test_citext_lt;
-DROP FUNCTION test_citext_le;
-DROP FUNCTION test_citext_gt;
-DROP FUNCTION test_citext_ge;
 
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');
