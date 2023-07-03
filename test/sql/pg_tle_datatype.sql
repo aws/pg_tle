@@ -78,11 +78,173 @@ DELETE FROM test_dt;
 -- Insert NULL
 INSERT INTO test_dt VALUES (NULL);
 SELECT * FROM test_dt;
+DROP TABLE test_dt;
 
 -- create_base_type fails on duplicates
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 -- create_base_type_if_not_exists returns false on duplicates
 SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+
+CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) 
+RETURNS int AS
+$$
+  SELECT pg_catalog.bttextcmp(pg_catalog.lower(pg_catalog.convert_from(l, 'UTF8')), pg_catalog.lower(pg_catalog.convert_from(r, 'UTF8')));
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_lt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) < 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_eq(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) = 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_le(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) <= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_gt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) > 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_ge(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) >= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.test_citext_ne(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) != 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.invalid_operator_func1(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+CREATE FUNCTION public.invalid_operator_func2(r1 bytea, r2 bytea, r3 bytea) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+
+-- invalid operator func
+SELECT pgtle.create_operator_func('public', 'test_citext', 'pg_catalog.bttextcmp(text, text)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func1(test_citext, test_citext)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func2(bytea, bytea, bytea)'::regprocedure);
+
+-- create_operator_func fails on duplicate
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+-- create_operator_func returns false on duplicate
+SELECT pgtle.create_operator_func_if_not_exists('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+
+DROP FUNCTION invalid_operator_func1;
+DROP FUNCTION invalid_operator_func2;
+DROP FUNCTION test_citext_cmp(test_citext, test_citext);
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_lt(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_le(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_eq(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ne(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_gt(bytea, bytea)'::regprocedure);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ge(bytea, bytea)'::regprocedure);
+
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+
+RESET SESSION AUTHORIZATION;
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+
+-- Regular user can use the newly created type
+SET SESSION AUTHORIZATION dbstaff;
+SELECT CURRENT_USER;
+
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+INSERT INTO test_dt VALUES ('select');
+DROP TABLE test_dt;
+
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
 
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
@@ -90,6 +252,15 @@ DROP FUNCTION test_citext_out(bytea);
 DROP FUNCTION test_citext_in(text) CASCADE;
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
+
+-- Drop user-defined operator functions
+DROP FUNCTION test_citext_cmp;
+DROP FUNCTION test_citext_eq;
+DROP FUNCTION test_citext_ne;
+DROP FUNCTION test_citext_lt;
+DROP FUNCTION test_citext_le;
+DROP FUNCTION test_citext_gt;
+DROP FUNCTION test_citext_ge;
 
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');

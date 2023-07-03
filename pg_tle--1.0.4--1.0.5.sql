@@ -75,6 +75,38 @@ END;
 $_pgtleie_$
 LANGUAGE plpgsql STRICT;
 
+CREATE FUNCTION pgtle.create_operator_func
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
+)
+RETURNS void
+SET search_path TO 'pgtle'
+STRICT
+AS 'MODULE_PATHNAME', 'pg_tle_create_operator_func'
+LANGUAGE C;
+
+CREATE FUNCTION pgtle.create_operator_func_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
+)
+RETURNS boolean
+SET search_path TO 'pgtle'
+AS $_pgtleie_$
+BEGIN
+  PERFORM pgtle.create_operator_func(typenamespace, typename, opfunc);
+  RETURN TRUE;
+EXCEPTION
+  -- only catch the duplicate_object exception, let all other exceptions pass through.
+  WHEN duplicate_object THEN
+    RETURN FALSE;
+END;
+$_pgtleie_$
+LANGUAGE plpgsql STRICT;
+
 REVOKE EXECUTE ON FUNCTION pgtle.create_shell_type
 (
   typenamespace regnamespace,
@@ -105,6 +137,20 @@ REVOKE EXECUTE ON FUNCTION pgtle.create_base_type_if_not_exists
   internallength int4
 ) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION pgtle.create_operator_func
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
+) FROM PUBLIC;
+
+REVOKE EXECUTE ON FUNCTION pgtle.create_operator_func_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
+) FROM PUBLIC;
+
 GRANT EXECUTE ON FUNCTION pgtle.create_shell_type
 (
   typenamespace regnamespace,
@@ -133,4 +179,18 @@ GRANT EXECUTE ON FUNCTION pgtle.create_base_type_if_not_exists
   infunc regprocedure,
   outfunc regprocedure,
   internallength int4
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_operator_func
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
+) TO pgtle_admin;
+
+GRANT EXECUTE ON FUNCTION pgtle.create_operator_func_if_not_exists
+(
+  typenamespace regnamespace,
+  typename name,
+  opfunc regprocedure
 ) TO pgtle_admin;

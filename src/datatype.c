@@ -49,6 +49,9 @@ static Oid	find_user_defined_func(List *procname, bool typeInput);
 static void check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typeInput);
 static char *get_probin(Oid fn_oid);
 static List *get_qualified_funcname(Oid fn_oid);
+static void check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace);
+static void check_pgtle_base_type(Oid typeOid);
+static bool is_pgtle_io_func(Oid funcid, bool typeInput);
 
 static void
 check_is_pgtle_admin(void)
@@ -703,4 +706,272 @@ get_qualified_funcname(Oid funcid)
 							makeString(NameStr(proc->proname)));
 	ReleaseSysCache(tuple);
 	return inputNames;
+}
+
+/*
+ * pgtle_create_operator_func
+ *
+ * User-defined operator funcion accepets BYTEA as argument type (because the custom type
+ * may not be available in some languages such as plrust).
+ *
+ * This function will create a C-version of the operator function that accepts the base type as argument.
+ */
+PG_FUNCTION_INFO_V1(pg_tle_create_operator_func);
+Datum
+pg_tle_create_operator_func(PG_FUNCTION_ARGS)
+{
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			funcOid = PG_GETARG_OID(2);
+	Oid			typeOid;
+	int			nargs;
+	Oid		   *argTypes;
+	AclResult	aclresult;
+	char	   *namespaceName;
+
+	/*
+	 * Even though the SQL function is locked down so only a member of
+	 * pgtle_admin can run this function, let's check and make sure there is
+	 * not a way to bypass that
+	 */
+	check_is_pgtle_admin();
+
+	/* Check we have creation rights in target namespace */
+	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
+	namespaceName = get_namespace_name(typeNamespace);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, OBJECT_SCHEMA, namespaceName);
+
+	/*
+	 * Look to see if type already exists
+	 */
+	typeOid = GET_TYPE_OID(TYPENAMENSP,
+						   CStringGetDatum(typeName),
+						   ObjectIdGetDatum(typeNamespace));
+
+	if (!OidIsValid(typeOid))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("type \"%s\" does not exist", typeName)));
+
+	/*
+	 * Check we are the owner of the base type.
+	 */
+	if (!PG_TYPE_OWNERCHECK(typeOid, GetUserId()))
+		aclcheck_error_type(ACLCHECK_NOT_OWNER, typeOid);
+
+	/*
+	 * Check we are the owner of the operator funcion.
+	 */
+	if (!PG_PROC_OWNERCHECK(funcOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION, get_func_name(funcOid));
+
+	check_user_operator_func(funcOid, typeOid, typeNamespace);
+	check_pgtle_base_type(typeOid);
+
+	/*
+	 * check_user_operator_func already ensures the number of func args is 1
+	 * or 2.
+	 */
+	nargs = get_func_nargs(funcOid);
+	argTypes = (Oid *) palloc(nargs * sizeof(Oid));
+	argTypes[0] = typeOid;
+	if (nargs == 2)
+		argTypes[1] = typeOid;
+
+	create_c_func_internal(typeNamespace, funcOid,
+						   buildoidvector(argTypes, nargs),
+						   get_func_rettype(funcOid), TLE_OPERATOR_FUNC,
+						   get_probin(fcinfo->flinfo->fn_oid));
+	PG_RETURN_BOOL(true);
+}
+
+/*
+ * check_user_operator_func
+ *
+ * Check a user-defined operator function meets pg_tle specific requirements:
+ * 1. must be defined in a trusted language (We check it's not in C or internal for now);
+ * 2. must accept one or two arguments of type bytea;
+ * 3. must be in the same namespace as the base type;
+ * 4. the to-be-created C operator function must not exist yet.
+ *
+ * Raise an error if any requirement is not met.
+ */
+static void
+check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
+{
+	HeapTuple	tuple;
+	Form_pg_proc proc;
+	List	   *funcNameList;
+	Oid		   *argTypes;
+
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+	proc = (Form_pg_proc) GETSTRUCT(tuple);
+
+	if (proc->prolang == INTERNALlanguageId || proc->prolang == ClanguageId)
+	{
+		ReleaseSysCache(tuple);
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				 errmsg("type operator function cannot be defined in C or internal")));
+	}
+
+	if (!((proc->pronargs == 1 && proc->proargtypes.values[0] == BYTEAOID) ||
+		  (proc->pronargs == 2 && proc->proargtypes.values[0] == BYTEAOID && proc->proargtypes.values[1] == BYTEAOID)))
+	{
+		ReleaseSysCache(tuple);
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				 errmsg("type opeartor function must accept one or two arguments of type bytea")));
+	}
+
+	if (proc->pronamespace != expectedNamespace)
+	{
+		ReleaseSysCache(tuple);
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				 errmsg("type operator functions must exist in the same namespace as the type")));
+	}
+
+	argTypes = (Oid *) palloc(proc->pronargs * sizeof(Oid));
+	argTypes[0] = typeOid;
+	if (proc->pronargs == 2)
+		argTypes[1] = typeOid;
+
+	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
+							  makeString(NameStr(proc->proname)));
+	if (OidIsValid(LookupFuncName(funcNameList, proc->pronargs, argTypes, true)))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("function \"%s\" already exists", NameListToString(funcNameList))));
+
+	ReleaseSysCache(tuple);
+}
+
+/*
+ * check_pgtle_base_type
+ *
+ * Check whether the input type is a pg_tle base type.
+ * This is done by checking if the I/O functions are created by pg_tle (based on prosrc).
+ */
+static void
+check_pgtle_base_type(Oid typeOid)
+{
+	HeapTuple	tuple;
+	Form_pg_type typeForm;
+	Oid			typeOwner;
+	Oid			inputOid;
+	Oid			outputOid;
+	Oid			tleadminoid;
+
+	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for type %u", typeOid);
+	typeForm = (Form_pg_type) GETSTRUCT(tuple);
+
+	if (!typeForm->typisdefined)
+	{
+		ReleaseSysCache(tuple);
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("type %s is only a shell type", format_type_be(typeOid))));
+	}
+
+	tleadminoid = get_role_oid(PG_TLE_ADMIN, false);
+	typeOwner = typeForm->typowner;
+	inputOid = typeForm->typinput;
+	outputOid = typeForm->typoutput;
+	ReleaseSysCache(tuple);
+
+	CHECK_CAN_SET_ROLE(typeOwner, tleadminoid);
+
+	if (!is_pgtle_io_func(inputOid, true) || !is_pgtle_io_func(outputOid, false))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("type %s is not a pg_tle defined base type", format_type_be(typeOid))));
+}
+
+/*
+ * is_pgtle_io_func
+ *
+ * Returns whether a given function is a pg_tle type I/O function.
+ * When `input` is true, the function returns whether a given function is a pg_tle type input function;
+ * otherwise, the function returns whether a given function is a pg_tle type output function.
+ *
+ * A function is considered as pg_tle type I/O function when
+ * 1. It's defined in C language;
+ * 2. prosrc is TLE_BASE_TYPE_IN/TLE_BASE_TYPE_OUT.
+ */
+static bool
+is_pgtle_io_func(Oid funcid, bool typeInput)
+{
+	HeapTuple	tuple;
+	Form_pg_proc proc;
+	Datum		prosrcattr;
+	char	   *prosrcstring;
+	bool		isnull;
+
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+
+	proc = (Form_pg_proc) GETSTRUCT(tuple);
+	if (proc->prolang != ClanguageId)
+	{
+		ReleaseSysCache(tuple);
+		return false;
+	}
+
+	prosrcattr = SysCacheGetAttr(PROCOID, tuple,
+								 Anum_pg_proc_prosrc, &isnull);
+	Assert(!isnull);
+
+	prosrcstring = TextDatumGetCString(prosrcattr);
+	ReleaseSysCache(tuple);
+	return strcmp(prosrcstring, typeInput ? TLE_BASE_TYPE_IN : TLE_BASE_TYPE_OUT) == 0;
+}
+
+/*
+ * pg_tle_operator_func
+ *
+ * This function is used by pg_tle type operator function. Based on the C operator function,
+ * we can find the corresponding user-defined operator function, and calls the user-defined operator function.
+ */
+PG_FUNCTION_INFO_V1(pg_tle_operator_func);
+Datum
+pg_tle_operator_func(PG_FUNCTION_ARGS)
+{
+	Datum		result;
+	Oid			userFunc;
+	List	   *procname;
+	Oid		   *argtypes = NULL;
+	int			nargs = 0;
+
+	procname = get_qualified_funcname(fcinfo->flinfo->fn_oid);
+	get_func_signature(fcinfo->flinfo->fn_oid, &argtypes, &nargs);
+	if (nargs != 1 && nargs != 2)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				 errmsg("operator function %s must accept one or two arguments",
+						func_signature_string(procname, nargs, NIL, argtypes))));
+
+	argtypes[0] = BYTEAOID;
+	if (nargs == 2)
+		argtypes[1] = BYTEAOID;
+
+	userFunc = LookupFuncName(procname, nargs, argtypes, true);
+	if (!OidIsValid(userFunc))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_FUNCTION),
+				 errmsg("function %s does not exist",
+						func_signature_string(procname, nargs, NIL, argtypes))));
+
+	if (nargs == 1)
+		result = OidFunctionCall1Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0));
+	else
+		result = OidFunctionCall2Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1));
+
+	return result;
 }

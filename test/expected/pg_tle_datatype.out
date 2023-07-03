@@ -133,6 +133,7 @@ SELECT * FROM test_dt;
  
 (1 row)
 
+DROP TABLE test_dt;
 -- create_base_type fails on duplicates
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 ERROR:  type "test_citext" already exists
@@ -143,29 +144,276 @@ SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citex
  f
 (1 row)
 
+CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) 
+RETURNS int AS
+$$
+  SELECT pg_catalog.bttextcmp(pg_catalog.lower(pg_catalog.convert_from(l, 'UTF8')), pg_catalog.lower(pg_catalog.convert_from(r, 'UTF8')));
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_lt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) < 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_eq(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) = 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_le(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) <= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_gt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) > 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_ge(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) >= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_ne(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) != 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.invalid_operator_func1(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.invalid_operator_func2(r1 bytea, r2 bytea, r3 bytea) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+-- invalid operator func
+SELECT pgtle.create_operator_func('public', 'test_citext', 'pg_catalog.bttextcmp(text, text)'::regprocedure);
+ERROR:  must be owner of function bttextcmp
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func1(test_citext, test_citext)'::regprocedure);
+ERROR:  type opeartor function must accept one or two arguments of type bytea
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func2(bytea, bytea, bytea)'::regprocedure);
+ERROR:  type opeartor function must accept one or two arguments of type bytea
+-- create_operator_func fails on duplicate
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ERROR:  function "public.test_citext_cmp" already exists
+-- create_operator_func returns false on duplicate
+SELECT pgtle.create_operator_func_if_not_exists('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func_if_not_exists 
+------------------------------------
+ f
+(1 row)
+
+DROP FUNCTION invalid_operator_func1;
+DROP FUNCTION invalid_operator_func2;
+DROP FUNCTION test_citext_cmp(test_citext, test_citext);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_lt(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_le(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_eq(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ne(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_gt(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ge(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+RESET SESSION AUTHORIZATION;
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+-- Regular user can use the newly created type
+SET SESSION AUTHORIZATION dbstaff;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+INSERT INTO test_dt VALUES ('select');
+ERROR:  duplicate key value violates unique constraint "test_dt_pkey"
+DETAIL:  Key (c1)=(select) already exists.
+DROP TABLE test_dt;
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
 ERROR:  cannot drop function test_citext_in(text) because other objects depend on it
 DETAIL:  function test_citext_in(cstring) depends on function test_citext_in(text)
 type test_citext depends on function test_citext_in(cstring)
 function test_citext_out(test_citext) depends on type test_citext
-column c1 of table test_dt depends on type test_citext
+function test_citext_cmp(test_citext,test_citext) depends on type test_citext
+function test_citext_lt(test_citext,test_citext) depends on type test_citext
+function test_citext_le(test_citext,test_citext) depends on type test_citext
+function test_citext_eq(test_citext,test_citext) depends on type test_citext
+function test_citext_ne(test_citext,test_citext) depends on type test_citext
+function test_citext_gt(test_citext,test_citext) depends on type test_citext
+function test_citext_ge(test_citext,test_citext) depends on type test_citext
+operator >(test_citext,test_citext) depends on type test_citext
+operator >=(test_citext,test_citext) depends on type test_citext
+operator <(test_citext,test_citext) depends on type test_citext
+operator <=(test_citext,test_citext) depends on type test_citext
+operator <>(test_citext,test_citext) depends on type test_citext
+operator =(test_citext,test_citext) depends on type test_citext
+operator class test_citext_ops for access method btree depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_out(bytea);
 ERROR:  cannot drop function test_citext_out(bytea) because other objects depend on it
 DETAIL:  function test_citext_out(test_citext) depends on function test_citext_out(bytea)
 type test_citext depends on function test_citext_out(test_citext)
 function test_citext_in(cstring) depends on type test_citext
-column c1 of table test_dt depends on type test_citext
+function test_citext_cmp(test_citext,test_citext) depends on type test_citext
+function test_citext_lt(test_citext,test_citext) depends on type test_citext
+function test_citext_le(test_citext,test_citext) depends on type test_citext
+function test_citext_eq(test_citext,test_citext) depends on type test_citext
+function test_citext_ne(test_citext,test_citext) depends on type test_citext
+function test_citext_gt(test_citext,test_citext) depends on type test_citext
+function test_citext_ge(test_citext,test_citext) depends on type test_citext
+operator >(test_citext,test_citext) depends on type test_citext
+operator >=(test_citext,test_citext) depends on type test_citext
+operator <(test_citext,test_citext) depends on type test_citext
+operator <=(test_citext,test_citext) depends on type test_citext
+operator <>(test_citext,test_citext) depends on type test_citext
+operator =(test_citext,test_citext) depends on type test_citext
+operator class test_citext_ops for access method btree depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_in(text) CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 17 other objects
 DETAIL:  drop cascades to function test_citext_in(cstring)
 drop cascades to type test_citext
 drop cascades to function test_citext_out(test_citext)
-drop cascades to column c1 of table test_dt
+drop cascades to function test_citext_cmp(test_citext,test_citext)
+drop cascades to function test_citext_lt(test_citext,test_citext)
+drop cascades to function test_citext_le(test_citext,test_citext)
+drop cascades to function test_citext_eq(test_citext,test_citext)
+drop cascades to function test_citext_ne(test_citext,test_citext)
+drop cascades to function test_citext_gt(test_citext,test_citext)
+drop cascades to function test_citext_ge(test_citext,test_citext)
+drop cascades to operator >(test_citext,test_citext)
+drop cascades to operator >=(test_citext,test_citext)
+drop cascades to operator <(test_citext,test_citext)
+drop cascades to operator <=(test_citext,test_citext)
+drop cascades to operator <>(test_citext,test_citext)
+drop cascades to operator =(test_citext,test_citext)
+drop cascades to operator class test_citext_ops for access method btree
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
+ERROR:  table "test_dt" does not exist
+-- Drop user-defined operator functions
+DROP FUNCTION test_citext_cmp;
+DROP FUNCTION test_citext_eq;
+DROP FUNCTION test_citext_ne;
+DROP FUNCTION test_citext_lt;
+DROP FUNCTION test_citext_le;
+DROP FUNCTION test_citext_gt;
+DROP FUNCTION test_citext_ge;
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');
  create_shell_type 
