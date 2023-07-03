@@ -480,7 +480,7 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 
 	funcArgList[0] = CSTRINGOID;
 	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
-							  makeString(NameStr(proc->proname)));
+							  makeString(pstrdup(NameStr(proc->proname))));
 	ReleaseSysCache(tuple);
 
 	if (OidIsValid(LookupFuncName(funcNameList, 1, funcArgList, true)))
@@ -703,7 +703,7 @@ get_qualified_funcname(Oid funcid)
 
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
 	inputNames = list_make2(makeString(get_namespace_name(proc->pronamespace)),
-							makeString(NameStr(proc->proname)));
+							makeString(pstrdup(NameStr(proc->proname))));
 	ReleaseSysCache(tuple);
 	return inputNames;
 }
@@ -805,6 +805,7 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 	List	   *funcNameList;
 	Oid		   *argTypes;
 	int			nargs;
+	int			i;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -819,16 +820,6 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 				 errmsg("type operator function cannot be defined in C or internal")));
 	}
 
-	nargs = proc->pronargs;
-	if (!((nargs == 1 && proc->proargtypes.values[0] == BYTEAOID) ||
-		  (nargs == 2 && proc->proargtypes.values[0] == BYTEAOID && proc->proargtypes.values[1] == BYTEAOID)))
-	{
-		ReleaseSysCache(tuple);
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type opeartor function must accept one or two arguments of type bytea")));
-	}
-
 	if (proc->pronamespace != expectedNamespace)
 	{
 		ReleaseSysCache(tuple);
@@ -837,13 +828,30 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 				 errmsg("type operator functions must exist in the same namespace as the type")));
 	}
 
+	nargs = proc->pronargs;
+	if (nargs != 1 && nargs != 2)
+	{
+		ReleaseSysCache(tuple);
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+				 errmsg("type opeartor function must accept one or two arguments of bytea")));
+	}
+
 	argTypes = (Oid *) palloc(nargs * sizeof(Oid));
-	argTypes[0] = typeOid;
-	if (nargs == 2)
-		argTypes[1] = typeOid;
+	for (i = 0; i < nargs; i++)
+	{
+		if (proc->proargtypes.values[i] != BYTEAOID)
+		{
+			ReleaseSysCache(tuple);
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+					 errmsg("type operator function must accept arguments of bytea")));
+		}
+		argTypes[i] = typeOid;
+	}
 
 	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
-							  makeString(NameStr(proc->proname)));
+							  makeString(pstrdup(NameStr(proc->proname))));
 	ReleaseSysCache(tuple);
 	if (OidIsValid(LookupFuncName(funcNameList, nargs, argTypes, true)))
 		ereport(ERROR,

@@ -193,9 +193,9 @@ $$ IMMUTABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_operator_func('public', 'test_citext', 'pg_catalog.bttextcmp(text, text)'::regprocedure);
 ERROR:  must be owner of function bttextcmp
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func1(test_citext, test_citext)'::regprocedure);
-ERROR:  type opeartor function must accept one or two arguments of type bytea
+ERROR:  type operator function must accept arguments of bytea
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func2(bytea, bytea, bytea)'::regprocedure);
-ERROR:  type opeartor function must accept one or two arguments of type bytea
+ERROR:  type opeartor function must accept one or two arguments of bytea
 -- create_operator_func fails on duplicate
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
  create_operator_func 
