@@ -531,6 +531,13 @@ SELECT pgtle.uninstall_extension('test42');
 
 SELECT pgtle.available_extension_versions();
 
+-- Skip TransactionStmts
+BEGIN;
+SELECT pgtle.available_extension_versions();
+SELECT 1/0;
+SELECT pgtle.available_extension_versions();
+ROLLBACK;
+
 -- clean up
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION superuser_only();
