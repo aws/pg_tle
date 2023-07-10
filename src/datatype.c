@@ -696,15 +696,19 @@ get_qualified_funcname(Oid funcid)
 	HeapTuple	tuple;
 	Form_pg_proc proc;
 	List	   *inputNames = NIL;
+	char	   *nspanme;
+	char	   *proname;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcid);
 
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
-	inputNames = list_make2(makeString(get_namespace_name(proc->pronamespace)),
-							makeString(pstrdup(NameStr(proc->proname))));
+	nspanme = get_namespace_name(proc->pronamespace);
+	proname = pstrdup(NameStr(proc->proname));
 	ReleaseSysCache(tuple);
+
+	inputNames = list_make2(makeString(nspanme), makeString(proname));
 	return inputNames;
 }
 
@@ -728,6 +732,7 @@ pg_tle_create_operator_func(PG_FUNCTION_ARGS)
 	Oid		   *argTypes;
 	AclResult	aclresult;
 	char	   *namespaceName;
+	int			i;
 
 	/*
 	 * Even though the SQL function is locked down so only a member of
@@ -775,9 +780,8 @@ pg_tle_create_operator_func(PG_FUNCTION_ARGS)
 	 */
 	nargs = get_func_nargs(funcOid);
 	argTypes = (Oid *) palloc(nargs * sizeof(Oid));
-	argTypes[0] = typeOid;
-	if (nargs == 2)
-		argTypes[1] = typeOid;
+	for (i = 0; i < nargs; ++i)
+		argTypes[i] = typeOid;
 
 	create_c_func_internal(typeNamespace, funcOid,
 						   buildoidvector(argTypes, nargs),
@@ -829,7 +833,7 @@ check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace)
 	}
 
 	nargs = proc->pronargs;
-	if (nargs != 1 && nargs != 2)
+	if (nargs < 1 || nargs > 2)
 	{
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
@@ -896,7 +900,7 @@ check_pgtle_base_type(Oid typeOid)
 
 	CHECK_CAN_SET_ROLE(typeOwner, tleadminoid);
 
-	if (!is_pgtle_io_func(inputOid, true) || !is_pgtle_io_func(outputOid, false))
+	if (!(is_pgtle_io_func(inputOid, true) && is_pgtle_io_func(outputOid, false)))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("type %s is not a pg_tle defined base type", format_type_be(typeOid))));
@@ -921,6 +925,7 @@ is_pgtle_io_func(Oid funcid, bool typeInput)
 	Datum		prosrcattr;
 	char	   *prosrcstring;
 	bool		isnull;
+	char	   *expectedProsrc;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -939,7 +944,8 @@ is_pgtle_io_func(Oid funcid, bool typeInput)
 
 	prosrcstring = TextDatumGetCString(prosrcattr);
 	ReleaseSysCache(tuple);
-	return strcmp(prosrcstring, typeInput ? TLE_BASE_TYPE_IN : TLE_BASE_TYPE_OUT) == 0;
+	expectedProsrc = typeInput ? TLE_BASE_TYPE_IN : TLE_BASE_TYPE_OUT;
+	return strncmp(prosrcstring, expectedProsrc, sizeof(*expectedProsrc)) == 0;
 }
 
 /*
@@ -952,23 +958,22 @@ PG_FUNCTION_INFO_V1(pg_tle_operator_func);
 Datum
 pg_tle_operator_func(PG_FUNCTION_ARGS)
 {
-	Datum		result;
 	Oid			userFunc;
 	List	   *procname;
 	Oid		   *argtypes = NULL;
 	int			nargs = 0;
+	int			i = 0;
 
 	procname = get_qualified_funcname(fcinfo->flinfo->fn_oid);
 	get_func_signature(fcinfo->flinfo->fn_oid, &argtypes, &nargs);
-	if (nargs != 1 && nargs != 2)
+	if (nargs < 1 || nargs > 2)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("operator function %s must accept one or two arguments",
 						func_signature_string(procname, nargs, NIL, argtypes))));
 
-	argtypes[0] = BYTEAOID;
-	if (nargs == 2)
-		argtypes[1] = BYTEAOID;
+	for (i = 0; i < nargs; ++i)
+		argtypes[i] = BYTEAOID;
 
 	userFunc = LookupFuncName(procname, nargs, argtypes, true);
 	if (!OidIsValid(userFunc))
@@ -978,9 +983,7 @@ pg_tle_operator_func(PG_FUNCTION_ARGS)
 						func_signature_string(procname, nargs, NIL, argtypes))));
 
 	if (nargs == 1)
-		result = OidFunctionCall1Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0));
-	else
-		result = OidFunctionCall2Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1));
+		return OidFunctionCall1Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0));
 
-	return result;
+	return OidFunctionCall2Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1));
 }
