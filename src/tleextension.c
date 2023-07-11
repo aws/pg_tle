@@ -2303,10 +2303,10 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	 * based on extension name and version
 	 */
 	extname = stmt->extname;
+	pcontrol = read_extension_control_file(extname);
 
 	if (versionName == NULL)
 	{
-		pcontrol = read_extension_control_file(extname);
 		if (pcontrol->default_version)
 			versionName = pcontrol->default_version;
 		else

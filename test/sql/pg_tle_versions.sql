@@ -7,7 +7,9 @@
 /*
 * 1. Test that an existing version of an extension cannot be installed again
 * 2. Test that a different version of an installed extension can be installed
-* 3. Test that CREATE EXTENSION automatically updates to default version
+* 3. Test that CREATE EXTENSION with an explicit version automatically updates
+*    to that version
+* 4. Test that CREATE EXTENSION automatically updates to default version
 */
 
 \pset pager off
@@ -97,6 +99,12 @@ $_pgtle_$
   )$$ LANGUAGE sql;
 $_pgtle_$
 );
+
+-- test that CREATE EXTENSION version 1.1 works
+CREATE EXTENSION test123 version '1.1';
+SELECT test123_func();
+SELECT test123_func_2();
+DROP EXTENSION test123;
 
 -- if version 1.1 is set as default, then it should be create-able via the upgrade path
 SELECT pgtle.set_default_version('test123', '1.1');
