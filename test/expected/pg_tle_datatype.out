@@ -10,8 +10,17 @@ CREATE ROLE dbadmin;
 GRANT pgtle_admin TO dbadmin;
 -- create unprivileged role to create trusted extensions
 CREATE ROLE dbstaff;
-GRANT CREATE, USAGE ON SCHEMA PUBLIC TO pgtle_admin;
+-- test roles: 
+-- dbuser1 has pgtle_admin privilege but no CREATE on SCHEMA PUBLIC
+-- dbuser2 has pgtle_admin privilege
+CREATE ROLE dbuser1;
+CREATE ROLE dbuser2;
+GRANT pgtle_admin TO dbuser1;
+GRANT pgtle_admin TO dbuser2;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbadmin;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
+GRANT USAGE ON SCHEMA PUBLIC TO dbuser1;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbuser2;
 SET search_path TO pgtle,public;
 -- unprivileged role cannot execute pgtle.create_shell_type and create_shell_type_if_not_exists
 SET SESSION AUTHORIZATION dbstaff;
@@ -133,6 +142,7 @@ SELECT * FROM test_dt;
  
 (1 row)
 
+DROP TABLE test_dt;
 -- create_base_type fails on duplicates
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 ERROR:  type "test_citext" already exists
@@ -143,29 +153,269 @@ SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citex
  f
 (1 row)
 
+CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) 
+RETURNS int AS
+$$
+  SELECT pg_catalog.bttextcmp(pg_catalog.lower(pg_catalog.convert_from(l, 'UTF8')), pg_catalog.lower(pg_catalog.convert_from(r, 'UTF8')));
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_lt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) < 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_eq(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) = 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_le(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) <= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_gt(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) > 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_ge(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) >= 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.test_citext_ne(l bytea, r bytea) 
+RETURNS boolean AS
+$$
+    SELECT public.test_citext_cmp(l, r) != 0;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.invalid_operator_func1(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE FUNCTION public.invalid_operator_func2(r1 bytea, r2 bytea, r3 bytea) 
+RETURNS boolean AS
+$$
+    SELECT 1 = 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+-- not owner of the operator function
+SELECT pgtle.create_operator_func('public', 'test_citext', 'pg_catalog.bttextcmp(text, text)'::regprocedure);
+ERROR:  must be owner of function bttextcmp
+-- wrong operator funcion arguments
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func1(test_citext, test_citext)'::regprocedure);
+ERROR:  type operator function must accept arguments of bytea
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_operator_func2(bytea, bytea, bytea)'::regprocedure);
+ERROR:  type opeartor function must accept one or two arguments of bytea
+-- unprivileged role cannot run create_operator_func
+SET SESSION AUTHORIZATION dbstaff;
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ERROR:  permission denied for function create_operator_func
+-- no CREATE priviliege in the namespace
+SET SESSION AUTHORIZATION dbuser1;
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ERROR:  permission denied for schema public
+-- not owner of the base type
+SET SESSION AUTHORIZATION dbuser2;
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ERROR:  must be owner of type public.test_citext
+SET SESSION AUTHORIZATION dbadmin;
+-- create_operator_func fails on duplicate
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ERROR:  function "public.test_citext_cmp" already exists
+-- create_operator_func returns false on duplicate
+SELECT pgtle.create_operator_func_if_not_exists('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func_if_not_exists 
+------------------------------------
+ f
+(1 row)
+
+DROP FUNCTION invalid_operator_func1;
+DROP FUNCTION invalid_operator_func2;
+DROP FUNCTION test_citext_cmp(test_citext, test_citext);
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_lt(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_le(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_eq(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ne(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_gt(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ge(bytea, bytea)'::regprocedure);
+ create_operator_func 
+----------------------
+ 
+(1 row)
+
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+RESET SESSION AUTHORIZATION;
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+-- Regular user can use the newly created type
+SET SESSION AUTHORIZATION dbstaff;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbstaff
+(1 row)
+
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+INSERT INTO test_dt VALUES ('select');
+ERROR:  duplicate key value violates unique constraint "test_dt_pkey"
+DETAIL:  Key (c1)=(select) already exists.
+DROP TABLE test_dt;
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+-- Drop user-defined operator functions
+DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_cmp(test_citext,test_citext)
+drop cascades to operator class test_citext_ops for access method btree
+DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_eq(test_citext,test_citext)
+drop cascades to operator =(test_citext,test_citext)
+DROP FUNCTION test_citext_ne(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_ne(test_citext,test_citext)
+drop cascades to operator <>(test_citext,test_citext)
+DROP FUNCTION test_citext_lt(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_lt(test_citext,test_citext)
+drop cascades to operator <(test_citext,test_citext)
+DROP FUNCTION test_citext_le(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_le(test_citext,test_citext)
+drop cascades to operator <=(test_citext,test_citext)
+DROP FUNCTION test_citext_gt(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_gt(test_citext,test_citext)
+drop cascades to operator >(test_citext,test_citext)
+DROP FUNCTION test_citext_ge(bytea, bytea) CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function test_citext_ge(test_citext,test_citext)
+drop cascades to operator >=(test_citext,test_citext)
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
 ERROR:  cannot drop function test_citext_in(text) because other objects depend on it
 DETAIL:  function test_citext_in(cstring) depends on function test_citext_in(text)
 type test_citext depends on function test_citext_in(cstring)
 function test_citext_out(test_citext) depends on type test_citext
-column c1 of table test_dt depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_out(bytea);
 ERROR:  cannot drop function test_citext_out(bytea) because other objects depend on it
 DETAIL:  function test_citext_out(test_citext) depends on function test_citext_out(bytea)
 type test_citext depends on function test_citext_out(test_citext)
 function test_citext_in(cstring) depends on type test_citext
-column c1 of table test_dt depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_in(text) CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to function test_citext_in(cstring)
 drop cascades to type test_citext
 drop cascades to function test_citext_out(test_citext)
-drop cascades to column c1 of table test_dt
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
+ERROR:  table "test_dt" does not exist
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');
  create_shell_type 
@@ -226,10 +476,14 @@ DROP FUNCTION test_int2_out(bytea) CASCADE;
 DROP TABLE test_dt;
 -- clean up
 RESET SESSION AUTHORIZATION;
-REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM pgtle_admin;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbadmin;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
+REVOKE USAGE ON SCHEMA PUBLIC FROM dbuser1;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbuser2;
 DROP ROLE dbstaff;
 DROP ROLE dbadmin;
+DROP ROLE dbuser1;
+DROP ROLE dbuser2;
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
 DROP ROLE pgtle_admin;
