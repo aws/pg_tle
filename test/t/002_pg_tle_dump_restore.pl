@@ -12,6 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+# Test that pg_dump and pg_restore work with pg_tle functionality.
+#
+# 1. Install and create a regular TLE
+# 2. Install and create a TLE with an indirect version upgrade path
+# 3. Create a custom data type
+# 4. Create a custom operator
+
 use strict;
 use warnings;
 
@@ -33,6 +40,8 @@ my ($stdout, $stderr);
 $node->psql($testdb, "CREATE EXTENSION pg_tle", stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'create_pg_tle');
 
+# 1. Install and create a TLE
+
 $node->psql(
     $testdb, qq[
     SELECT pgtle.install_extension
@@ -50,6 +59,14 @@ $node->psql(
     );
     ], stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'install_tle');
+
+$node->psql($testdb, "CREATE EXTENSION test123", stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_tle');
+
+$node->psql($testdb, 'SELECT test123_func()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/42/, 'select_tle_function');
+
+# 2. Install and create a TLE with an indirect version
 
 $node->psql(
     $testdb, qq[
@@ -87,12 +104,6 @@ $node->psql(
     ], stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'install_tle_update_path');
 
-$node->psql($testdb, "CREATE EXTENSION test123", stdout => \$stdout, stderr => \$stderr);
-like  ($stderr, qr//, 'create_tle');
-
-$node->psql($testdb, 'SELECT test123_func()', stdout => \$stdout, stderr => \$stderr);
-like  ($stdout, qr/42/, 'select_tle_function');
-
 $node->psql($testdb, 'SELECT pgtle.set_default_version(\'foo\', \'1.1\')', stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'set_default_version');
 
@@ -101,6 +112,74 @@ like  ($stderr, qr//, 'create_tle_2');
 
 $node->psql($testdb, 'SELECT bar()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/1/, 'select_tle_function_2');
+
+# 3. Create a custom data type
+
+$node->psql($testdb, 'SELECT pgtle.create_shell_type(\'public\', \'test_citext\')', stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_shell_type');
+$node->psql($testdb, qq[CREATE FUNCTION public.test_citext_in(input text) RETURNS bytea AS
+    \$\$
+        SELECT pg_catalog.convert_to(input, 'UTF8');
+    \$\$ IMMUTABLE STRICT LANGUAGE sql], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_input_function');
+$node->psql($testdb, qq[CREATE FUNCTION public.test_citext_out(input bytea) RETURNS text AS
+    \$\$
+        SELECT pg_catalog.convert_from(input, 'UTF8');
+    \$\$ IMMUTABLE STRICT LANGUAGE sql], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_output_function');
+$node->psql($testdb, qq[SELECT pgtle.create_base_type(
+    'public',
+    'test_citext',
+    'test_citext_in(text)'::regprocedure,
+    'test_citext_out(bytea)'::regprocedure,
+    -1)], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_output_function');
+
+# and create a table with it
+
+$node->psql($testdb, 'CREATE TABLE test_dt(c1 test_citext)', stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_custom_data_type_table');
+$node->psql($testdb, 'INSERT INTO test_dt VALUES (\'TEST\')', stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'insert_custom_data_type');
+$node->psql($testdb, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/TEST/, 'select_custom_data_type');
+
+# 4. Create a custom data operator
+
+$node->psql($testdb, qq[CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) RETURNS int AS
+    \$\$
+        SELECT pg_catalog.bttextcmp(pg_catalog.lower(pg_catalog.convert_from(l, 'UTF8')), pg_catalog.lower(pg_catalog.convert_from(r, 'UTF8')));
+    \$\$ IMMUTABLE STRICT LANGUAGE sql], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_custom_operator_cmp');
+$node->psql($testdb, qq[CREATE FUNCTION public.test_citext_eq(l bytea, r bytea) RETURNS boolean AS
+    \$\$
+        SELECT public.test_citext_cmp(l, r) = 0;
+    \$\$ IMMUTABLE STRICT LANGUAGE sql], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_custom_operator_eq');
+$node->psql($testdb,
+    qq[SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure)],
+    stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_operator_func_cmp');
+$node->psql($testdb,
+    qq[SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_eq(bytea, bytea)'::regprocedure)],
+    stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_operator_func_eq');
+
+$node->psql($testdb, qq[
+    CREATE OPERATOR = (
+        LEFTARG = public.test_citext,
+        RIGHTARG = public.test_citext,
+        COMMUTATOR = =,
+        NEGATOR = <>,
+        RESTRICT = eqsel,
+        JOIN = eqjoinsel,
+        HASHES,
+        MERGES,
+        PROCEDURE = public.test_citext_eq
+    )], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_operator');
+$node->psql($testdb, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/t/, 'operator');
 
 # pg_dump the database to sql
 $node->command_ok(
@@ -128,12 +207,26 @@ $node->command_ok(
     'restore new db from sql dump'
 );
 
+# 1. Verify TLE
+
 $node->psql($restored_db, 'SELECT test123_func()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/42/, 'select_tle_function_from_restored_db');
+
+# 2. Verify TLE with indirect version
 
 $node->psql($restored_db, 'SELECT bar()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_2');
 
-$node->stop('fast');
+# 3. Verify custom data type
 
+$node->psql($testdb, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/TEST/, 'select_custom_data_type_from_restored_db');
+
+# 4. Verify custom data operator
+
+$node->psql($testdb, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/t/, 'operator_from_restored_db');
+
+# Test complete
+$node->stop('fast');
 done_testing();
