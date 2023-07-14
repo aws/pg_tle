@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_cast.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
@@ -368,6 +369,9 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 				InvalidOid);	/* type's collation */
 
 	pfree(array_type);
+
+	/* Create explicit cast from the base type to bytea */
+	CAST_CREATE(typeOid, BYTEAOID, InvalidOid, 'e', 'b', DEPENDENCY_NORMAL);
 
 	PG_RETURN_VOID();
 }
