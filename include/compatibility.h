@@ -22,7 +22,6 @@
 #include "catalog/genbki.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_cast.h"
-#include "catalog/pg_cast_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
