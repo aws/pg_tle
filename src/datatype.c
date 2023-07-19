@@ -388,6 +388,7 @@ find_user_defined_func(List *procname, bool typeInput)
 {
 	Oid			argList[1];
 	Oid			procOid;
+	Oid			expectedRetType;	
 	char	   *funcType;
 
 	/*
@@ -396,6 +397,7 @@ find_user_defined_func(List *procname, bool typeInput)
 	 * argument of the bytea and return text.
 	 */
 	argList[0] = typeInput ? TEXTOID : BYTEAOID;
+	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
 	funcType = typeInput ? "input" : "output";
 
 	procOid = LookupFuncName(procname, 1, argList, true);
@@ -406,19 +408,15 @@ find_user_defined_func(List *procname, bool typeInput)
 				 errmsg("function %s does not exist",
 						func_signature_string(procname, 1, NIL, argList))));
 
-	/* User-defined input functions must return bytea. */
-	if (typeInput && get_func_rettype(procOid) != BYTEAOID)
+	/* 
+	 * User-defined input functions must return bytea while user-defined output 
+	 * functions must return text.
+	 */
+	if (get_func_rettype(procOid) != expectedRetType)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("type %s function %s must return type %s",
 						funcType, NameListToString(procname), format_type_be(BYTEAOID))));
-
-	/* User-defined output functions must return text. */
-	if (!typeInput && get_func_rettype(procOid) != TEXTOID)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("type %s function %s must return type %s",
-						funcType, NameListToString(procname), format_type_be(TEXTOID))));
 
 	return procOid;
 }
