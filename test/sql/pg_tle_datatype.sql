@@ -267,6 +267,150 @@ DROP TABLE test_dt;
 SET SESSION AUTHORIZATION dbadmin;
 SELECT CURRENT_USER;
 
+-- Drop C-version operator functions cascades to operator class
+DROP FUNCTION test_citext_cmp(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_eq(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_ne(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_lt(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_le(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_gt(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_ge(test_citext, test_citext) CASCADE;
+
+-- Use explicit cast to create operator functions
+CREATE FUNCTION public.test_citext_cmp(l test_citext, r test_citext) 
+RETURNS int AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_eq(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_eq(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_ne(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_ne(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_lt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_lt(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_le(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_le(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_gt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_gt(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_ge(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_ge(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+
+RESET SESSION AUTHORIZATION;
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+INSERT INTO test_dt VALUES ('select');
+
 -- Drop user-defined operator functions
 DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
 DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
@@ -275,6 +419,13 @@ DROP FUNCTION test_citext_lt(bytea, bytea) CASCADE;
 DROP FUNCTION test_citext_le(bytea, bytea) CASCADE;
 DROP FUNCTION test_citext_gt(bytea, bytea) CASCADE;
 DROP FUNCTION test_citext_ge(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_cmp(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_eq(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_ne(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_lt(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_le(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_gt(test_citext, test_citext) CASCADE;
+DROP FUNCTION test_citext_ge(test_citext, test_citext) CASCADE;
 
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
@@ -307,6 +458,15 @@ END
 $$ IMMUTABLE STRICT LANGUAGE plpgsql;
 
 SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
+
+CREATE TABLE test_cast(c1 bytea);
+-- Implicit cast from test_int2 to bytea is allowed.
+INSERT INTO test_cast(c1) VALUES ('11,22'::test_int2);
+-- Explicit cast from test_int2 to bytea is allowed.
+INSERT INTO test_cast(c1) VALUES (CAST('11,22'::test_int2 AS bytea));
+-- Explicit cast from bytea to test_int2 is not allowed.
+SELECT CAST('\x0b16'::bytea AS test_int2);
+DROP TABLE test_cast;
 
 CREATE TABLE test_dt(c1 test_int2);
 -- Insert a regular value

@@ -366,56 +366,198 @@ SELECT CURRENT_USER;
  dbadmin
 (1 row)
 
+-- Drop C-version operator functions cascades to operator class
+DROP FUNCTION test_citext_cmp(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator class test_citext_ops for access method btree
+DROP FUNCTION test_citext_eq(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator =(test_citext,test_citext)
+DROP FUNCTION test_citext_ne(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <>(test_citext,test_citext)
+DROP FUNCTION test_citext_lt(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <(test_citext,test_citext)
+DROP FUNCTION test_citext_le(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <=(test_citext,test_citext)
+DROP FUNCTION test_citext_gt(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator >(test_citext,test_citext)
+DROP FUNCTION test_citext_ge(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator >=(test_citext,test_citext)
+-- Use explicit cast to create operator functions
+CREATE FUNCTION public.test_citext_cmp(l test_citext, r test_citext) 
+RETURNS int AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_eq(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_eq(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_ne(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_ne(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_lt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_lt(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_le(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_le(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_gt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_gt(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE FUNCTION public.test_citext_ge(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_ge(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+RESET SESSION AUTHORIZATION;
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+SET SESSION AUTHORIZATION dbadmin;
+SELECT CURRENT_USER;
+ current_user 
+--------------
+ dbadmin
+(1 row)
+
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+INSERT INTO test_dt VALUES ('select');
+ERROR:  duplicate key value violates unique constraint "test_dt_pkey"
+DETAIL:  Key (c1)=(select) already exists.
 -- Drop user-defined operator functions
 DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_cmp(test_citext,test_citext)
-drop cascades to operator class test_citext_ops for access method btree
 DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_eq(test_citext,test_citext)
-drop cascades to operator =(test_citext,test_citext)
 DROP FUNCTION test_citext_ne(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_ne(test_citext,test_citext)
-drop cascades to operator <>(test_citext,test_citext)
 DROP FUNCTION test_citext_lt(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_lt(test_citext,test_citext)
-drop cascades to operator <(test_citext,test_citext)
 DROP FUNCTION test_citext_le(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_le(test_citext,test_citext)
-drop cascades to operator <=(test_citext,test_citext)
 DROP FUNCTION test_citext_gt(bytea, bytea) CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_gt(test_citext,test_citext)
-drop cascades to operator >(test_citext,test_citext)
 DROP FUNCTION test_citext_ge(bytea, bytea) CASCADE;
+DROP FUNCTION test_citext_cmp(test_citext, test_citext) CASCADE;
 NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to function test_citext_ge(test_citext,test_citext)
-drop cascades to operator >=(test_citext,test_citext)
+DETAIL:  drop cascades to operator class test_citext_ops for access method btree
+drop cascades to constraint test_dt_pkey on table test_dt
+DROP FUNCTION test_citext_eq(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator =(test_citext,test_citext)
+DROP FUNCTION test_citext_ne(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <>(test_citext,test_citext)
+DROP FUNCTION test_citext_lt(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <(test_citext,test_citext)
+DROP FUNCTION test_citext_le(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator <=(test_citext,test_citext)
+DROP FUNCTION test_citext_gt(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator >(test_citext,test_citext)
+DROP FUNCTION test_citext_ge(test_citext, test_citext) CASCADE;
+NOTICE:  drop cascades to operator >=(test_citext,test_citext)
 -- Drop the user-defined I/O function will dropping the custom type in cascade
 DROP FUNCTION test_citext_in(text);
 ERROR:  cannot drop function test_citext_in(text) because other objects depend on it
 DETAIL:  function test_citext_in(cstring) depends on function test_citext_in(text)
 type test_citext depends on function test_citext_in(cstring)
 function test_citext_out(test_citext) depends on type test_citext
+cast from test_citext to bytea depends on type test_citext
+column c1 of table test_dt depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_out(bytea);
 ERROR:  cannot drop function test_citext_out(bytea) because other objects depend on it
 DETAIL:  function test_citext_out(test_citext) depends on function test_citext_out(bytea)
 type test_citext depends on function test_citext_out(test_citext)
 function test_citext_in(cstring) depends on type test_citext
+cast from test_citext to bytea depends on type test_citext
+column c1 of table test_dt depends on type test_citext
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FUNCTION test_citext_in(text) CASCADE;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_citext_in(cstring)
 drop cascades to type test_citext
 drop cascades to function test_citext_out(test_citext)
+drop cascades to cast from test_citext to bytea
+drop cascades to column c1 of table test_dt
 DROP FUNCTION test_citext_out(bytea) CASCADE;
 DROP TABLE test_dt;
-ERROR:  table "test_dt" does not exist
 -- A fixed length custom type int2: a 2-element vector of one byte integer value
 SELECT pgtle.create_shell_type('public', 'test_int2');
  create_shell_type 
@@ -448,6 +590,21 @@ SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regpr
  
 (1 row)
 
+CREATE TABLE test_cast(c1 bytea);
+-- Implicit cast from test_int2 to bytea is allowed.
+INSERT INTO test_cast(c1) VALUES ('11,22'::test_int2);
+ERROR:  column "c1" is of type bytea but expression is of type test_int2
+LINE 1: INSERT INTO test_cast(c1) VALUES ('11,22'::test_int2);
+                                          ^
+HINT:  You will need to rewrite or cast the expression.
+-- Explicit cast from test_int2 to bytea is allowed.
+INSERT INTO test_cast(c1) VALUES (CAST('11,22'::test_int2 AS bytea));
+-- Explicit cast from bytea to test_int2 is not allowed.
+SELECT CAST('\x0b16'::bytea AS test_int2);
+ERROR:  cannot cast type bytea to test_int2
+LINE 1: SELECT CAST('\x0b16'::bytea AS test_int2);
+               ^
+DROP TABLE test_cast;
 CREATE TABLE test_dt(c1 test_int2);
 -- Insert a regular value
 INSERT INTO test_dt VALUES ('11,22');
@@ -467,10 +624,11 @@ SELECT * FROM test_dt;
 (1 row)
 
 DROP FUNCTION test_int2_in(text) CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_int2_in(cstring)
 drop cascades to type test_int2
 drop cascades to function test_int2_out(test_int2)
+drop cascades to cast from test_int2 to bytea
 drop cascades to column c1 of table test_dt
 DROP FUNCTION test_int2_out(bytea) CASCADE;
 DROP TABLE test_dt;
