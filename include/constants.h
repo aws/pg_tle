@@ -33,6 +33,8 @@
 #define TLE_BASE_TYPE_IN         "pg_tle_base_type_in"
 #define TLE_BASE_TYPE_OUT        "pg_tle_base_type_out"
 #define TLE_OPERATOR_FUNC        "pg_tle_operator_func"
+#define TLE_INPUT_FUNC_STR       "input"
+#define TLE_OUTPUT_FUNC_STR      "output"
 
 /*
  * TLE_BASE_TYPE_SIZE_LIMIT is the maximum allowed size of pg_tle type.

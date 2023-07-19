@@ -77,6 +77,49 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 0);
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, 32767);
 
+-- Invalid: not owner of I/O function
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'pg_catalog.bttextcmp(text, text)'::regprocedure, -1);
+
+-- Invalid: I/O function argument length mistach
+CREATE FUNCTION public.test_citext_in2(input1 text, input2 text, input3 text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input1, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text, text, text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+DROP FUNCTION public.test_citext_in2;
+
+-- Invalid: I/O function argument type mistach
+CREATE FUNCTION public.test_citext_in2(input int) RETURNS bytea AS
+$$
+  SELECT '00'::bytea;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(int)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+DROP FUNCTION public.test_citext_in2;
+
+-- Invalid: I/O function return type mistach
+CREATE FUNCTION public.test_citext_in2(input text) RETURNS int AS
+$$
+  SELECT 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+DROP FUNCTION public.test_citext_in2;
+
+-- Invalid: I/O function not immutable
+CREATE FUNCTION public.test_citext_in2(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ STABLE STRICT LANGUAGE sql;
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+DROP FUNCTION public.test_citext_in2;
+
+-- Invalid: I/O function not strict
+CREATE FUNCTION public.test_citext_in2(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE LANGUAGE sql;
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+DROP FUNCTION public.test_citext_in2;
+
 -- Valid
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 
