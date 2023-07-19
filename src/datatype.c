@@ -416,7 +416,7 @@ find_user_defined_func(List *procname, bool typeInput)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("type %s function %s must return type %s",
-						funcType, NameListToString(procname), format_type_be(BYTEAOID))));
+						funcType, NameListToString(procname), format_type_be(expectedRetType))));
 
 	return procOid;
 }
