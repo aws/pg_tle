@@ -388,7 +388,7 @@ find_user_defined_func(List *procname, bool typeInput)
 {
 	Oid			argList[1];
 	Oid			procOid;
-	Oid			expectedRetType;	
+	Oid			expectedRetType;
 	char	   *funcType;
 
 	/*
@@ -408,9 +408,9 @@ find_user_defined_func(List *procname, bool typeInput)
 				 errmsg("function %s does not exist",
 						func_signature_string(procname, 1, NIL, argList))));
 
-	/* 
-	 * User-defined input functions must return bytea while user-defined output 
-	 * functions must return text.
+	/*
+	 * User-defined input functions must return bytea while user-defined
+	 * output functions must return text.
 	 */
 	if (get_func_rettype(procOid) != expectedRetType)
 		ereport(ERROR,
@@ -464,7 +464,7 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s function must accept one argument of type %s",
-				 funcType, format_type_be(expectedArgType))));
+						funcType, format_type_be(expectedArgType))));
 	}
 
 	prolang = proc->prolang;
@@ -479,31 +479,31 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s function cannot be defined in C or internal",
-				 funcType)));
+						funcType)));
 
 	if (prorettype != expectedRetType)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s functions must return type %s",
-				 funcType, format_type_be(expectedRetType))));
+						funcType, format_type_be(expectedRetType))));
 
 	if (namespace != expectedNamespace)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s functions must exist in the same namespace as the type",
-				 funcType)));
+						funcType)));
 
 	if (!proisstrict)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s functions must be strict",
-				 funcType)));
+						funcType)));
 
 	if (provolatile != PROVOLATILE_IMMUTABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
 				 errmsg("type %s functions must be immutable",
-				 funcType)));
+						funcType)));
 
 	funcArgList[0] = CSTRINGOID;
 	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
