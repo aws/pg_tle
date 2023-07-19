@@ -126,7 +126,7 @@ $$
   SELECT pg_catalog.convert_to(input1, 'UTF8');
 $$ IMMUTABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text, text, text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-ERROR:  type input/output function must accept one argument of type text
+ERROR:  type input function must accept one argument of type text
 DROP FUNCTION public.test_citext_in2;
 -- Invalid: I/O function argument type mistach
 CREATE FUNCTION public.test_citext_in2(input int) RETURNS bytea AS
@@ -134,7 +134,7 @@ $$
   SELECT '00'::bytea;
 $$ IMMUTABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(int)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-ERROR:  type input/output function must accept one argument of type text
+ERROR:  type input function must accept one argument of type text
 DROP FUNCTION public.test_citext_in2;
 -- Invalid: I/O function return type mistach
 CREATE FUNCTION public.test_citext_in2(input text) RETURNS int AS
@@ -142,7 +142,7 @@ $$
   SELECT 1;
 $$ IMMUTABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-ERROR:  type input/output functions must return type bytea
+ERROR:  type input functions must return type bytea
 DROP FUNCTION public.test_citext_in2;
 -- Invalid: I/O function not immutable
 CREATE FUNCTION public.test_citext_in2(input text) RETURNS bytea AS
@@ -150,7 +150,7 @@ $$
   SELECT pg_catalog.convert_to(input, 'UTF8');
 $$ STABLE STRICT LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-ERROR:  type input/output functions must be immutable
+ERROR:  type input functions must be immutable
 DROP FUNCTION public.test_citext_in2;
 -- Invalid: I/O function not strict
 CREATE FUNCTION public.test_citext_in2(input text) RETURNS bytea AS
@@ -158,7 +158,7 @@ $$
   SELECT pg_catalog.convert_to(input, 'UTF8');
 $$ IMMUTABLE LANGUAGE sql;
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in2(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
-ERROR:  type input/output functions must be strict
+ERROR:  type input functions must be strict
 DROP FUNCTION public.test_citext_in2;
 -- Valid
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);

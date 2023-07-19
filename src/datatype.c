@@ -388,6 +388,7 @@ find_user_defined_func(List *procname, bool typeInput)
 {
 	Oid			argList[1];
 	Oid			procOid;
+	char	   *funcType;
 
 	/*
 	 * User-defined input functions always take a single argument of the text
@@ -395,6 +396,7 @@ find_user_defined_func(List *procname, bool typeInput)
 	 * argument of the bytea and return text.
 	 */
 	argList[0] = typeInput ? TEXTOID : BYTEAOID;
+	funcType = typeInput ? "input" : "output";
 
 	procOid = LookupFuncName(procname, 1, argList, true);
 
@@ -408,15 +410,15 @@ find_user_defined_func(List *procname, bool typeInput)
 	if (typeInput && get_func_rettype(procOid) != BYTEAOID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("type input function %s must return type %s",
-						NameListToString(procname), format_type_be(BYTEAOID))));
+				 errmsg("type %s function %s must return type %s",
+						funcType, NameListToString(procname), format_type_be(BYTEAOID))));
 
 	/* User-defined output functions must return text. */
 	if (!typeInput && get_func_rettype(procOid) != TEXTOID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("type output function %s must return type %s",
-						NameListToString(procname), format_type_be(TEXTOID))));
+				 errmsg("type %s function %s must return type %s",
+						funcType, NameListToString(procname), format_type_be(TEXTOID))));
 
 	return procOid;
 }
@@ -448,6 +450,7 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 	bool		proisstrict;
 	char		provolatile;
 	char	   *proname;
+	char	   *funcType;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -456,13 +459,14 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 
 	expectedArgType = typeInput ? TEXTOID : BYTEAOID;
 	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
+	funcType = typeInput ? "input" : "output";
 	if (proc->pronargs != 1 || proc->proargtypes.values[0] != expectedArgType)
 	{
 		ReleaseSysCache(tuple);
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output function must accept one argument of type %s",
-				 format_type_be(expectedArgType))));
+				 errmsg("type %s function must accept one argument of type %s",
+				 funcType, format_type_be(expectedArgType))));
 	}
 
 	prolang = proc->prolang;
@@ -476,27 +480,32 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 	if (prolang == INTERNALlanguageId || prolang == ClanguageId)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output function cannot be defined in C or internal")));
+				 errmsg("type %s function cannot be defined in C or internal",
+				 funcType)));
 
 	if (prorettype != expectedRetType)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output functions must return type %s", format_type_be(expectedRetType))));
+				 errmsg("type %s functions must return type %s",
+				 funcType, format_type_be(expectedRetType))));
 
 	if (namespace != expectedNamespace)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output functions must exist in the same namespace as the type")));
+				 errmsg("type %s functions must exist in the same namespace as the type",
+				 funcType)));
 
 	if (!proisstrict)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output functions must be strict")));
+				 errmsg("type %s functions must be strict",
+				 funcType)));
 
 	if (provolatile != PROVOLATILE_IMMUTABLE)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-				 errmsg("type input/output functions must be immutable")));
+				 errmsg("type %s functions must be immutable",
+				 funcType)));
 
 	funcArgList[0] = CSTRINGOID;
 	funcNameList = list_make2(makeString(get_namespace_name(expectedNamespace)),
