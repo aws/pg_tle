@@ -362,12 +362,12 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 }
 #endif
 
-#if (PG_VERSION_NUM < 160000)
-#define CAST_CREATE(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior) \
-	CastCreate(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior)
-#else
+#if (PG_VERSION_NUM >= 160000)
 #define CAST_CREATE(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior) \
 	CastCreate(sourcetypeid, targettypeid, funcid, InvalidOid, InvalidOid, castcontext, castmethod, behavior)
+#else
+#define CAST_CREATE(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior) \
+	CastCreate(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior)
 #endif
 
 #if PG_VERSION_NUM >= 140000

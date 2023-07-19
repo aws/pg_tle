@@ -371,7 +371,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	pfree(array_type);
 
 	/* Create explicit cast from the base type to bytea */
-	CAST_CREATE(typeOid, BYTEAOID, InvalidOid, 'e', 'b', DEPENDENCY_NORMAL);
+	CAST_CREATE(typeOid, BYTEAOID, InvalidOid, COERCION_CODE_EXPLICIT, COERCION_METHOD_BINARY, DEPENDENCY_NORMAL);
 
 	PG_RETURN_VOID();
 }
