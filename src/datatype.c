@@ -398,7 +398,7 @@ find_user_defined_func(List *procname, bool typeInput)
 	 */
 	argList[0] = typeInput ? TEXTOID : BYTEAOID;
 	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
-	funcType = typeInput ? "input" : "output";
+	funcType = typeInput ? TLE_INPUT_FUNC_STR : TLE_OUTPUT_FUNC_STR;
 
 	procOid = LookupFuncName(procname, 1, argList, true);
 
@@ -457,7 +457,7 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 
 	expectedArgType = typeInput ? TEXTOID : BYTEAOID;
 	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
-	funcType = typeInput ? "input" : "output";
+	funcType = typeInput ? TLE_INPUT_FUNC_STR : TLE_OUTPUT_FUNC_STR;
 	if (proc->pronargs != 1 || proc->proargtypes.values[0] != expectedArgType)
 	{
 		ReleaseSysCache(tuple);
