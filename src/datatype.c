@@ -53,6 +53,8 @@ static List *get_qualified_funcname(Oid fn_oid);
 static void check_user_operator_func(Oid funcid, Oid typeOid, Oid expectedNamespace);
 static void check_pgtle_base_type(Oid typeOid);
 static bool is_pgtle_io_func(Oid funcid, bool typeInput);
+static Oid	get_type_func_argtype(bool typeInput);
+static Oid	get_type_func_rettype(bool typeInput);
 
 static void
 check_is_pgtle_admin(void)
@@ -377,6 +379,40 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 }
 
 /*
+ * get_type_func_argtype
+ *
+ * When `typeInput` is true, returns the expected argument type of user-defined
+ * input functions; Otherwise, returns the expected argument type of user-defined
+ * output functions
+ *
+ * User-defined input functions always take a single argument of the text while
+ * user-defined output functions always take a single argument of the bytea
+ *
+ */
+static Oid
+get_type_func_argtype(bool typeInput)
+{
+	return typeInput ? TEXTOID : BYTEAOID;
+}
+
+/*
+ * get_type_func_rettype
+ *
+ * When `typeInput` is true, returns the expected return type of user-defined
+ * input functions; Otherwise, returns the expected return type of user-defined
+ * output functions
+ *
+ * User-defined input functions always return bytea while user-defined output
+ * functions always return text.
+ *
+ */
+static Oid
+get_type_func_rettype(bool typeInput)
+{
+	return typeInput ? BYTEAOID : TEXTOID;
+}
+
+/*
  * find_user_defined_func
  *
  * Given a qualified user defined input/output C function name, find the corresponding
@@ -396,8 +432,8 @@ find_user_defined_func(List *procname, bool typeInput)
 	 * and return bytea. User-defined output functions always take a single
 	 * argument of the bytea and return text.
 	 */
-	argList[0] = typeInput ? TEXTOID : BYTEAOID;
-	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
+	argList[0] = get_type_func_argtype(typeInput);
+	expectedRetType = get_type_func_rettype(typeInput);
 	funcType = typeInput ? TLE_INPUT_FUNC_STR : TLE_OUTPUT_FUNC_STR;
 
 	procOid = LookupFuncName(procname, 1, argList, true);
@@ -455,8 +491,8 @@ check_user_defined_func(Oid funcid, Oid typeOid, Oid expectedNamespace, bool typ
 		elog(ERROR, "cache lookup failed for function %u", funcid);
 	proc = (Form_pg_proc) GETSTRUCT(tuple);
 
-	expectedArgType = typeInput ? TEXTOID : BYTEAOID;
-	expectedRetType = typeInput ? BYTEAOID : TEXTOID;
+	expectedArgType = get_type_func_argtype(typeInput);
+	expectedRetType = get_type_func_rettype(typeInput);
 	funcType = typeInput ? TLE_INPUT_FUNC_STR : TLE_OUTPUT_FUNC_STR;
 	if (proc->pronargs != 1 || proc->proargtypes.values[0] != expectedArgType)
 	{
