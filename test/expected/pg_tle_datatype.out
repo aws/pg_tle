@@ -22,6 +22,10 @@ GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbstaff;
 GRANT USAGE ON SCHEMA PUBLIC TO dbuser1;
 GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbuser2;
 SET search_path TO pgtle,public;
+CREATE SCHEMA test_schema;
+CREATE ROLE dbuser3;
+GRANT dbuser3 TO pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA test_schema TO dbuser3;
 -- unprivileged role cannot execute pgtle.create_shell_type and create_shell_type_if_not_exists
 SET SESSION AUTHORIZATION dbstaff;
 SELECT CURRENT_USER;
@@ -167,6 +171,104 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
  
 (1 row)
 
+-- REPLACE type I/O functions
+CREATE OR REPLACE FUNCTION public.test_citext_in(input aaa) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+ERROR:  type aaa does not exist
+CREATE OR REPLACE FUNCTION public.test_citext_in(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+CREATE OR REPLACE FUNCTION public.test_citext_in(input cstring) RETURNS test_citext
+AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type'
+LANGUAGE C PARALLEL SAFE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+CREATE OR REPLACE FUNCTION public.test_citext_out(input bytea) RETURNS text AS
+$$
+  SELECT pg_catalog.convert_from(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE sql;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+CREATE OR REPLACE FUNCTION public.test_citext_out(input test_citext) RETURNS cstring
+AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type'
+LANGUAGE C PARALLEL SAFE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+CREATE OR REPLACE FUNCTION public.test_citext_in(i INT) RETURNS INT AS
+$$
+  SELECT 1;
+$$ STRICT LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION public.test_citext_out(i INT) RETURNS INT AS
+$$
+  SELECT 1;
+$$ STRICT LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION public.test_citext_in(i INT) RETURNS INT AS
+$$
+  SELECT 2;
+$$ STRICT LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION public.test_citext_out(i INT) RETURNS INT AS
+$$
+  SELECT 2;
+$$ STRICT LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION public.another_func(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ STRICT LANGUAGE SQL;
+-- ALTER type I/O functions
+ALTER FUNCTION public.test_citext_in(text) STABLE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_in(cstring) STABLE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_out(bytea) STABLE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_out(test_citext) STABLE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_in(int) STABLE;
+ALTER FUNCTION public.test_citext_out(int) STABLE;
+ALTER FUNCTION public.another_func(text) STABLE;
+-- ALTER type I/O functions OWNER
+ALTER FUNCTION public.test_citext_in(text) OWNER TO dbuser3;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_in(cstring) OWNER TO dbuser3;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_out(bytea) OWNER TO dbuser3;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_out(test_citext) OWNER TO dbuser3;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_in(int) OWNER TO dbuser3;
+ERROR:  permission denied for schema public
+ALTER FUNCTION public.test_citext_out(int) OWNER TO dbuser3;
+ERROR:  permission denied for schema public
+ALTER FUNCTION public.another_func(text) OWNER TO dbuser3;
+ERROR:  permission denied for schema public
+-- RENAME type I/O functions
+ALTER FUNCTION public.test_citext_in(text) RENAME TO test_citext_in2;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_in(cstring) RENAME TO test_citext_in2;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_out(bytea) RENAME TO test_citext_in2;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_out(test_citext) RENAME TO test_citext_in2;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_in(int) RENAME TO test_citext_in2;
+ALTER FUNCTION public.test_citext_out(int) RENAME TO test_citext_out2;
+ALTER FUNCTION public.another_func(text) RENAME TO another_func2;
+-- ALTER type I/O functions schema
+ALTER FUNCTION public.test_citext_in(text) SET SCHEMA test_schema;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_in(cstring) SET SCHEMA test_schema;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_in is not allowed
+ALTER FUNCTION public.test_citext_out(bytea) SET SCHEMA test_schema;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_out(test_citext) SET SCHEMA test_schema;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_out is not allowed
+ALTER FUNCTION public.test_citext_in2(int) SET SCHEMA test_schema;
+ALTER FUNCTION public.test_citext_out2(int) SET SCHEMA test_schema;
+ALTER FUNCTION public.another_func2(text) SET SCHEMA test_schema;
+DROP FUNCTION test_schema.test_citext_in2;
+DROP FUNCTION test_schema.test_citext_out2;
+DROP FUNCTION test_schema.another_func2;
 CREATE TABLE test_dt(c1 test_citext);
 -- Insert a regular string
 INSERT INTO test_dt VALUES ('TEST');
@@ -323,6 +425,41 @@ SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_g
  
 (1 row)
 
+-- REPLACE type operator functions
+CREATE OR REPLACE FUNCTION public.test_citext_cmp(l bytea, r bytea)
+RETURNS int AS
+$$
+  SELECT 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_cmp is not allowed
+CREATE OR REPLACE FUNCTION public.test_citext_cmp2(l bytea, r bytea)
+RETURNS int AS
+$$
+  SELECT 1;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+CREATE OR REPLACE FUNCTION public.test_citext_cmp2(l bytea, r bytea)
+RETURNS int AS
+$$
+  SELECT 2;
+$$ IMMUTABLE STRICT LANGUAGE sql;
+-- ALTER type operator functions
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) STABLE;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_cmp is not allowed
+ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) STABLE;
+-- ALTER type operator functions OWNER
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) OWNER TO dbuser3;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_cmp is not allowed
+ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) OWNER TO dbuser3;
+ERROR:  permission denied for schema public
+-- RENAME type operator functions
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) RENAME TO test_citext_in2;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_cmp is not allowed
+ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) RENAME TO test_citext_cmp3;
+-- ALTER type operator functions schema
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) SET SCHEMA test_schema;
+ERROR:  Alter or replace pg_tle used type I/O function test_citext_cmp is not allowed
+ALTER FUNCTION public.test_citext_cmp3(l bytea, r bytea) SET SCHEMA test_schema;
+DROP FUNCTION test_schema.test_citext_cmp3;
 CREATE OPERATOR < (
     LEFTARG = public.test_citext,
     RIGHTARG = public.test_citext,
@@ -681,10 +818,13 @@ REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbadmin;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
 REVOKE USAGE ON SCHEMA PUBLIC FROM dbuser1;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbuser2;
+REVOKE CREATE, USAGE ON SCHEMA test_schema FROM dbuser3;
+DROP SCHEMA test_schema;
 DROP ROLE dbstaff;
 DROP ROLE dbadmin;
 DROP ROLE dbuser1;
 DROP ROLE dbuser2;
+DROP ROLE dbuser3;
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
 DROP ROLE pgtle_admin;

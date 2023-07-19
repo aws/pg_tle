@@ -55,6 +55,7 @@
 #endif
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
@@ -71,6 +72,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
 #include "parser/parse_func.h"
+#include "parser/parse_type.h"
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -203,6 +205,9 @@ static void pg_tle_xact_callback(XactEvent event, void *arg);
 static List *textarray_to_stringlist(ArrayType *textarray);
 static bool validate_tle_sql(char *sql);
 static void check_requires_list(List *requires);
+static bool is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func);
+static bool is_pgtle_used_user_func(Oid funcid, bool *is_operator_func);
+static void check_pgtle_used_func(Oid funcid);
 
 #if PG_VERSION_NUM < 150001
 /* flag bits for InitMaterializedSRF() */
@@ -4147,6 +4152,39 @@ _PU_HOOK
 				}
 			}
 
+			/* CREATE OR REPLACE FUNCTION */
+			if (n->replace && !n->is_procedure)
+			{
+				int			nargs;
+				List	   *funcNameList;
+				Oid			funcArgList[2];
+				Oid			funcid;
+				ListCell   *x;
+				int			i = 0;
+
+				nargs = list_length(n->parameters);
+				if (nargs < 1 || nargs > 2)
+					break;
+				foreach(x, n->parameters)
+				{
+					FunctionParameter *fp = (FunctionParameter *) lfirst(x);
+					TypeName   *t = fp->argType;
+					Type		typtup = LookupTypeName(NULL, t, NULL, false);
+
+					if (!typtup)
+						ereport(ERROR,
+								(errcode(ERRCODE_UNDEFINED_OBJECT),
+									errmsg("type %s does not exist", TypeNameToString(t))));
+					funcArgList[i] = typeTypeId(typtup);
+					ReleaseSysCache(typtup);
+					++i;
+				}
+
+				funcNameList = list_make2(makeString(nspname), makeString(funcname));
+				funcid = LookupFuncName(funcNameList, nargs, funcArgList, true);
+				check_pgtle_used_func(funcid);
+			}
+
 			break;
 		}
 
@@ -4156,6 +4194,7 @@ _PU_HOOK
 			char   *funcname;
 			char   *nspname;
 			Oid		nspid;
+			Oid		funcid;			
 
 			/* Convert list of names to a name and namespace */
 			nspid = QualifiedNameGetCreationNamespace(((ObjectWithArgs *) n->func)->objname,
@@ -4195,6 +4234,9 @@ _PU_HOOK
 						errmsg("altering pg_tle functions in %s schema not allowed", PG_TLE_NSPNAME)));
 				}
 			}
+
+			funcid = LookupFuncWithArgs(n->objtype, n->func, true);
+			check_pgtle_used_func(funcid);
 
 			break;
 		}
@@ -4237,6 +4279,54 @@ _PU_HOOK
 				}
 			}
 
+			if (n->objectType == OBJECT_FUNCTION)
+			{
+				ObjectAddress address;
+				Relation	relation;
+
+				address = get_object_address(n->objectType,
+												n->object,
+												&relation,
+												AccessExclusiveLock, false);
+				check_pgtle_used_func(address.objectId);
+			}
+
+			break;
+		}
+
+		case T_RenameStmt:		/* ALTER FUNCTION xxx RENAME TO */
+		{
+			RenameStmt *stmt = (RenameStmt *) pu_parsetree;
+
+			if (stmt->renameType == OBJECT_FUNCTION)
+			{
+				ObjectAddress address;
+				Relation	relation;
+
+				address = get_object_address(stmt->renameType,
+												stmt->object,
+												&relation,
+												AccessExclusiveLock, false);
+				check_pgtle_used_func(address.objectId);
+			}
+			break;
+		}
+
+		case T_AlterOwnerStmt:	/* ALTER FUNCTION xxx OWNER TO */
+		{
+			AlterOwnerStmt *stmt = (AlterOwnerStmt *) pu_parsetree;
+
+			if (stmt->objectType == OBJECT_FUNCTION)
+			{
+				ObjectAddress address;
+				Relation	relation;
+
+				address = get_object_address(stmt->objectType,
+												stmt->object,
+												&relation,
+												AccessExclusiveLock, false);
+				check_pgtle_used_func(address.objectId);
+			}
 			break;
 		}
 
@@ -4968,4 +5058,151 @@ static void check_requires_list(List *requires)
 				 errmsg("\"requires\" limited to %d entries for \"%s\" extensions",
 			 		TLE_REQUIRES_LIMIT, PG_TLE_EXTNAME)));
 	}
+}
+
+/*
+ * is_pgtle_defined_c_func
+ *
+ * Returns whether a given function is a C function defined by pgtle datatype APIs.
+ * `is_operator_func` is set to true when the input function is a C operator 
+ * function defined by create_operator_func API.
+ *
+ * This is done by checking prosrc of the given function.
+ *
+ */
+static bool
+is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func)
+{
+	HeapTuple	tuple;
+	Form_pg_proc proc;
+	Datum		prosrcattr;
+	char	   *prosrcstring;
+	bool		isnull;
+	int			nargs;
+
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+
+	proc = (Form_pg_proc) GETSTRUCT(tuple);
+	nargs = proc->pronargs;
+
+	/* pg_tle defined C function can only have 1 or 2 arguments */
+	if (proc->prolang != ClanguageId || nargs < 1 || nargs > 2)
+	{
+		ReleaseSysCache(tuple);
+		return false;
+	}
+
+	prosrcattr = SysCacheGetAttr(PROCOID, tuple,
+								 Anum_pg_proc_prosrc, &isnull);
+	Assert(!isnull);
+
+	prosrcstring = TextDatumGetCString(prosrcattr);
+	ReleaseSysCache(tuple);
+
+	return strncmp(prosrcstring, TLE_BASE_TYPE_IN, sizeof(TLE_BASE_TYPE_IN)) == 0 ||
+			strncmp(prosrcstring, TLE_BASE_TYPE_OUT, sizeof(TLE_BASE_TYPE_OUT)) == 0 ||
+			strncmp(prosrcstring, TLE_OPERATOR_FUNC, sizeof(TLE_OPERATOR_FUNC)) == 0;
+}
+
+/*
+ * is_pgtle_used_user_func
+ *
+ * Returns whether a given function is used by pgtle datatype APIs.
+ * `is_operator_func` is set to true when the input function is an 
+ * operator function used by create_operator_func API.
+ *
+ * If a function is used by pgtle datatype APIs (i.e. create_base_type
+ * or create_operator_func), a C version function will be defined with
+ * the same name. We can know if the given function is used by looking
+ * for existence of the C version funcion
+ */
+static bool
+is_pgtle_used_user_func(Oid funcid, bool *is_operator_func)
+{
+	HeapTuple	tuple;
+	Form_pg_proc proc;
+	List	   *funcNameList;
+	Oid			argTypes[2];
+	Oid			retType;
+	Oid			namespace;
+	char	   *proname;
+	FuncCandidateList clist;
+	int			nargs;
+	int			i;
+
+	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+
+	proc = (Form_pg_proc) GETSTRUCT(tuple);
+	nargs = proc->pronargs;
+	/* pg_tle used user functions can only have 1 or 2 arguments */
+	if (proc->prolang == INTERNALlanguageId || proc->prolang == ClanguageId || 
+		nargs < 1 || nargs > 2)
+	{
+		ReleaseSysCache(tuple);
+		return false;
+	}
+
+	retType = proc->prorettype;
+	for (i = 0; i < nargs; i++)
+		argTypes[i] = proc->proargtypes.values[i];
+	namespace = proc->pronamespace;
+	proname = pstrdup(NameStr(proc->proname));
+	ReleaseSysCache(tuple);
+
+	/* nargs == 1, it could be an operator or I/O function */
+	if (nargs == 1)
+	{
+		if (argTypes[0] != TEXTOID && argTypes[0] != BYTEAOID)
+			return false;
+		/* argType is TEXT, it must be a type input funcion and return bytea */
+		if (argTypes[0] == TEXTOID && retType != BYTEAOID)
+			return false;
+	}
+
+	/* nargs == 2, it can only be an operator funcion and must return bytea. */
+	if (nargs == 2)
+	{
+		for (i = 0; i < nargs; i++)
+			if (argTypes[i] != BYTEAOID)
+				return false;
+	}
+
+	funcNameList = list_make2(makeString(get_namespace_name(namespace)), makeString(proname));
+	clist = FUNCNAME_GET_CANDIDATES(funcNameList, nargs, NIL, false, false, false);
+	for (; clist; clist = clist->next)
+	{
+		if (is_pgtle_defined_c_func(clist->oid, is_operator_func))
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ * check_pgtle_used_func
+ *
+ * Checks whether a given function is either used by pgtle datatype APIs or
+ * defined by pgtle datatype APIs. If so, report an error.
+ */
+static void
+check_pgtle_used_func(Oid funcid)
+{
+	bool		is_operator_func = false;
+	bool		result = false;
+
+	if (!OidIsValid(funcid))
+		return;
+
+	result = is_pgtle_used_user_func(funcid, &is_operator_func) ||
+			 is_pgtle_defined_c_func(funcid, &is_operator_func);
+	if (!result)
+		return;
+
+	ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("Alter or replace pg_tle used %s function %s is not allowed",
+						   is_operator_func ? "operator" : "type I/O", get_func_name(funcid))));
 }
