@@ -219,12 +219,12 @@ like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_2');
 
 # 3. Verify custom data type
 
-$node->psql($testdb, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
+$node->psql($restored_db, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/TEST/, 'select_custom_data_type_from_restored_db');
 
 # 4. Verify custom data operator
 
-$node->psql($testdb, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
+$node->psql($restored_db, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/t/, 'operator_from_restored_db');
 
 # Test complete
