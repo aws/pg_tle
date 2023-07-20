@@ -31,6 +31,7 @@ SET search_path TO pgtle,public;
 CREATE SCHEMA test_schema;
 CREATE ROLE dbuser3;
 GRANT dbuser3 TO pgtle_admin;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbuser3;
 GRANT CREATE, USAGE ON SCHEMA test_schema TO dbuser3;
 
 -- unprivileged role cannot execute pgtle.create_shell_type and create_shell_type_if_not_exists
@@ -128,8 +129,7 @@ DROP FUNCTION public.test_citext_in2;
 -- Valid
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 
-
--- REPLACE type I/O functions
+-- Invalid: REPLACE type I/O functions
 CREATE OR REPLACE FUNCTION public.test_citext_in(input aaa) RETURNS bytea AS
 $$
   SELECT pg_catalog.convert_to(input, 'UTF8');
@@ -153,6 +153,7 @@ CREATE OR REPLACE FUNCTION public.test_citext_out(input test_citext) RETURNS cst
 AS 'MODULE_PATHNAME', 'pg_tle_create_shell_type'
 LANGUAGE C PARALLEL SAFE;
 
+-- Valid: CREATE OR REPLACE regular functions (name or arg type differs)
 CREATE OR REPLACE FUNCTION public.test_citext_in(i INT) RETURNS INT AS
 $$
   SELECT 1;
@@ -178,38 +179,42 @@ $$
   SELECT pg_catalog.convert_to(input, 'UTF8');
 $$ STRICT LANGUAGE SQL;
 
--- ALTER type I/O functions
+-- Invalid: ALTER type I/O functions
 ALTER FUNCTION public.test_citext_in(text) STABLE;
 ALTER FUNCTION public.test_citext_in(cstring) STABLE;
 ALTER FUNCTION public.test_citext_out(bytea) STABLE;
 ALTER FUNCTION public.test_citext_out(test_citext) STABLE;
+-- Valid: ALTER regular functions
 ALTER FUNCTION public.test_citext_in(int) STABLE;
 ALTER FUNCTION public.test_citext_out(int) STABLE;
 ALTER FUNCTION public.another_func(text) STABLE;
 
--- ALTER type I/O functions OWNER
+-- Invalid: ALTER type I/O functions OWNER
 ALTER FUNCTION public.test_citext_in(text) OWNER TO dbuser3;
 ALTER FUNCTION public.test_citext_in(cstring) OWNER TO dbuser3;
 ALTER FUNCTION public.test_citext_out(bytea) OWNER TO dbuser3;
 ALTER FUNCTION public.test_citext_out(test_citext) OWNER TO dbuser3;
+-- Valid: ALTER regular functions OWNER
 ALTER FUNCTION public.test_citext_in(int) OWNER TO dbuser3;
 ALTER FUNCTION public.test_citext_out(int) OWNER TO dbuser3;
 ALTER FUNCTION public.another_func(text) OWNER TO dbuser3;
 
--- RENAME type I/O functions
+-- Invalid: RENAME type I/O functions
 ALTER FUNCTION public.test_citext_in(text) RENAME TO test_citext_in2;
 ALTER FUNCTION public.test_citext_in(cstring) RENAME TO test_citext_in2;
 ALTER FUNCTION public.test_citext_out(bytea) RENAME TO test_citext_in2;
 ALTER FUNCTION public.test_citext_out(test_citext) RENAME TO test_citext_in2;
+-- Valid: RENAME regular functions
 ALTER FUNCTION public.test_citext_in(int) RENAME TO test_citext_in2;
 ALTER FUNCTION public.test_citext_out(int) RENAME TO test_citext_out2;
 ALTER FUNCTION public.another_func(text) RENAME TO another_func2;
 
--- ALTER type I/O functions schema
+-- Invalid: ALTER type I/O functions schema
 ALTER FUNCTION public.test_citext_in(text) SET SCHEMA test_schema;
 ALTER FUNCTION public.test_citext_in(cstring) SET SCHEMA test_schema;
 ALTER FUNCTION public.test_citext_out(bytea) SET SCHEMA test_schema;
 ALTER FUNCTION public.test_citext_out(test_citext) SET SCHEMA test_schema;
+-- Valid: ALTER regular functions schema
 ALTER FUNCTION public.test_citext_in2(int) SET SCHEMA test_schema;
 ALTER FUNCTION public.test_citext_out2(int) SET SCHEMA test_schema;
 ALTER FUNCTION public.another_func2(text) SET SCHEMA test_schema;
@@ -296,8 +301,12 @@ SELECT pgtle.create_operator_func('public', 'test_citext', 'public.invalid_opera
 SET SESSION AUTHORIZATION dbstaff;
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
 -- no CREATE priviliege in the namespace
+RESET SESSION AUTHORIZATION;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbuser3;
 SET SESSION AUTHORIZATION dbuser1;
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
+RESET SESSION AUTHORIZATION;
+GRANT CREATE, USAGE ON SCHEMA PUBLIC TO dbuser3;
 -- not owner of the base type
 SET SESSION AUTHORIZATION dbuser2;
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
@@ -321,13 +330,14 @@ SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_n
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_gt(bytea, bytea)'::regprocedure);
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_ge(bytea, bytea)'::regprocedure);
 
--- REPLACE type operator functions
+-- Invalid: REPLACE pgtle used type operator functions
 CREATE OR REPLACE FUNCTION public.test_citext_cmp(l bytea, r bytea)
 RETURNS int AS
 $$
   SELECT 1;
 $$ IMMUTABLE STRICT LANGUAGE sql;
 
+-- Valid: CREATE OR REPLACE regular functions (name or arg type differs)
 CREATE OR REPLACE FUNCTION public.test_citext_cmp2(l bytea, r bytea)
 RETURNS int AS
 $$
@@ -340,20 +350,24 @@ $$
   SELECT 2;
 $$ IMMUTABLE STRICT LANGUAGE sql;
 
--- ALTER type operator functions
+-- Invalid: ALTER pgtle used type operator functions
 ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) STABLE;
+-- Valid: ALTER regular functions
 ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) STABLE;
 
--- ALTER type operator functions OWNER
+-- Invalid: ALTER pgtle used type operator functions OWNER
 ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) OWNER TO dbuser3;
+-- Valid: ALTER regular functions OWNER
 ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) OWNER TO dbuser3;
 
--- RENAME type operator functions
+-- Invalid: RENAME pgtle used type operator functions
 ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) RENAME TO test_citext_in2;
+-- Valid: RENAME regular functions
 ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) RENAME TO test_citext_cmp3;
 
--- ALTER type operator functions schema
+-- Invalid: ALTER pgtle used type operator functions schema
 ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) SET SCHEMA test_schema;
+-- Valid: ALTER regular functions schema
 ALTER FUNCTION public.test_citext_cmp3(l bytea, r bytea) SET SCHEMA test_schema;
 
 DROP FUNCTION test_schema.test_citext_cmp3;
@@ -586,6 +600,21 @@ CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
 INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
 INSERT INTO test_dt VALUES ('select');
 
+-- Valid: ALTER or REPLACE operator functions not used by pgtle API
+CREATE OR REPLACE FUNCTION public.test_citext_cmp(l test_citext, r test_citext) 
+RETURNS int AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l::bytea, r::bytea);
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+ALTER FUNCTION public.test_citext_cmp(l test_citext, r test_citext) STABLE;
+ALTER FUNCTION public.test_citext_cmp(l test_citext, r test_citext) OWNER TO dbuser3;
+ALTER FUNCTION public.test_citext_cmp(l test_citext, r test_citext) RENAME TO test_citext_cmp2;
+ALTER FUNCTION public.test_citext_cmp2(l test_citext, r test_citext) RENAME TO test_citext_cmp;
+ALTER FUNCTION public.test_citext_cmp(l test_citext, r test_citext) SET SCHEMA test_schema;
+ALTER FUNCTION test_schema.test_citext_cmp(l test_citext, r test_citext) SET SCHEMA PUBLIC;
+
 -- Drop user-defined operator functions
 DROP FUNCTION test_citext_cmp(bytea, bytea) CASCADE;
 DROP FUNCTION test_citext_eq(bytea, bytea) CASCADE;
@@ -662,6 +691,7 @@ REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbadmin;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbstaff;
 REVOKE USAGE ON SCHEMA PUBLIC FROM dbuser1;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbuser2;
+REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbuser3;
 REVOKE CREATE, USAGE ON SCHEMA test_schema FROM dbuser3;
 DROP SCHEMA test_schema;
 DROP ROLE dbstaff;

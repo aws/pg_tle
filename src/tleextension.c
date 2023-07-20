@@ -5101,9 +5101,14 @@ is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func)
 	prosrcstring = TextDatumGetCString(prosrcattr);
 	ReleaseSysCache(tuple);
 
-	return strncmp(prosrcstring, TLE_BASE_TYPE_IN, sizeof(TLE_BASE_TYPE_IN)) == 0 ||
-			strncmp(prosrcstring, TLE_BASE_TYPE_OUT, sizeof(TLE_BASE_TYPE_OUT)) == 0 ||
-			strncmp(prosrcstring, TLE_OPERATOR_FUNC, sizeof(TLE_OPERATOR_FUNC)) == 0;
+	if (strncmp(prosrcstring, TLE_OPERATOR_FUNC, sizeof(TLE_OPERATOR_FUNC)) == 0)
+		*is_operator_func = true;
+	else
+		*is_operator_func = false;
+
+	return *is_operator_func ||
+			strncmp(prosrcstring, TLE_BASE_TYPE_IN, sizeof(TLE_BASE_TYPE_IN)) == 0 ||
+			strncmp(prosrcstring, TLE_BASE_TYPE_OUT, sizeof(TLE_BASE_TYPE_OUT)) == 0;
 }
 
 /*
@@ -5202,7 +5207,7 @@ check_pgtle_used_func(Oid funcid)
 	if (!result)
 		return;
 
-	ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					errmsg("Alter or replace pg_tle used %s function %s is not allowed",
-						   is_operator_func ? "operator" : "type I/O", get_func_name(funcid))));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("ALTER or REPLACE of pg_tle used datatype %s function %s is not allowed",
+						   is_operator_func ? "operator" : "I/O", get_func_name(funcid))));
 }
