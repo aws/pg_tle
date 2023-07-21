@@ -1,6 +1,6 @@
 # Trusted Language Base types
 
-PostgreSQL provides `CREATE TYPE` command to register a new base type (scalar type) for use in the current database. Base type allows you to customized how the data is stored interally and how to converts it from/to an external textual representation. The support functions `input_function` and `output_function` are required. The `input_function` converts the type's external textual representation to the internal representation. `output_function` performs the reverse transformation. Generally they have to be coded in C or another low-level language. Also, you must be a superuser to create a new base type.
+PostgreSQL provides [`CREATE TYPE`](https://www.postgresql.org/docs/current/sql-createtype.html) command to register a new base type (scalar type) for use in the current database. A base type allows you to customized how the data is stored internally and how to convert it from/to an external textual representation. The support functions `input_function` and `output_function` are required. The `input_function` converts the type's external textual representation to the internal representation. `output_function` performs the reverse transformation. Generally they have to be coded in C or another low-level language. Also, you must be a superuser to create a new base type.
 
 `pg_tle` enables you to build Trusted Language base data types through a set of SQL APIs and use a trusted language to define the support functions. This section of the documentation describes the available APIs and provides examples for how to use them to create your own base data types.
 
@@ -12,7 +12,7 @@ The `pg_tle` base data type is scoped to an individual PostgreSQL database (e.g.
 
 ### `pgtle.create_shell_type(typenamespace regnamespace, typename name)`
 
-`create_shell_type` provides a way to create a shell type, which is simply a placeholder for a type to be defined later. This is similar to shell type form of `CREATE TYPE`.
+`create_shell_type` provides a way to create a shell type, which is simply a placeholder for a type to be defined later. This is similar to shell type form of [`CREATE TYPE`](https://www.postgresql.org/docs/current/sql-createtype.html).
 
 #### Role
 
@@ -50,7 +50,7 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 
 ### `pgtle.create_base_type(typenamespace regnamespace, typename name, infunc regprocedure, outfunc regprocedure, internallength int4)`
 
-`create_base_type` provides a way to create a new base data type. The type must be a shell type previously defined by `create_shell_type`. This is similar to base type form of `CREATE TYPE` command. Internally, a base data type created by `pg_tle` is stored as `bytea`, it can be casted to `bytea` explicitly after creation.
+`create_base_type` provides a way to create a new base data type. The type must be a shell type previously defined by `create_shell_type`. This is similar to base type form of [`CREATE TYPE`](https://www.postgresql.org/docs/current/sql-createtype.html). Internally, a base data type created by `pg_tle` is stored as `bytea`, it can be cast to `bytea` explicitly after creation.
 
 #### Role
 
@@ -60,8 +60,8 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 
 * `typenamespace`: The namespace where the base data type will be created.
 * `typename`: The name of the base data type.
-* `infunc`: The name of a previously defined function to converts the type's external textual representation to the internal representation (`bytea`). The function must be declared as taking one argument of type `text` and returning `bytea`. The function must also be declared `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
-* `outfunc`: The name of a previously defined function to converts the type's internal binary representation (`bytea`) to the external textual representation. The function must be declared as taking one argument of type `bytea` and returning `text`. The function must also be declared `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
+* `infunc`: The name of a previously defined function to convert the type's external textual representation to the internal representation (`bytea`). The function must take one argument of type `text` and return `bytea`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
+* `outfunc`: The name of a previously defined function to convert the type's internal binary representation (`bytea`) to the external textual representation. The function must take one argument of type `bytea` and return `text`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `internallength`: Total length of the base data type as bytes. Base data types can be fixed-length, in which case internallength is a positive integer, or variable-length, in which case internallength is -1.
 
 #### Example
@@ -72,7 +72,7 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
 
 ### `pgtle.create_base_type_if_not_exists(typenamespace regnamespace, typename name, infunc regprocedure, outfunc regprocedure, internallength int4)`
 
-`create_base_type_if_not_exists` `create_base_type` provides a way to create a new base data type. It returns `true` if the type is created, otherwise it returns `false` if the type already exists. The type must be a shell type previously defined by `create_shell_type`. This is similar to base type form of `CREATE TYPE` command. Internally, a base data type created by `pg_tle` is stored as `bytea`, it can be casted to `bytea` explicitly after creation.
+`create_base_type_if_not_exists` `create_base_type` provides a way to create a new base data type. It returns `true` if the type is created, otherwise it returns `false` if the type already exists. The type must be a shell type previously defined by `create_shell_type`. This is similar to base type form of [`CREATE TYPE`](https://www.postgresql.org/docs/current/sql-createtype.html). Internally, a base data type created by `pg_tle` is stored as `bytea`, it can be cast to `bytea` explicitly after creation.
 
 #### Role
 
@@ -82,8 +82,8 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
 
 * `typenamespace`: The namespace where the base data type will be created.
 * `typename`: The name of the base data type.
-* `infunc`: The name of a previously defined function to converts the type's external textual representation to the internal representation (`bytea`). The function must be declared as taking one argument of type `text` and returning `bytea`. The function must also be declared `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
-* `outfunc`: The name of a previously defined function to converts the type's internal binary representation (`bytea`) to the external textual representation. The function must be declared as taking one argument of type `bytea` and returning `text`. The function must also be declared `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
+* `infunc`: The name of a previously defined function to convert the type's external textual representation to the internal representation (`bytea`). The function must take one argument of type `text` and return `bytea`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
+* `outfunc`: The name of a previously defined function to convert the type's internal binary representation (`bytea`) to the external textual representation. The function must take one argument of type `bytea` and return `text`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `internallength`: Total length of the base data type as bytes. Base data types can be fixed-length, in which case internallength is a positive integer, or variable-length, in which case internallength is -1.
 
 #### Example
@@ -282,7 +282,7 @@ $$
 $$ IMMUTABLE STRICT LANGUAGE sql;
 ```
 
-then use `pgtle.create_operator_func` to converts the functions to operate on type `test_citext`:
+then use `pgtle.create_operator_func` to convert the functions to operate on type `test_citext`:
 ```sql
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_cmp(bytea, bytea)'::regprocedure);
 SELECT pgtle.create_operator_func('public', 'test_citext', 'public.test_citext_lt(bytea, bytea)'::regprocedure);
