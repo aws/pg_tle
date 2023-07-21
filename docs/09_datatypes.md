@@ -67,7 +67,10 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 #### Example
 
 ```sql
+-- Create a variable-length data type
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+-- Create a fixed-length (2 bytes) data type
+SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
 ```
 
 ### `pgtle.create_base_type_if_not_exists(typenamespace regnamespace, typename name, infunc regprocedure, outfunc regprocedure, internallength int4)`
@@ -89,12 +92,15 @@ SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::r
 #### Example
 
 ```sql
-SELECT pgtle.pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+-- Create a variable-length data type
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+-- Create a fixed-length (2 bytes) data type
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
 ```
 
 ### `pgtle.create_operator_func(typenamespace regnamespace, typename name, opfunc regprocedure)`
 
-`create_operator_func` provides a way to create an operator function on the base data type previously defined by `create_base_type`. This function is not required to create an operator function, but it can be helpful while working with certain languages such as plrust.
+`create_operator_func` provides a way to create an operator function on the base data type previously defined by `create_base_type`. This function takes an operator function which accepts one or two arguments of type `bytea`, and creates an overloaded version which accpets the base data type as the arguments instead. This is not required to create an operator function, but it can be helpful while working with certain languages such as plrust.
 
 #### Role
 
@@ -104,7 +110,7 @@ SELECT pgtle.pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test
 
 * `typenamespace`: The namespace where the new operator function will be created. It must be the same namespace where the base data type is.
 * `typename`: The name of the base data type.
-* `opfunc`: The name of a previously defined operator function. The function must be declared as taking one or two arguments of type `bytea`.
+* `opfunc`: The name of a previously defined operator function. The function must take exactly one or two arguments of type `bytea`.
 
 #### Example
 
@@ -133,17 +139,17 @@ SELECT pgtle.create_operator_func_if_not_exists('public', 'test_citext', 'public
 ```
 
 ## Examples
-The following examples demonstrates how to use `pg_tle` data type APIs functions to create a base data type. After running this example, a base data type called `test_citext` (case-insentive text) will be available for use in the current database.
+The following examples demonstrate how to use `pg_tle` data type API functions to create a base data type. After running this example, a base data type called `test_citext` (case-insentive text) will be available for use in the current database.
 
 ### Create shell type
-First, you will need to use `pgtle.create_shell_type` to create a shell type in the target namespace (PUBLIC in our example).
+First, use `pgtle.create_shell_type` to create a shell type in the target namespace (PUBLIC in this example).
 
 ```sql
 SELECT pgtle.create_shell_type('public', 'test_citext');
 ```
 
 ### Create I/O functions
-Second, you will need to define the input/output function on the data type. Remember the input function takes one argument of type `text` and returns `bytea`; while the output function takes one argument of type `bytea` and returns `text`.
+Second, define the input/output function on the data type. Remember the input function takes one argument of type `text` and returns `bytea`; while the output function takes one argument of type `bytea` and returns `text`.
 
 ```sql
 CREATE FUNCTION public.test_citext_in(input text) RETURNS bytea AS
@@ -158,22 +164,22 @@ $$ IMMUTABLE STRICT LANGUAGE sql;
 ```
 
 ### Create base type
-You can now use `pgtle.create_base_type` to create the base data type using the I/O functions defined previously. Because we are defining a variable-length type, `-1` is used as `internallength`.
+We can now use `pgtle.create_base_type` to create the base data type using the I/O functions defined previously. Because we are defining a variable-length type, `-1` is used as `internallength`.
 
 ```sql
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 ```
 
-After this step, you should be able to use the newly created data type `test_citext`.
+After this step, we should be able to use the newly created data type `test_citext`.
 ```sql
 CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
 INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
 INSERT INTO test_dt VALUES ('select');
 ```
-`'SELECT'` and `'select'` is considered different values at this moment because we haven't defined related operators and operator class for the type.
+`'SELECT'` and `'select'` are considered different values at this moment because we haven't defined related operators and operator class for the type.
 
 ### Create operator functions
-After the base data type is created, you can define operators and operator class if needed.
+After the base data type is created, we can define operators and operator class if needed.
 
 The following commands define a set of operator functions on type `test_citext`. We use an explicit cast from `test_citext` to `bytea` so that we can utilize existing binary functions in Postgresql. 
 ```sql
@@ -235,7 +241,7 @@ $$ IMMUTABLE STRICT LANGUAGE plpgsql;
 ```
 
 ### Alternative way to operator functions
-Alternatively, you can use `pgtle.create_operator_func` to create operator functions without explicit cast. It can be really helpful in certains languages such as plrust where the newly created type is not available.
+Alternatively, we can use `pgtle.create_operator_func` to create operator functions without explicit cast. It can be really helpful in certains languages such as plrust where the newly created type is not available.
 
 First, create the operator functions that take `bytea` as argument type:
 ```sql
@@ -359,7 +365,7 @@ CREATE OPERATOR >= (
 );
 ```
 
-Run following command to create operator class. Note you need superuser permission here. If you are using Amazon RDS, superuser permission is not required.
+Run following command to create operator class. Note superuser permission is required here. If you are using Amazon RDS, superuser permission is not required.
 
 ```sql
 CREATE OPERATOR CLASS public.test_citext_ops
