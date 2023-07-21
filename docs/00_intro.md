@@ -12,6 +12,8 @@ Trusted Language Extensions for PostgreSQL, or `pg_tle`, is an extension to help
 
 `pg_tle` also exposes additional PostgreSQL functionality for extension building through an API, including PostgreSQL [hooks](./04_hooks.md).
 
+`pg_tle` also supports creating [base data types](./09_datatypes.md) using "trusted languages" through a set of APIs.
+
 While `pg_tle` is designed for systems that have restricted filesystem access, it can be used on any PostgreSQL installation. `pg_tle` allows for PostgreSQL administrators to delegate extension management to unprivileged users using the trusted systems within PostgreSQL. `pg_tle` also provides an access control system that allows PostgreSQL administrators to apply finer-grained permissions on who can manage `pg_tle` compatible extensions.
 
 ## Next steps
