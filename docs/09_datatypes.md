@@ -387,4 +387,4 @@ INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
 INSERT INTO test_dt VALUES ('select');
 ERROR:  duplicate key value violates unique constraint "test_dt_pkey"
 ```
-`'SELECT'` and `'select'` is considered equal according to the `=` operator and violates the unique constraint of `PRIMARY KEY`.
+`'SELECT'` and `'select'` are considered equal according to the `=` operator and violates the unique constraint of `PRIMARY KEY`.
