@@ -381,7 +381,7 @@ CREATE OPERATOR CLASS public.test_citext_ops
 Now we can run some simply queries to verify the operators are working as expected.
 
 ```sql
-CREATE TABLE IF EXISTS public.test_dt;
+DROP TABLE IF EXISTS public.test_dt;
 CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
 INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
 INSERT INTO test_dt VALUES ('select');

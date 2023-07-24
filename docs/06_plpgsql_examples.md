@@ -122,3 +122,164 @@ DROP EXTENSION my_password_check_rules;
 
 SELECT pgtle.uninstall_extension('my_password_check_rules');
 ```
+
+## Example: new data type `test_citext`
+
+```sql
+-- 1. Create shell type
+SELECT pgtle.create_shell_type('public', 'test_citext');
+
+-- 2. Create I/O functions
+CREATE FUNCTION public.test_citext_in(input text) RETURNS bytea AS
+$$
+BEGIN
+  RETURN pg_catalog.convert_to(input, 'UTF8');
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_out(input bytea) RETURNS text AS
+$$
+BEGIN
+  SELECT pg_catalog.convert_from(input, 'UTF8');
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+-- 3. Create base type
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
+
+-- 4. Create operator functions
+CREATE FUNCTION public.test_citext_cmp(l test_citext, r test_citext)
+RETURNS int AS
+$$
+BEGIN
+  RETURN pg_catalog.bttextcmp(pg_catalog.lower(pg_catalog.convert_from(l::bytea, 'UTF8')), pg_catalog.lower(pg_catalog.convert_from(r::bytea, 'UTF8')));
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_eq(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) == 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_ne(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) != 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_lt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) < 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_le(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) <= 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_gt(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) > 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE FUNCTION public.test_citext_ge(l test_citext, r test_citext) 
+RETURNS boolean AS
+$$
+BEGIN
+  RETURN public.test_citext_cmp(l, r) >= 0;
+END;
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+-- 4. Create operators and operator class
+CREATE OPERATOR < (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >,
+    NEGATOR = >=,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_lt
+);
+
+CREATE OPERATOR <= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = >=,
+    NEGATOR = >,
+    RESTRICT = scalarltsel,
+    JOIN = scalarltjoinsel,
+    PROCEDURE = public.test_citext_le
+);
+
+CREATE OPERATOR = (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = =,
+    NEGATOR = <>,
+    RESTRICT = eqsel,
+    JOIN = eqjoinsel,
+    HASHES,
+    MERGES,
+    PROCEDURE = public.test_citext_eq
+);
+
+CREATE OPERATOR <> (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <>,
+    NEGATOR = =,
+    RESTRICT = neqsel,
+    JOIN = neqjoinsel,
+    PROCEDURE = public.test_citext_ne
+);
+
+CREATE OPERATOR > (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <,
+    NEGATOR = <=,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_gt
+);
+
+CREATE OPERATOR >= (
+    LEFTARG = public.test_citext,
+    RIGHTARG = public.test_citext,
+    COMMUTATOR = <=,
+    NEGATOR = <,
+    RESTRICT = scalargtsel,
+    JOIN = scalargtjoinsel,
+    PROCEDURE = public.test_citext_ge
+);
+-- Superuser privilege might be required
+CREATE OPERATOR CLASS public.test_citext_ops
+    DEFAULT FOR TYPE public.test_citext USING btree AS
+        OPERATOR        1       < ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       = ,
+        OPERATOR        4       > ,
+        OPERATOR        5       >= ,
+        FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
+
+-- 5. Use the new type
+CREATE TABLE IF NOT EXISTS public.test_dt;
+CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
+INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
+-- ERROR:  duplicate key value violates unique constraint "test_dt_pkey"
+INSERT INTO test_dt VALUES ('select');
+```
