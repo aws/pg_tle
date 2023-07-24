@@ -204,7 +204,7 @@ BEGIN
 END;
 $$ IMMUTABLE STRICT LANGUAGE plpgsql;
 
--- 4. Create operators and operator class
+-- 5. Create operators and operator class
 CREATE OPERATOR < (
     LEFTARG = public.test_citext,
     RIGHTARG = public.test_citext,
@@ -276,7 +276,7 @@ CREATE OPERATOR CLASS public.test_citext_ops
         OPERATOR        5       >= ,
         FUNCTION        1       public.test_citext_cmp(public.test_citext, public.test_citext);
 
--- 5. Use the new type
+-- 6. Use the new type
 CREATE TABLE IF NOT EXISTS public.test_dt;
 CREATE TABLE public.test_dt(c1 test_citext PRIMARY KEY);
 INSERT INTO test_dt VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE');
