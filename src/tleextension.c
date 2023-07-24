@@ -5079,6 +5079,7 @@ is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func)
 	char	   *prosrcstring;
 	bool		isnull;
 	int			nargs;
+	bool		result;
 
 	tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(tuple))
@@ -5106,9 +5107,11 @@ is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func)
 	else
 		*is_operator_func = false;
 
-	return *is_operator_func ||
-			strncmp(prosrcstring, TLE_BASE_TYPE_IN, sizeof(TLE_BASE_TYPE_IN)) == 0 ||
-			strncmp(prosrcstring, TLE_BASE_TYPE_OUT, sizeof(TLE_BASE_TYPE_OUT)) == 0;
+	result = *is_operator_func ||
+			 strncmp(prosrcstring, TLE_BASE_TYPE_IN, sizeof(TLE_BASE_TYPE_IN)) == 0 ||
+			 strncmp(prosrcstring, TLE_BASE_TYPE_OUT, sizeof(TLE_BASE_TYPE_OUT)) == 0;
+	pfree(prosrcstring);
+	return result;
 }
 
 /*
