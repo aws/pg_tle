@@ -422,3 +422,5 @@ SELECT pgtle.unregister_feature_if_exists('pw_hook', 'passcheck');
 ## Next steps
 
 Learn how you can use [hooks](./04_hooks.md) to use more PostgreSQL capabilities in your Trusted Language Extensions.
+
+Learn how you can create [base data types](./09_datatypes.md) to use more PostgreSQL capabilities in your Trusted Language Extensions.
