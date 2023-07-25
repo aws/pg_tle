@@ -219,6 +219,17 @@ ALTER FUNCTION public.test_citext_in2(int) SET SCHEMA test_schema;
 ALTER FUNCTION public.test_citext_out2(int) SET SCHEMA test_schema;
 ALTER FUNCTION public.another_func2(text) SET SCHEMA test_schema;
 
+-- Superuser can alter type I/O functions
+RESET SESSION AUTHORIZATION;
+ALTER FUNCTION public.test_citext_in(text) IMMUTABLE;
+ALTER FUNCTION public.test_citext_in(text) OWNER TO dbuser3;
+ALTER FUNCTION public.test_citext_in(text) OWNER TO dbadmin;
+ALTER FUNCTION public.test_citext_in(text) RENAME TO test_citext_in2;
+ALTER FUNCTION public.test_citext_in2(text) RENAME TO test_citext_in;
+ALTER FUNCTION public.test_citext_in(text) SET SCHEMA test_schema;
+ALTER FUNCTION test_schema.test_citext_in(text) SET SCHEMA public;
+SET SESSION AUTHORIZATION dbadmin;
+
 DROP FUNCTION test_schema.test_citext_in2;
 DROP FUNCTION test_schema.test_citext_out2;
 DROP FUNCTION test_schema.another_func2;
@@ -369,6 +380,18 @@ ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) RENAME TO test_citext_c
 ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) SET SCHEMA test_schema;
 -- Valid: ALTER regular functions schema
 ALTER FUNCTION public.test_citext_cmp3(l bytea, r bytea) SET SCHEMA test_schema;
+
+-- Superuser can alter pgtle used type operator functions
+RESET SESSION AUTHORIZATION;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) STABLE;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) IMMUTABLE;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) OWNER TO dbuser3;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) OWNER TO dbadmin;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) RENAME TO test_citext_cmp2;
+ALTER FUNCTION public.test_citext_cmp2(l bytea, r bytea) RENAME TO test_citext_cmp;
+ALTER FUNCTION public.test_citext_cmp(l bytea, r bytea) SET SCHEMA test_schema;
+ALTER FUNCTION test_schema.test_citext_cmp(l bytea, r bytea) SET SCHEMA public;
+SET SESSION AUTHORIZATION dbadmin;
 
 DROP FUNCTION test_schema.test_citext_cmp3;
 

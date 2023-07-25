@@ -4153,7 +4153,7 @@ _PU_HOOK
 			}
 
 			/* CREATE OR REPLACE FUNCTION */
-			if (n->replace && !n->is_procedure)
+			if (!superuser() && n->replace && !n->is_procedure)
 			{
 				int			nargs;
 				List	   *funcNameList;
@@ -4235,8 +4235,11 @@ _PU_HOOK
 				}
 			}
 
-			funcid = LookupFuncWithArgs(n->objtype, n->func, true);
-			check_pgtle_used_func(funcid);
+			if (!superuser())
+			{
+				funcid = LookupFuncWithArgs(n->objtype, n->func, true);
+				check_pgtle_used_func(funcid);
+			}
 
 			break;
 		}
@@ -4279,7 +4282,7 @@ _PU_HOOK
 				}
 			}
 
-			if (n->objectType == OBJECT_FUNCTION)
+			if (!superuser() && n->objectType == OBJECT_FUNCTION)
 			{
 				ObjectAddress address;
 				Relation	relation;
@@ -4298,7 +4301,7 @@ _PU_HOOK
 		{
 			RenameStmt *stmt = (RenameStmt *) pu_parsetree;
 
-			if (stmt->renameType == OBJECT_FUNCTION)
+			if (!superuser() && stmt->renameType == OBJECT_FUNCTION)
 			{
 				ObjectAddress address;
 				Relation	relation;
@@ -4316,7 +4319,7 @@ _PU_HOOK
 		{
 			AlterOwnerStmt *stmt = (AlterOwnerStmt *) pu_parsetree;
 
-			if (stmt->objectType == OBJECT_FUNCTION)
+			if (!superuser() && stmt->objectType == OBJECT_FUNCTION)
 			{
 				ObjectAddress address;
 				Relation	relation;
