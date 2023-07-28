@@ -15,7 +15,7 @@
  */
 
 /*
- * Updates since v1.0.0
+ * Updates since v1.1.0
  *    1. pg_upgrade bugfix. No API changes
  */
 
