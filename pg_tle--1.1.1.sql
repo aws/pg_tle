@@ -1,4 +1,4 @@
-\/*
+/*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
@@ -15,16 +15,8 @@
  */
 
 /*
- * Updates since v1.0.0
- *    1. pg_tle_feature_info_sql_drop() updated so that it cleans up 
- *       registered features associated with an extension when the 
- *       extension is dropped.
- *    2. install_extension_version_sql() added to allow installing a
- *       specific version of sql files for an extension; control file
- *       must already exist and is not altered.
- *    3. uninstall_extension(name, version) updated to handle uninstalling
- *       a specific version of an extension that was installed with sql
- *       file only. 
+ * Updates since v1.1.0
+ *    1. pg_upgrade bugfix. No API changes
  */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
