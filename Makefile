@@ -7,7 +7,7 @@ MODULE_big = $(EXTENSION)
 OBJS = src/tleextension.o src/guc-file.o src/feature.o src/passcheck.o src/uni_api.o src/datatype.o
 
 EXTRA_CLEAN	= src/guc-file.c pg_tle.control pg_tle--$(EXTVERSION).sql
-DATA = pg_tle.control pg_tle--1.0.0.sql pg_tle--1.0.0--1.0.1.sql pg_tle--1.0.1--1.0.4.sql pg_tle--1.0.4--1.1.0.sql pg_tle--1.1.0--1.1.1.sql
+DATA = pg_tle.control pg_tle--1.0.0.sql pg_tle--1.0.0--1.0.1.sql pg_tle--1.0.1--1.0.4.sql pg_tle--1.0.4--1.1.0.sql pg_tle--1.1.0--1.1.1.sql pg_tle--1.1.0.sql pg_tle--1.1.1.sql
 
 REGRESS = pg_tle_api pg_tle_management pg_tle_injection pg_tle_perms pg_tle_requires pg_tle_datatype pg_tle_versions
 
