@@ -1,13 +1,13 @@
 EXTENSION = pg_tle
-EXTVERSION = 1.1.1
+EXTVERSION = 1.1.2
 
 SCHEMA = pgtle
 MODULE_big = $(EXTENSION)
 
-OBJS = src/tleextension.o src/guc-file.o src/feature.o src/passcheck.o src/uni_api.o src/datatype.o
+OBJS = src/tleextension.o src/guc-file.o src/feature.o src/passcheck.o src/uni_api.o src/datatype.o src/clientauth.o
 
-EXTRA_CLEAN	= src/guc-file.c pg_tle.control pg_tle--$(EXTVERSION).sql
-DATA = pg_tle.control pg_tle--1.0.0.sql pg_tle--1.0.0--1.0.1.sql pg_tle--1.0.1--1.0.4.sql pg_tle--1.0.4--1.1.1.sql pg_tle--1.1.0--1.1.1.sql
+EXTRA_CLEAN	= src/guc-file.c pg_tle.control
+DATA = pg_tle.control pg_tle--1.0.0.sql pg_tle--1.0.0--1.0.1.sql pg_tle--1.0.1--1.0.4.sql pg_tle--1.0.4.sql pg_tle--1.0.4--1.1.1.sql pg_tle--1.1.0--1.1.1.sql pg_tle--1.1.1--1.1.2.sql
 
 REGRESS = pg_tle_api pg_tle_management pg_tle_injection pg_tle_perms pg_tle_requires pg_tle_datatype pg_tle_versions
 
