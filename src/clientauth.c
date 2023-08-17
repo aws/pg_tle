@@ -56,7 +56,7 @@
 #include "storage/shmem.h"
 
 /* Maximum number of pending connections to process, i.e. max queue length */
-#define CLIENT_AUTH_MAX_PENDING_ENTRIES 4
+#define CLIENT_AUTH_MAX_PENDING_ENTRIES 256
 /* Maximum length of strings (including \0) in PortSubset */
 #define CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN 256
 /* Maximum length of error message (including \0) that can be returned by user function */
@@ -253,17 +253,33 @@ void clientauth_launcher_main(Datum arg)
         Oid         extOid;
         ListCell    *item;
         List        *proc_names;
-        PortSubset  ports[max_entries_to_process];
-        int         statuses[max_entries_to_process];
-        int         shmem_indices[max_entries_to_process];
-        int         num_entries_to_process = 0;
-        char        error_msgs[max_entries_to_process][CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
-        bool        errors[max_entries_to_process];
+        PortSubset  port;
+        int         status;
+        int         idx;
+        char        error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
+        bool        error;
         bool        allow_without_executing = false;
         bool        reject_without_executing = false;
 
         /* Sleep until clientauth_hook signals that a connection is ready to process */
-        ConditionVariableSleep(&clientauth_ss->bgw_process_cv, WAIT_EVENT_MQ_RECEIVE);
+        while (true)
+        {
+            ConditionVariableSleep(&clientauth_ss->bgw_process_cv, WAIT_EVENT_MQ_RECEIVE);
+            LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+            idx = clientauth_ss->idx_process;
+
+            if (!clientauth_ss->requests[idx].processed_entry)
+            {
+                clientauth_ss->idx_process++;
+                if (clientauth_ss->idx_process >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
+                    clientauth_ss->idx_process = 0;
+                LWLockRelease(clientauth_ss->lock);
+                break;
+            }
+
+            LWLockRelease(clientauth_ss->lock);
+        }
+        ConditionVariableCancelSleep();
 
         /* Check for signals that came in while asleep */
         CHECK_FOR_INTERRUPTS();
@@ -292,15 +308,9 @@ void clientauth_launcher_main(Datum arg)
         if (can_allow_without_executing())
         {
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-            for (int idx = index; idx < CLIENT_AUTH_MAX_PENDING_ENTRIES; idx += clientauth_num_parallel_workers)
-            {
-                if (!clientauth_ss->requests[idx].processed_entry)
-                {
-                    clientauth_ss->requests[idx].processed_entry = true;
-                    clientauth_ss->requests[idx].error = false;
-                    ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
-                }
-            }
+            clientauth_ss->requests[idx].processed_entry = true;
+            clientauth_ss->requests[idx].error = false;
+            ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
             LWLockRelease(clientauth_ss->lock);
 
             SPI_finish();
@@ -314,17 +324,11 @@ void clientauth_launcher_main(Datum arg)
         if (can_reject_without_executing())
         {
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-            for (int idx = index; idx < CLIENT_AUTH_MAX_PENDING_ENTRIES; idx += clientauth_num_parallel_workers)
-            {
-                if (!clientauth_ss->requests[idx].processed_entry)
-                {
-                    clientauth_ss->requests[idx].processed_entry = true;
-                    clientauth_ss->requests[idx].error = true;
-                    snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
-                             "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
-                    ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
-                }
-            }
+            clientauth_ss->requests[idx].processed_entry = true;
+            clientauth_ss->requests[idx].error = true;
+            snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
+                     "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
+            ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
             LWLockRelease(clientauth_ss->lock);
 
             SPI_finish();
@@ -334,109 +338,98 @@ void clientauth_launcher_main(Datum arg)
             continue;
         }
 
-        /* Start processing the queue of entries. First, copy the entries from shared memory to local. */
+        /* Start processing the entry. First, copy the entry to local memory. */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        for (int idx = index; idx < CLIENT_AUTH_MAX_PENDING_ENTRIES; idx += clientauth_num_parallel_workers)
-        {
-            if (!clientauth_ss->requests[idx].processed_entry)
-            {
-                memcpy(&ports[num_entries_to_process], &clientauth_ss->requests[idx].port_info, sizeof(ports[num_entries_to_process]));
-                statuses[num_entries_to_process] = clientauth_ss->requests[idx].status;
-                shmem_indices[num_entries_to_process] = idx;
-                num_entries_to_process++;
-            }
-        }
-        elog(LOG, "idx_insert: %d, idx_process: %d", clientauth_ss->idx_insert, clientauth_ss->idx_process);
+        memcpy(&port, &clientauth_ss->requests[idx].port_info, sizeof(port));
+        status = clientauth_ss->requests[idx].status;
         LWLockRelease(clientauth_ss->lock);
 
-
-        /* For each entry in the queue, run each function that is registered with clientauth.
+        /* Run each function that is registered with clientauth.
          * Store the results locally. */
         proc_names = feature_proc(clientauth_feature);
-        for (int i = 0; i < num_entries_to_process; i++)
+
+        MemoryContext old_context = CurrentMemoryContext;
+        ResourceOwner old_owner = CurrentResourceOwner;
+        error = false;
+        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "");
+
+        /* Wrap these SPI calls in a subtransaction so that we can gracefully handle errors from SPI */
+        BeginInternalSubTransaction(NULL);
+        PG_TRY();
         {
-            MemoryContext old_context = CurrentMemoryContext;
-            ResourceOwner old_owner = CurrentResourceOwner;
-            errors[i] = false;
-            snprintf(error_msgs[i], CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "");
-
-            /* Wrap these SPI calls in a subtransaction so that we can gracefully handle errors from SPI */
-            BeginInternalSubTransaction(NULL);
-            PG_TRY();
+            foreach(item, proc_names)
             {
-                foreach(item, proc_names)
-                {
-                    char        *query;
-                    char        *func_name = lfirst(item);
-                    char        *port_subset_str;
-                    Oid         hookargtypes[SPI_NARGS_2] = { TEXTOID, INT4OID };
-                    Datum       hookargs[SPI_NARGS_2];
-                    char        hooknulls[SPI_NARGS_2];
+                char        *query;
+                char        *func_name = lfirst(item);
+                char        *port_subset_str;
+                Oid         hookargtypes[SPI_NARGS_2] = { TEXTOID, INT4OID };
+                Datum       hookargs[SPI_NARGS_2];
+                char        hooknulls[SPI_NARGS_2];
 
-                    query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
-                                     func_name,
-                                     quote_identifier(PG_TLE_NSPNAME));
+                query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
+                                 func_name,
+                                 quote_identifier(PG_TLE_NSPNAME));
 
-                    port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
-                                               ports[i].noblock,
-                                               ports[i].remote_host,
-                                               ports[i].remote_hostname,
-                                               ports[i].remote_hostname_resolv,
-                                               ports[i].remote_hostname_errcode,
-                                               ports[i].database_name,
-                                               ports[i].user_name);
+                port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
+                                           port.noblock,
+                                           port.remote_host,
+                                           port.remote_hostname,
+                                           port.remote_hostname_resolv,
+                                           port.remote_hostname_errcode,
+                                           port.database_name,
+                                           port.user_name);
 
-                    hookargs[0] = CStringGetTextDatum(port_subset_str);
-                    hookargs[1] = Int32GetDatum(statuses[i]);
+                hookargs[0] = CStringGetTextDatum(port_subset_str);
+                hookargs[1] = Int32GetDatum(status);
 
-                    SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
+                SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
 
-                    /* We expect a single row with one text column to be returned.
+                /* We expect a single row with one text column to be returned.
                      * If nothing is returned, consider this an "empty string" and accept the connection. */
-                    if (SPI_tuptable != NULL)
+                if (SPI_tuptable != NULL)
+                {
+                    SPITupleTable   *tuptable = SPI_tuptable;
+                    TupleDesc       tupdesc = tuptable->tupdesc;
+                    char            buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
+
+                    /* Expect only one row to be returned */
+                    HeapTuple tuple = tuptable->vals[0];
+                    snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, SPI_getvalue(tuple, tupdesc, 1));
+
+                    /* If return value is not an empty string, then there is an error */
+                    if (strcmp(buf, "") != 0)
                     {
-                        SPITupleTable   *tuptable = SPI_tuptable;
-                        TupleDesc       tupdesc = tuptable->tupdesc;
-                        char            buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
-
-                        /* Expect only one row to be returned */
-                        HeapTuple tuple = tuptable->vals[0];
-                        snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, SPI_getvalue(tuple, tupdesc, 1));
-
-                        /* If return value is not an empty string, then there is an error */
-                        if (strcmp(buf, "") != 0)
-                        {
-                            snprintf(error_msgs[i], CLIENT_AUTH_USER_ERROR_MAX_STRLEN, buf);
-                            errors[i] = true;
-                            break;
-                        }
+                        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, buf);
+                        error = true;
+                        break;
                     }
                 }
-
-                /* Done with SPI, release the subtransaction */
-                ReleaseCurrentSubTransaction();
-                MemoryContextSwitchTo(old_context);
-                CurrentResourceOwner = old_owner;
             }
-            PG_CATCH();
-            {
-                /* Copy the error message from SPI and rollback the subtransaction */
-                ErrorData *edata;
 
-                MemoryContextSwitchTo(old_context);
-                edata = CopyErrorData();
-                FlushErrorState();
-
-                RollbackAndReleaseCurrentSubTransaction();
-                CurrentResourceOwner = old_owner;
-
-                /* Return the error from SPI to the user and reject the connection */
-                snprintf(error_msgs[i], CLIENT_AUTH_USER_ERROR_MAX_STRLEN, edata->message);
-                errors[i] = true;
-                FreeErrorData(edata);
-            }
-            PG_END_TRY();
+            /* Done with SPI, release the subtransaction */
+            ReleaseCurrentSubTransaction();
+            MemoryContextSwitchTo(old_context);
+            CurrentResourceOwner = old_owner;
         }
+        PG_CATCH();
+        {
+            /* Copy the error message from SPI and rollback the subtransaction */
+            ErrorData *edata;
+
+            MemoryContextSwitchTo(old_context);
+            edata = CopyErrorData();
+            FlushErrorState();
+
+            RollbackAndReleaseCurrentSubTransaction();
+            CurrentResourceOwner = old_owner;
+
+            /* Return the error from SPI to the user and reject the connection */
+            snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, edata->message);
+            error = true;
+            FreeErrorData(edata);
+        }
+        PG_END_TRY();
+
         list_free(proc_names);
 
         /* Finish our transaction */
@@ -446,13 +439,10 @@ void clientauth_launcher_main(Datum arg)
 
         /* Copy execution results back to shared memory */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        for (int i = 0; i < num_entries_to_process; i++)
-        {
-            clientauth_ss->requests[shmem_indices[i]].processed_entry = true;
-            clientauth_ss->requests[shmem_indices[i]].error = errors[i];
-            snprintf(clientauth_ss->requests[shmem_indices[i]].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, error_msgs[i]);
-            ConditionVariableSignal(&clientauth_ss->requests[shmem_indices[i]].client_cv);
-        }
+        clientauth_ss->requests[idx].processed_entry = true;
+        clientauth_ss->requests[idx].error = error;
+        snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, error_msg);
+        ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
         LWLockRelease(clientauth_ss->lock);
     }
 }
@@ -481,6 +471,7 @@ static void clientauth_hook(Port *port, int status)
         ConditionVariableSleep(&clientauth_ss->available_entry_cv, WAIT_EVENT_MQ_RECEIVE);
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
     }
+    ConditionVariableCancelSleep();
 
     /* Loop idx_insert back to 0 if needed */
     if (clientauth_ss->idx_insert >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
@@ -513,8 +504,8 @@ static void clientauth_hook(Port *port, int status)
     clientauth_ss->num_requests++;
     clientauth_ss->idx_insert++;
 
-    /* Signal BGWs */
-    ConditionVariableBroadcast(&clientauth_ss->bgw_process_cv);
+    /* Signal BGW */
+    ConditionVariableSignal(&clientauth_ss->bgw_process_cv);
     LWLockRelease(clientauth_ss->lock);
 
     while (true)
@@ -534,7 +525,7 @@ static void clientauth_hook(Port *port, int status)
             /* We are done with this entry, so update num_requests and signal that a connection slot is available */
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
             clientauth_ss->num_requests--;
-            ConditionVariableBroadcast(&clientauth_ss->available_entry_cv);
+            ConditionVariableSignal(&clientauth_ss->available_entry_cv);
             LWLockRelease(clientauth_ss->lock);
 
             if (error)
@@ -545,6 +536,7 @@ static void clientauth_hook(Port *port, int status)
             break;
         }
     }
+    ConditionVariableCancelSleep();
 }
 
 static Size clientauth_shared_memsize(void)
