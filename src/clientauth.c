@@ -87,6 +87,7 @@ static void clientauth_sighup(SIGNAL_ARGS);
 bool can_allow_without_executing();
 bool can_reject_without_executing();
 bool check_skip_user(const char *user_name);
+bool check_skip_database(const char *database_name);
 
 /* GUC that determines whether clientauth is enabled */
 static int enable_clientauth_feature = FEATURE_OFF;
@@ -96,6 +97,8 @@ static char *clientauth_database_name = "postgres";
 static int clientauth_num_parallel_workers = 2;
 /* GUC that determines users that clientauth feature skips */
 static char *clientauth_users_to_skip = "";
+/* GUC that determines databases that clientauth feature skips */
+static char *clientauth_databases_to_skip = "";
 
 /* Global flags */
 static bool clientauth_reload_config = false;
@@ -217,6 +220,16 @@ void clientauth_init(void)
         GUC_LIST_INPUT,
         NULL, NULL, NULL);
 
+    DefineCustomStringVariable(
+        "pgtle.clientauth_databases_to_skip",
+        gettext_noop("Comma-delimited list of databases that pg_tle clientauth hook skips."),
+        NULL,
+        &clientauth_databases_to_skip,
+        "",
+        PGC_SIGHUP,
+        GUC_LIST_INPUT,
+        NULL, NULL, NULL);
+
     /* Create background workers */
     worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
     worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
@@ -237,7 +250,6 @@ void clientauth_init(void)
 void clientauth_launcher_main(Datum arg)
 {
     int index = DatumGetInt32(arg);
-    int max_entries_to_process = CLIENT_AUTH_MAX_PENDING_ENTRIES / clientauth_num_parallel_workers + 1;
 
     /* Establish signal handlers before unblocking signals */
     pqsignal(SIGHUP, clientauth_sighup);
@@ -385,7 +397,8 @@ void clientauth_launcher_main(Datum arg)
                 SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
 
                 /* We expect a single row with one text column to be returned.
-                     * If nothing is returned, consider this an "empty string" and accept the connection. */
+                 * If nothing is returned (SPI_tuptable == NULL),
+                 * consider this an "empty string" and accept the connection. */
                 if (SPI_tuptable != NULL)
                 {
                     SPITupleTable   *tuptable = SPI_tuptable;
@@ -458,6 +471,12 @@ static void clientauth_hook(Port *port, int status)
     if (check_skip_user(port->user_name))
     {
         elog(LOG, "%s is on pgtle.clientauth_users_to_skip, skipping", port->user_name);
+        return;
+    }
+    /* Skip if this database is on the skip list */
+    if (check_skip_database(port->database_name))
+    {
+        elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->user_name);
         return;
     }
 
@@ -676,6 +695,35 @@ bool check_skip_user(const char *user_name)
 
     pfree(users_copy);
     list_free(users);
+
+    return skip;
+}
+
+/* Check if database should be skipped according to pgtle.clientauth_databases_to_skip GUC */
+bool check_skip_database(const char *database_name)
+{
+    bool skip = false;
+    char *databases_copy;
+    List *databases = NIL;
+    ListCell *lc;
+
+    databases_copy = pstrdup(clientauth_databases_to_skip);
+    if (!SplitIdentifierString(databases_copy, ',', &databases))
+        elog(ERROR, "could not parse pgtle.clientauth_databases_to_skip");
+
+    foreach(lc, databases)
+    {
+        char *database = (char *) lfirst(lc);
+
+        if (strcmp(database, database_name) == 0)
+        {
+            skip = true;
+            break;
+        }
+    }
+
+    pfree(databases_copy);
+    list_free(databases);
 
     return skip;
 }

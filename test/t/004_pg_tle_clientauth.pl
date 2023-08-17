@@ -19,6 +19,7 @@
 ### 5. Functions that raise exceptions are returned as errors
 ### 6. Functions do not take effect when pgtle.enable_clientauth = 'off'
 ### 7. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
+### 8. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
 
 use strict;
 use warnings;
@@ -142,6 +143,27 @@ $node->command_ok(
 $node->command_ok(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when testuser2 is in pgtle.clientauth_users_to_skip");
+
+### 8. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+$node->psql('postgres', 'CREATE DATABASE excluded');
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'excluded'));
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+
+$node->command_ok(
+    ['psql', '-U', 'testuser', '-d', 'excluded', '-c', 'select;'],
+    "clientauth function does not reject testuser when database is in pgtle.clientauth_databases_to_skip");
+$node->command_ok(
+    ['psql', '-U', 'testuser2', '-d', 'excluded', '-c', 'select;'],
+    "clientauth function does not reject testuser2 when database is in pgtle.clientauth_databases_to_skip");
+$node->command_fails(
+    ['psql', '-U', 'testuser', '-c', 'select;'],
+    qr/testuser is not allowed to connect/,
+    "clientauth function rejects testuser when database is not on pgtle.clientauth_databases_to_skip");
+$node->command_fails(
+    ['psql', '-U', 'testuser', '-c', 'select;'],
+    qr/clientauth function error/,
+    "clientauth function rejects testuser when database is not on pgtle.clientauth_databases_to_skip");
 
 $node->stop;
 done_testing();
