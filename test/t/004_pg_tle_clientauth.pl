@@ -12,14 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-### 1. Basic client auth function rejects connections based on connection info
-### 2. Basic client auth function allows connections based on connection info
-### 3. Two client auth functions can be registered and both trigger
-### 4. Functions with fatal runtime errors are returned as errors
-### 5. Functions that raise exceptions are returned as errors
-### 6. Functions do not take effect when pgtle.enable_clientauth = 'off'
-### 7. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
-### 8. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 1.  Basic client auth function rejects connections based on connection info
+### 2.  Basic client auth function allows connections based on connection info
+### 3.  Two client auth functions can be registered and both trigger
+### 4.  Functions with fatal runtime errors are returned as errors
+### 5.  Functions that raise exceptions are returned as errors
+### 6.  Functions do not take effect when pgtle.enable_clientauth = 'off'
+### 7.  Functions do not take effect when user is on pgtle.clientauth_users_to_skip
+### 8.  Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 9.  Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 
 use strict;
 use warnings;
@@ -53,7 +55,7 @@ $node->psql('postgres', q[
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')]);
 
 ### 1. Basic client auth function rejects invalid connections
-$node->command_fails(
+$node->command_fails_like(
     ['psql', '-U', 'testuser', '-c', 'select;'],
     qr/testuser is not allowed to connect/,
     "clientauth function rejects testuser");
@@ -77,11 +79,11 @@ $node->psql('postgres', q[
     $$ LANGUAGE plpgsql;]);
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser2', 'clientauth')]);
 
-$node->command_fails(
+$node->command_fails_like(
     ['psql', '-U', 'testuser', '-c', 'select;'],
     qr/testuser is not allowed to connect/,
     "clientauth function rejects testuser");
-$node->command_fails(
+$node->command_fails_like(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     qr/testuser2 is not allowed to connect/,
     "clientauth function rejects testuser2");
@@ -100,7 +102,7 @@ $node->psql('postgres', q[
         END
     $$ LANGUAGE plpgsql;]);
 $node->psql('postgres', qq[SELECT pgtle.register_feature('bad_function', 'clientauth')]);
-$node->command_fails(
+$node->command_fails_like(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     qr/control reached end of function without RETURN/,
     "function with fatal runtime error returns an error");
@@ -116,7 +118,7 @@ $node->psql('postgres', q[
         END
     $$ LANGUAGE plpgsql;]);
 $node->psql('postgres', qq[SELECT pgtle.register_feature('error', 'clientauth')]);
-$node->command_fails(
+$node->command_fails_like(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     qr/clientauth function error/,
     "function that raises exception is returned as error");
@@ -145,25 +147,53 @@ $node->command_ok(
     "clientauth function does not reject testuser2 when testuser2 is in pgtle.clientauth_users_to_skip");
 
 ### 8. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
-$node->psql('postgres', 'CREATE DATABASE excluded');
+$node->psql('postgres', 'CREATE DATABASE not_excluded');
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
-$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'excluded'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'postgres'));
 $node->psql('postgres', 'SELECT pg_reload_conf();');
 
 $node->command_ok(
-    ['psql', '-U', 'testuser', '-d', 'excluded', '-c', 'select;'],
+    ['psql', '-U', 'testuser', '-c', 'select;'],
     "clientauth function does not reject testuser when database is in pgtle.clientauth_databases_to_skip");
 $node->command_ok(
-    ['psql', '-U', 'testuser2', '-d', 'excluded', '-c', 'select;'],
+    ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when database is in pgtle.clientauth_databases_to_skip");
-$node->command_fails(
-    ['psql', '-U', 'testuser', '-c', 'select;'],
+$node->command_fails_like(
+    ['psql', '-U', 'testuser', '-d', 'not_excluded', '-c', 'select;'],
     qr/testuser is not allowed to connect/,
     "clientauth function rejects testuser when database is not on pgtle.clientauth_databases_to_skip");
-$node->command_fails(
-    ['psql', '-U', 'testuser', '-c', 'select;'],
+$node->command_fails_like(
+    ['psql', '-U', 'testuser2', '-d', 'not_excluded', '-c', 'select;'],
     qr/clientauth function error/,
-    "clientauth function rejects testuser when database is not on pgtle.clientauth_databases_to_skip");
+    "clientauth function rejects testuser2 when database is not on pgtle.clientauth_databases_to_skip");
+
+### 9. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+$node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')]);
+$node->psql('postgres', qq[SELECT pgtle.unregister_feature('error', 'clientauth')]);
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'require'));
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+
+$node->command_fails_like(
+    ['psql', '-d', 'not_excluded', '-c', 'select;'],
+    qr/pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature/,
+    "clientauth rejects connection when pgtle.enable_clientauth = 'require' and no clientauth functions are registered");
+$node->command_ok(
+    ['psql', '-c', 'select;'],
+    "can still connect if database is in pgtle.clientauth_database_name");
+
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth'))]);
+
+### 10.  Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+$node->psql('postgres', qq[DROP EXTENSION pg_tle CASCADE;]);
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+
+$node->command_fails_like(
+    ['psql', '-d', 'not_excluded', '-c', 'select;'],
+    qr/pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature/,
+    "clientauth rejects connection when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name");
+$node->command_ok(
+    ['psql', '-c', 'select;'],
+    "can still connect if database is in pgtle.clientauth_database_name");
 
 $node->stop;
 done_testing();
