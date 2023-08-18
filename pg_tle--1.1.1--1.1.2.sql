@@ -22,6 +22,8 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_tle" to load this file. \quit
 
+ALTER TYPE pgtle.pg_tle_features ADD VALUE 'clientauth';
+
 CREATE TYPE pgtle.clientauth_port_subset AS (
     noblock                 boolean,
 
