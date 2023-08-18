@@ -69,7 +69,7 @@ static const char *clientauth_feature = "clientauth";
 PGDLLEXPORT void clientauth_launcher_main(Datum arg);
 
 /* Set up our hooks */
-static ClientAuthentication_hook_type next_clientauth_hook = NULL;
+static ClientAuthentication_hook_type prev_clientauth_hook = NULL;
 static void clientauth_hook(Port *port, int status);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -164,7 +164,7 @@ void clientauth_init(void)
 #endif
 
     /* Install our client authentication hook */
-    next_clientauth_hook = ClientAuthentication_hook;
+    prev_clientauth_hook = ClientAuthentication_hook;
     ClientAuthentication_hook = clientauth_hook;
 
     /* Install our shmem hooks */
@@ -467,6 +467,9 @@ static void clientauth_hook(Port *port, int status)
     bool    error;
     bool    processed = false;
 
+    if (prev_clientauth_hook)
+        prev_clientauth_hook(port, status);
+
     /* Skip if this user is on the skip list */
     if (check_skip_user(port->user_name))
     {
@@ -558,14 +561,6 @@ static void clientauth_hook(Port *port, int status)
     ConditionVariableCancelSleep();
 }
 
-static Size clientauth_shared_memsize(void)
-{
-    Size size;
-    size = MAXALIGN(sizeof(ClientAuthBgwShmemSharedState));
-
-    return size;
-}
-
 static void clientauth_shmem_startup(void)
 {
     if (prev_shmem_startup_hook)
@@ -605,6 +600,14 @@ static void clientauth_shmem_request(void)
     RequestAddinShmemSpace(clientauth_shared_memsize());
 }
 #endif
+
+static Size clientauth_shared_memsize(void)
+{
+    Size size;
+    size = MAXALIGN(sizeof(ClientAuthBgwShmemSharedState));
+
+    return size;
+}
 
 /* Signal handler for SIGHUP. */
 static void clientauth_sighup(SIGNAL_ARGS)
