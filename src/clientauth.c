@@ -84,8 +84,9 @@ static Size clientauth_shared_memsize(void);
 
 static void clientauth_sighup(SIGNAL_ARGS);
 
-bool can_allow_without_executing();
-bool can_reject_without_executing();
+void clientauth_init(void);
+bool can_allow_without_executing(void);
+bool can_reject_without_executing(void);
 bool check_skip_user(const char *user_name);
 bool check_skip_database(const char *database_name);
 
@@ -249,8 +250,6 @@ void clientauth_init(void)
 
 void clientauth_launcher_main(Datum arg)
 {
-    int index = DatumGetInt32(arg);
-
     /* Establish signal handlers before unblocking signals */
     pqsignal(SIGHUP, clientauth_sighup);
     pqsignal(SIGTERM, die);
@@ -262,7 +261,6 @@ void clientauth_launcher_main(Datum arg)
     while (true)
     {
         int         ret;
-        Oid         extOid;
         ListCell    *item;
         List        *proc_names;
         PortSubset  port;
@@ -270,8 +268,9 @@ void clientauth_launcher_main(Datum arg)
         int         idx;
         char        error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
         bool        error;
-        bool        allow_without_executing = false;
-        bool        reject_without_executing = false;
+
+        MemoryContext   old_context;
+        ResourceOwner   old_owner;
 
         /* Sleep until clientauth_hook signals that a connection is ready to process */
         while (true)
@@ -360,10 +359,10 @@ void clientauth_launcher_main(Datum arg)
          * Store the results locally. */
         proc_names = feature_proc(clientauth_feature);
 
-        MemoryContext old_context = CurrentMemoryContext;
-        ResourceOwner old_owner = CurrentResourceOwner;
+        old_context = CurrentMemoryContext;
+        old_owner = CurrentResourceOwner;
         error = false;
-        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "");
+        error_msg[0] = 0;
 
         /* Wrap these SPI calls in a subtransaction so that we can gracefully handle errors from SPI */
         BeginInternalSubTransaction(NULL);
@@ -407,12 +406,12 @@ void clientauth_launcher_main(Datum arg)
 
                     /* Expect only one row to be returned */
                     HeapTuple tuple = tuptable->vals[0];
-                    snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, SPI_getvalue(tuple, tupdesc, 1));
+                    snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
 
                     /* If return value is not an empty string, then there is an error */
                     if (strcmp(buf, "") != 0)
                     {
-                        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, buf);
+                        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
                         error = true;
                         break;
                     }
@@ -437,7 +436,7 @@ void clientauth_launcher_main(Datum arg)
             CurrentResourceOwner = old_owner;
 
             /* Return the error from SPI to the user and reject the connection */
-            snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, edata->message);
+            snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", edata->message);
             error = true;
             FreeErrorData(edata);
         }
@@ -454,7 +453,7 @@ void clientauth_launcher_main(Datum arg)
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
         clientauth_ss->requests[idx].processed_entry = true;
         clientauth_ss->requests[idx].error = error;
-        snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, error_msg);
+        snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", error_msg);
         ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
         LWLockRelease(clientauth_ss->lock);
     }
@@ -479,7 +478,7 @@ static void clientauth_hook(Port *port, int status)
     /* Skip if this database is on the skip list */
     if (check_skip_database(port->database_name))
     {
-        elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->user_name);
+        elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->database_name);
         return;
     }
 
@@ -504,15 +503,19 @@ static void clientauth_hook(Port *port, int status)
     /* Copy fields in port to entry */
     snprintf(clientauth_ss->requests[idx].port_info.remote_host,
              CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+             "%s",
              port->remote_host == NULL ? "" : port->remote_host);
     snprintf(clientauth_ss->requests[idx].port_info.remote_hostname,
              CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+             "%s",
              port->remote_hostname == NULL ? "" : port->remote_hostname);
     snprintf(clientauth_ss->requests[idx].port_info.database_name,
              CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+             "%s",
              port->database_name == NULL ? "" : port->database_name);
     snprintf(clientauth_ss->requests[idx].port_info.user_name,
              CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+             "%s",
              port->user_name == NULL ? "" : port->user_name);
     clientauth_ss->requests[idx].port_info.noblock = port->noblock;
     clientauth_ss->requests[idx].port_info.remote_hostname_resolv = port->remote_hostname_resolv;
@@ -537,7 +540,7 @@ static void clientauth_hook(Port *port, int status)
 
         /* Copy results of BGW processing from shared memory */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, clientauth_ss->requests[idx].error_msg);
+        snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", clientauth_ss->requests[idx].error_msg);
         error = clientauth_ss->requests[idx].error;
         processed = clientauth_ss->requests[idx].processed_entry;
         LWLockRelease(clientauth_ss->lock);
@@ -551,7 +554,7 @@ static void clientauth_hook(Port *port, int status)
             LWLockRelease(clientauth_ss->lock);
 
             if (error)
-                ereport(ERROR, errcode(ERRCODE_CONNECTION_EXCEPTION), errmsg(error_msg));
+                ereport(ERROR, errcode(ERRCODE_CONNECTION_EXCEPTION), errmsg("%s", error_msg));
             else
                 elog(LOG, "successful connection");
 
@@ -563,10 +566,10 @@ static void clientauth_hook(Port *port, int status)
 
 static void clientauth_shmem_startup(void)
 {
+    bool found;
+
     if (prev_shmem_startup_hook)
         prev_shmem_startup_hook();
-
-    bool found;
 
     LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
     clientauth_ss = ShmemInitStruct(clientauth_shmem_name, clientauth_shared_memsize(), &found);
@@ -615,7 +618,7 @@ static void clientauth_sighup(SIGNAL_ARGS)
     clientauth_reload_config = true;
 }
 
-/* If one (or more) of the following is true, then allow the connection without executing user functions.
+/* If one (or more) of the following is true, then the connection can be accepted without executing user functions.
  *
  * 1. pgtle.enable_clientauth is OFF
  * 2. pgtle.enable_clientauth is ON and the pg_tle extension is not installed on clientauth_database_name
@@ -646,7 +649,7 @@ bool can_allow_without_executing()
     return false;
 }
 
-/* If one (or more) of the following is true, then reject the connection without executing user functions.
+/* If one (or more) of the following is true, then the connection can be rejected without executing user functions.
  *
  * 1. pgtle.enable_clientauth is REQUIRE and the pg_tle extension is not installed on clientauth_database_name
  * 2. pgtle.enable_clientauth is REQUIRE and no functions are registered with the clientauth feature */
