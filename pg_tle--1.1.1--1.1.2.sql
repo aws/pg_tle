@@ -15,8 +15,8 @@
  */
 
 /*
- * Updates since v1.1.0
- *    1. pg_upgrade bugfix. No API changes
+ * Updates since v1.1.1
+ *    1. Introduced clientauth feature
  */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION

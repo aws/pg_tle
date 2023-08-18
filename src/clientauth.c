@@ -14,6 +14,31 @@
  * limitations under the License.
  */
 
+/*
+ * clientauth feature
+ * Allows users to attach trusted language functions to ClientAuthentication_hook.
+ *
+ * This feature uses background workers to execute the user's functions on connection attempts.
+ * The client communicates with the background workers via shared memory.
+ * Connections are written to a queue in shared memory, and a BGW is signalled to wake and process.
+ * The return value of the user's function(s) is written to the shared memory queue for the client
+ * to consume.
+ *
+ * A connection is successful if any of the following are true:
+ * 1. clientauth is disabled
+ * 2. clientauth is on and pg_tle is not installed on the clientauth database
+ * 3. clientauth is on and there are no clientauth functions registered
+ * 4. the registered functions are called and all return either the empty string or void
+ *
+ * A connection is rejected if any of the following are true:
+ * 1. clientauth is required and pg_tle is not installed on the clientauth database
+ * 2. clientauth is required and there are no clientauth functions registered
+ * 3. the registered functions are called and any return a non-empty string or throw an error
+ *
+ * Note that if the connecting user or database is found in pgtle.clientauth_users_to_skip or
+ * pgtle.clientauth_databases_to_skip, then the connection is accepted before doing anything.
+ */
+
 #include "postgres.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
@@ -80,8 +105,8 @@ static shmem_request_hook_type prev_shmem_request_hook = NULL;
 static void clientauth_shmem_request(void);
 #endif
 
+/* Helper functions */
 static Size clientauth_shared_memsize(void);
-
 static void clientauth_sighup(SIGNAL_ARGS);
 
 void clientauth_init(void);
@@ -104,7 +129,13 @@ static char *clientauth_databases_to_skip = "";
 /* Global flags */
 static bool clientauth_reload_config = false;
 
-/* Fixed-length subset of Port, passed to user function */
+/* Fixed-length subset of Port, passed to user function. A corresponding SQL base type is defined.
+ * Shared memory structs are required to be fixed-size, which is why we include a subset of Port's
+ * fields and truncate all the strings.
+ *
+ * Future versions of pg_tle may add fields to PortSubset without breaking a user's functions.
+ * However, the background workers need to be restarted or else connections will fail, since the BGW
+ * main function needs a code change to understand and pass the new struct/base type definition. */
 typedef struct PortSubset
 {
     bool noblock;
@@ -142,7 +173,7 @@ typedef struct ClientAuthBgwShmemSharedState
 
     /* Signalled when a connection is ready for a background worker to process */
     ConditionVariable bgw_process_cv;
-    /* Signalled when an entry opens in the queue for a new connection */
+    /* Signalled when an entry opens in the queue for a new connection, in case a client is waiting */
     ConditionVariable available_entry_cv;
 
     /* Connection queue state */
@@ -164,6 +195,12 @@ void clientauth_init(void)
     RequestAddinShmemSpace(clientauth_shared_memsize());
 #endif
 
+    /* PG15 requires shared memory space to be requested in shmem_request_hook */
+#if (PG_VERSION_NUM >= 150000)
+    prev_shmem_request_hook = shmem_request_hook;
+    shmem_request_hook = clientauth_shmem_request;
+#endif
+
     /* Install our client authentication hook */
     prev_clientauth_hook = ClientAuthentication_hook;
     ClientAuthentication_hook = clientauth_hook;
@@ -171,11 +208,6 @@ void clientauth_init(void)
     /* Install our shmem hooks */
     prev_shmem_startup_hook = shmem_startup_hook;
     shmem_startup_hook = clientauth_shmem_startup;
-    /* PG15 requires shared memory space to be requested in shmem_request_hook */
-#if (PG_VERSION_NUM >= 150000)
-    prev_shmem_request_hook = shmem_request_hook;
-    shmem_request_hook = clientauth_shmem_request;
-#endif
 
     /* Define our GUC parameters */
     DefineCustomEnumVariable(
@@ -258,17 +290,27 @@ void clientauth_launcher_main(Datum arg)
     /* Initialize connection to the database */
     BackgroundWorkerInitializeConnection(clientauth_database_name, NULL, 0);
 
+    /* Main BGW loop */
     while (true)
     {
         int         ret;
-        ListCell    *item;
+
+        /* Functions from pgtle.feature_info */
         List        *proc_names;
+        ListCell    *proc_item;
+
+        /* Local copies of port and status, copied from shared memory */
         PortSubset  port;
         int         status;
+
+        /* Index of clientauth_ss->requests that we are processing */
         int         idx;
+
+        /* Values returned by the user function, to be copied into shared memory */
         char        error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
         bool        error;
 
+        /* Used for starting a subtransaction */
         MemoryContext   old_context;
         ResourceOwner   old_owner;
 
@@ -355,23 +397,22 @@ void clientauth_launcher_main(Datum arg)
         status = clientauth_ss->requests[idx].status;
         LWLockRelease(clientauth_ss->lock);
 
-        /* Run each function that is registered with clientauth.
-         * Store the results locally. */
+        /* Run each function that is registered with clientauth. Store the results locally. */
         proc_names = feature_proc(clientauth_feature);
-
-        old_context = CurrentMemoryContext;
-        old_owner = CurrentResourceOwner;
         error = false;
         error_msg[0] = 0;
 
-        /* Wrap these SPI calls in a subtransaction so that we can gracefully handle errors from SPI */
+        old_context = CurrentMemoryContext;
+        old_owner = CurrentResourceOwner;
+
+        /* Wrap these SPI calls in a subtransaction so that we can gracefully handle query errors */
         BeginInternalSubTransaction(NULL);
         PG_TRY();
         {
-            foreach(item, proc_names)
+            foreach(proc_item, proc_names)
             {
                 char        *query;
-                char        *func_name = lfirst(item);
+                char        *func_name = lfirst(proc_item);
                 char        *port_subset_str;
                 Oid         hookargtypes[SPI_NARGS_2] = { TEXTOID, INT4OID };
                 Datum       hookargs[SPI_NARGS_2];
@@ -395,7 +436,7 @@ void clientauth_launcher_main(Datum arg)
 
                 SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
 
-                /* We expect a single row with one text column to be returned.
+                /* Look at the first item of the first row for the return value.
                  * If nothing is returned (SPI_tuptable == NULL),
                  * consider this an "empty string" and accept the connection. */
                 if (SPI_tuptable != NULL)
@@ -404,11 +445,12 @@ void clientauth_launcher_main(Datum arg)
                     TupleDesc       tupdesc = tuptable->tupdesc;
                     char            buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
 
-                    /* Expect only one row to be returned */
+                    /* Only look at first item of first row */
                     HeapTuple tuple = tuptable->vals[0];
                     snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
 
-                    /* If return value is not an empty string, then there is an error */
+                    /* If return value is not an empty string, then there is an error and we should reject.
+                     * Skip any remaining functions */
                     if (strcmp(buf, "") != 0)
                     {
                         snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
@@ -418,14 +460,14 @@ void clientauth_launcher_main(Datum arg)
                 }
             }
 
-            /* Done with SPI, release the subtransaction */
+            /* Done with our queries, so release the subtransaction */
             ReleaseCurrentSubTransaction();
             MemoryContextSwitchTo(old_context);
             CurrentResourceOwner = old_owner;
         }
         PG_CATCH();
         {
-            /* Copy the error message from SPI and rollback the subtransaction */
+            /* There is a query error, copy the error message from SPI and rollback the subtransaction */
             ErrorData *edata;
 
             MemoryContextSwitchTo(old_context);
@@ -449,7 +491,7 @@ void clientauth_launcher_main(Datum arg)
         PopActiveSnapshot();
         CommitTransactionCommand();
 
-        /* Copy execution results back to shared memory */
+        /* Copy execution results back to shared memory and signal clientauth_hook */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
         clientauth_ss->requests[idx].processed_entry = true;
         clientauth_ss->requests[idx].error = error;
@@ -545,6 +587,7 @@ static void clientauth_hook(Port *port, int status)
         processed = clientauth_ss->requests[idx].processed_entry;
         LWLockRelease(clientauth_ss->lock);
 
+        /* Since there may be spurious wakeups, check that the entry has actually finished processing */
         if (processed)
         {
             /* We are done with this entry, so update num_requests and signal that a connection slot is available */
@@ -553,10 +596,9 @@ static void clientauth_hook(Port *port, int status)
             ConditionVariableSignal(&clientauth_ss->available_entry_cv);
             LWLockRelease(clientauth_ss->lock);
 
+            /* If BGW says there's an error, then ereport(ERROR). Otherwise the connection can go through */
             if (error)
                 ereport(ERROR, errcode(ERRCODE_CONNECTION_EXCEPTION), errmsg("%s", error_msg));
-            else
-                elog(LOG, "successful connection");
 
             break;
         }
