@@ -110,10 +110,10 @@ static Size clientauth_shared_memsize(void);
 static void clientauth_sighup(SIGNAL_ARGS);
 
 void clientauth_init(void);
-bool can_allow_without_executing(void);
-bool can_reject_without_executing(void);
-bool check_skip_user(const char *user_name);
-bool check_skip_database(const char *database_name);
+static bool can_allow_without_executing(void);
+static bool can_reject_without_executing(void);
+static bool check_skip_user(const char *user_name);
+static bool check_skip_database(const char *database_name);
 
 /* GUC that determines whether clientauth is enabled */
 static int enable_clientauth_feature = FEATURE_OFF;
@@ -662,7 +662,7 @@ static void clientauth_sighup(SIGNAL_ARGS)
  * 1. pgtle.enable_clientauth is OFF
  * 2. pgtle.enable_clientauth is ON and the pg_tle extension is not installed on clientauth_database_name
  * 3. pgtle.enable_clientauth is ON and no functions are registered with the clientauth feature */
-bool can_allow_without_executing()
+static bool can_allow_without_executing()
 {
     List    *proc_names;
     Oid     extOid;
@@ -692,7 +692,7 @@ bool can_allow_without_executing()
  *
  * 1. pgtle.enable_clientauth is REQUIRE and the pg_tle extension is not installed on clientauth_database_name
  * 2. pgtle.enable_clientauth is REQUIRE and no functions are registered with the clientauth feature */
-bool can_reject_without_executing()
+static bool can_reject_without_executing()
 {
     List    *proc_names;
     Oid     extOid;
@@ -716,7 +716,7 @@ bool can_reject_without_executing()
 }
 
 /* Check if user should be skipped according to pgtle.clientauth_users_to_skip GUC */
-bool check_skip_user(const char *user_name)
+static bool check_skip_user(const char *user_name)
 {
     bool skip = false;
     char *users_copy;
@@ -745,7 +745,7 @@ bool check_skip_user(const char *user_name)
 }
 
 /* Check if database should be skipped according to pgtle.clientauth_databases_to_skip GUC */
-bool check_skip_database(const char *database_name)
+static bool check_skip_database(const char *database_name)
 {
     bool skip = false;
     char *databases_copy;
