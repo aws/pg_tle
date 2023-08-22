@@ -160,6 +160,7 @@ typedef struct ClientAuthStatusEntry
     ConditionVariable client_cv;
     bool needs_processing;
     bool done_processing;
+    bool available_entry;
 
     /* Error message to be emitted back to client */
     bool error;
@@ -179,7 +180,6 @@ typedef struct ClientAuthBgwShmemSharedState
 
     /* Connection queue state */
     ClientAuthStatusEntry requests[CLIENT_AUTH_MAX_PENDING_ENTRIES];
-    int num_requests;
     int idx_insert;
     int idx_process;
 } ClientAuthBgwShmemSharedState;
@@ -316,10 +316,10 @@ void clientauth_launcher_main(Datum arg)
         ResourceOwner   old_owner;
 
         /* Sleep until clientauth_hook signals that a connection is ready to process */
+        ConditionVariablePrepareToSleep(&clientauth_ss->bgw_process_cv);
         while (true)
         {
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-            ConditionVariablePrepareToSleep(&clientauth_ss->bgw_process_cv);
             idx = clientauth_ss->idx_process;
 
             if (clientauth_ss->requests[idx].needs_processing)
@@ -528,11 +528,11 @@ static void clientauth_hook(Port *port, int status)
         return;
     }
 
+    ConditionVariablePrepareToSleep(&clientauth_ss->available_entry_cv);
     while (true)
     {
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        ConditionVariablePrepareToSleep(&clientauth_ss->available_entry_cv);
-        if (clientauth_ss->num_requests < CLIENT_AUTH_MAX_PENDING_ENTRIES)
+        if (clientauth_ss->requests[clientauth_ss->idx_insert].available_entry)
             break;
 
         LWLockRelease(clientauth_ss->lock);
@@ -540,11 +540,8 @@ static void clientauth_hook(Port *port, int status)
     }
     ConditionVariableCancelSleep();
 
-    /* Loop idx_insert back to 0 if needed */
-    if (clientauth_ss->idx_insert >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
-        clientauth_ss->idx_insert = 0;
-
     idx = clientauth_ss->idx_insert;
+    clientauth_ss->requests[idx].available_entry = false;
 
     /* Copy fields in port to entry */
     snprintf(clientauth_ss->requests[idx].port_info.remote_host,
@@ -573,17 +570,19 @@ static void clientauth_hook(Port *port, int status)
     clientauth_ss->requests[idx].needs_processing = true;
 
     /* Increment queue counters */
-    clientauth_ss->num_requests++;
     clientauth_ss->idx_insert++;
+    /* Loop idx_insert back to 0 if needed */
+    if (clientauth_ss->idx_insert >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
+        clientauth_ss->idx_insert = 0;
 
     /* Signal BGW */
     LWLockRelease(clientauth_ss->lock);
     ConditionVariableSignal(&clientauth_ss->bgw_process_cv);
 
+    ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
     while (true)
     {
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
         if (clientauth_ss->requests[idx].done_processing)
             break;
 
@@ -595,7 +594,7 @@ static void clientauth_hook(Port *port, int status)
     /* Copy results of BGW processing from shared memory */
     snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", clientauth_ss->requests[idx].error_msg);
     error = clientauth_ss->requests[idx].error;
-    clientauth_ss->num_requests--;
+    clientauth_ss->requests[idx].available_entry = true;
     LWLockRelease(clientauth_ss->lock);
     ConditionVariableSignal(&clientauth_ss->available_entry_cv);
 
@@ -619,7 +618,6 @@ static void clientauth_shmem_startup(void)
         clientauth_ss->lock = &(GetNamedLWLockTranche(PG_TLE_EXTNAME))->lock;
         ConditionVariableInit(&clientauth_ss->bgw_process_cv);
         ConditionVariableInit(&clientauth_ss->available_entry_cv);
-        clientauth_ss->num_requests = 0;
         clientauth_ss->idx_insert = 0;
         clientauth_ss->idx_process = 0;
 
@@ -627,6 +625,7 @@ static void clientauth_shmem_startup(void)
             ConditionVariableInit(&clientauth_ss->requests[i].client_cv);
             clientauth_ss->requests[i].done_processing = true;
             clientauth_ss->requests[i].needs_processing = false;
+            clientauth_ss->requests[i].available_entry = true;
         }
     }
 
