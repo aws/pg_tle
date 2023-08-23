@@ -45,6 +45,7 @@
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/user.h"
+#include "common/hashfn.h"
 #include "executor/spi.h"
 #include "libpq/auth.h"
 #include "nodes/pg_list.h"
@@ -138,26 +139,32 @@ static bool clientauth_reload_config = false;
  * main function needs a code change to understand and pass the new struct/base type definition. */
 typedef struct PortSubset
 {
-    bool noblock;
+    bool    noblock;
 
-    char remote_host[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
-    char remote_hostname[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
-    int remote_hostname_resolv;
-    int remote_hostname_errcode;
+    char    remote_host[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+    char    remote_hostname[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+    int     remote_hostname_resolv;
+    int     remote_hostname_errcode;
 
-    char database_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
-    char user_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+    char    database_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+    char    user_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 } PortSubset;
 
 /* Represents a pending connection */
 typedef struct ClientAuthStatusEntry
 {
     /* Data forwarded from ClientAuthentication_hook */
-    PortSubset port_info;
-    int status;
+    PortSubset  port_info;
+    int         status;
 
+    /* Points to the CV corresponding to this entry's worker. */
+    ConditionVariable   *bgw_process_cv_ptr;
     /* Signalled when background worker returns and clientauth can continue to process */
-    ConditionVariable client_cv;
+    ConditionVariable   client_cv;
+    /* Points to the CV corresponding to this entry's worker. */
+    ConditionVariable   *available_entry_cv_ptr;
+
+    /* Keeps track of this entry's state */
     bool needs_processing;
     bool done_processing;
     bool available_entry;
@@ -171,17 +178,22 @@ typedef struct ClientAuthStatusEntry
  * Contains array of pending connections */
 typedef struct ClientAuthBgwShmemSharedState
 {
+    /* Controls accesses to this struct. Any process should hold this lock before accessing this struct */
     LWLock *lock;
 
-    /* Signalled when a connection is ready for a background worker to process */
-    ConditionVariable bgw_process_cv;
-    /* Signalled when an entry opens in the queue for a new connection, in case a client is waiting */
-    ConditionVariable available_entry_cv;
+    /* bgw_process_cv[idx] is signalled to tell worker idx to process its entries.
+     * available_entry_cv[idx] is signalled to tell clients that worker idx has a free slot.
+     *
+     * Only the first clientauth_num_parallel_workers entries of each array will be initialized!
+     * clientauth_num_parallel_workers is restricted to be less than CLIENT_AUTH_MAX_PENDING_ENTRIES.
+     *
+     * requests[idx] contains a pointer to each of the CVs that the entry corresponds to.
+     * Use those instead of directly using these CVs. */
+    ConditionVariable bgw_process_cvs[CLIENT_AUTH_MAX_PENDING_ENTRIES];
+    ConditionVariable available_entry_cvs[CLIENT_AUTH_MAX_PENDING_ENTRIES];
 
     /* Connection queue state */
     ClientAuthStatusEntry requests[CLIENT_AUTH_MAX_PENDING_ENTRIES];
-    int idx_insert;
-    int idx_process;
 } ClientAuthBgwShmemSharedState;
 
 static ClientAuthBgwShmemSharedState *clientauth_ss = NULL;
@@ -239,7 +251,7 @@ void clientauth_init(void)
         &clientauth_num_parallel_workers,
         2,
         1,
-        1024,
+        CLIENT_AUTH_MAX_PENDING_ENTRIES,
         PGC_POSTMASTER,
         GUC_SUPERUSER_ONLY,
         NULL, NULL, NULL);
@@ -283,6 +295,8 @@ void clientauth_init(void)
 
 void clientauth_launcher_main(Datum arg)
 {
+    int bgw_idx = DatumGetInt32(arg);
+
     /* Establish signal handlers before unblocking signals */
     pqsignal(SIGHUP, clientauth_sighup);
     pqsignal(SIGTERM, die);
@@ -291,21 +305,29 @@ void clientauth_launcher_main(Datum arg)
     /* Initialize connection to the database */
     BackgroundWorkerInitializeConnection(clientauth_database_name, NULL, 0);
 
-    /* Main BGW loop */
+    /* Main worker loop */
     while (true)
     {
+        /* SPI return value */
         int         ret;
 
-        /* Functions from pgtle.feature_info */
+        /* User functions gotten from pgtle.feature_info */
         List        *proc_names;
         ListCell    *proc_item;
 
-        /* Local copies of port and status, copied from shared memory */
+        /* Arguments to ClientAuthentication_hook, copied from shared memory */
         PortSubset  port;
         int         status;
 
-        /* Index of clientauth_ss->requests that we are processing */
+        /* Tracks whether each entry in the queue needs to be processed.
+         * Most entries will be false just because they don't belong to this worker */
+        bool        need_to_process[CLIENT_AUTH_MAX_PENDING_ENTRIES];
+
         int         idx;
+
+        /* Tracks whether this worker can allow or reject all connections without executing user functions */
+        bool        allow_without_executing = false;
+        bool        reject_without_executing = false;
 
         /* Values returned by the user function, to be copied into shared memory */
         char        error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
@@ -315,26 +337,33 @@ void clientauth_launcher_main(Datum arg)
         MemoryContext   old_context;
         ResourceOwner   old_owner;
 
+        for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++)
+            need_to_process[i] = false;
+
         /* Sleep until clientauth_hook signals that a connection is ready to process */
-        ConditionVariablePrepareToSleep(&clientauth_ss->bgw_process_cv);
+        ConditionVariablePrepareToSleep(clientauth_ss->requests[bgw_idx].bgw_process_cv_ptr);
         while (true)
         {
+            bool need_to_wake = false;
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-            idx = clientauth_ss->idx_process;
 
-            if (clientauth_ss->requests[idx].needs_processing)
+            /* Check if this worker's assigned entries need processing */
+            for (int i = bgw_idx; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i += clientauth_num_parallel_workers)
             {
-                clientauth_ss->requests[idx].needs_processing = false;
-                clientauth_ss->idx_process++;
-                if (clientauth_ss->idx_process >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
-                    clientauth_ss->idx_process = 0;
-
-                LWLockRelease(clientauth_ss->lock);
-                break;
+                if (clientauth_ss->requests[i].needs_processing)
+                {
+                    idx = i;
+                    clientauth_ss->requests[i].needs_processing = false;
+                    need_to_wake = true;
+                    break;
+                }
             }
 
             LWLockRelease(clientauth_ss->lock);
-            ConditionVariableSleep(&clientauth_ss->bgw_process_cv, WAIT_EVENT_MQ_RECEIVE);
+            if (need_to_wake)
+                break;
+
+            ConditionVariableSleep(clientauth_ss->requests[bgw_idx].bgw_process_cv_ptr, WAIT_EVENT_MQ_RECEIVE);
         }
         ConditionVariableCancelSleep();
 
@@ -361,12 +390,22 @@ void clientauth_launcher_main(Datum arg)
 
         PushActiveSnapshot(GetTransactionSnapshot());
 
-        /* Check if we can allow all connections in the queue without executing the user's functions */
-        if (can_allow_without_executing())
+        /* Check if we can allow or reject without executing the user's functions */
+        allow_without_executing = can_allow_without_executing();
+        reject_without_executing = can_reject_without_executing();
+
+        if (allow_without_executing || reject_without_executing)
         {
             LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
             clientauth_ss->requests[idx].done_processing = true;
-            clientauth_ss->requests[idx].error = false;
+            clientauth_ss->requests[idx].error = reject_without_executing;
+
+            if (reject_without_executing)
+            {
+                snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
+                         "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
+            }
+
             LWLockRelease(clientauth_ss->lock);
             ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
 
@@ -377,23 +416,8 @@ void clientauth_launcher_main(Datum arg)
             continue;
         }
 
-        /* Check if we can reject all connections in the queue without executing the user's functions */
-        if (can_reject_without_executing())
-        {
-            LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-            clientauth_ss->requests[idx].done_processing = true;
-            clientauth_ss->requests[idx].error = true;
-            snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
-                     "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
-            LWLockRelease(clientauth_ss->lock);
-            ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
-
-            SPI_finish();
-            PopActiveSnapshot();
-            CommitTransactionCommand();
-
-            continue;
-        }
+        /* Get each function that is registered with clientauth */
+        proc_names = feature_proc(clientauth_feature);
 
         /* Start processing the entry. First, copy the entry to local memory. */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
@@ -401,8 +425,6 @@ void clientauth_launcher_main(Datum arg)
         status = clientauth_ss->requests[idx].status;
         LWLockRelease(clientauth_ss->lock);
 
-        /* Run each function that is registered with clientauth. Store the results locally. */
-        proc_names = feature_proc(clientauth_feature);
         error = false;
         error_msg[0] = 0;
 
@@ -441,7 +463,7 @@ void clientauth_launcher_main(Datum arg)
                 SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
 
                 /* Look at the first item of the first row for the return value.
-                 * If nothing is returned (SPI_tuptable == NULL),
+                 * If nothing is returned (i.e. SPI_tuptable == NULL),
                  * consider this an "empty string" and accept the connection. */
                 if (SPI_tuptable != NULL)
                 {
@@ -488,13 +510,6 @@ void clientauth_launcher_main(Datum arg)
         }
         PG_END_TRY();
 
-        list_free(proc_names);
-
-        /* Finish our transaction */
-        SPI_finish();
-        PopActiveSnapshot();
-        CommitTransactionCommand();
-
         /* Copy execution results back to shared memory and signal clientauth_hook */
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
         clientauth_ss->requests[idx].done_processing = true;
@@ -502,15 +517,22 @@ void clientauth_launcher_main(Datum arg)
         snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", error_msg);
         LWLockRelease(clientauth_ss->lock);
         ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
+
+        list_free(proc_names);
+
+        /* Finish our transaction */
+        SPI_finish();
+        PopActiveSnapshot();
+        CommitTransactionCommand();
     }
 }
 
 static void clientauth_hook(Port *port, int status)
 {
-    int     idx;
+    /* Determine the queue index that this client will insert into based on its PID */
+    int     idx = MyProc->pid % CLIENT_AUTH_MAX_PENDING_ENTRIES;
     char    error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
     bool    error;
-    bool    processed = false;
 
     if (prev_clientauth_hook)
         prev_clientauth_hook(port, status);
@@ -528,19 +550,18 @@ static void clientauth_hook(Port *port, int status)
         return;
     }
 
-    ConditionVariablePrepareToSleep(&clientauth_ss->available_entry_cv);
+    ConditionVariablePrepareToSleep(clientauth_ss->requests[idx].available_entry_cv_ptr);
     while (true)
     {
         LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-        if (clientauth_ss->requests[clientauth_ss->idx_insert].available_entry)
+        if (clientauth_ss->requests[idx].available_entry)
             break;
 
         LWLockRelease(clientauth_ss->lock);
-        ConditionVariableSleep(&clientauth_ss->available_entry_cv, WAIT_EVENT_MQ_RECEIVE);
+        ConditionVariableSleep(clientauth_ss->requests[idx].available_entry_cv_ptr, WAIT_EVENT_MQ_RECEIVE);
     }
     ConditionVariableCancelSleep();
 
-    idx = clientauth_ss->idx_insert;
     clientauth_ss->requests[idx].available_entry = false;
 
     /* Copy fields in port to entry */
@@ -569,15 +590,9 @@ static void clientauth_hook(Port *port, int status)
     clientauth_ss->requests[idx].done_processing = false;
     clientauth_ss->requests[idx].needs_processing = true;
 
-    /* Increment queue counters */
-    clientauth_ss->idx_insert++;
-    /* Loop idx_insert back to 0 if needed */
-    if (clientauth_ss->idx_insert >= CLIENT_AUTH_MAX_PENDING_ENTRIES)
-        clientauth_ss->idx_insert = 0;
-
     /* Signal BGW */
     LWLockRelease(clientauth_ss->lock);
-    ConditionVariableSignal(&clientauth_ss->bgw_process_cv);
+    ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
 
     ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
     while (true)
@@ -596,7 +611,7 @@ static void clientauth_hook(Port *port, int status)
     error = clientauth_ss->requests[idx].error;
     clientauth_ss->requests[idx].available_entry = true;
     LWLockRelease(clientauth_ss->lock);
-    ConditionVariableSignal(&clientauth_ss->available_entry_cv);
+    ConditionVariableSignal(clientauth_ss->requests[idx].available_entry_cv_ptr);
 
     if (error)
         ereport(ERROR, errcode(ERRCODE_CONNECTION_EXCEPTION), errmsg("%s", error_msg));
@@ -616,15 +631,27 @@ static void clientauth_shmem_startup(void)
     {
         /* Initialize clientauth_ss */
         clientauth_ss->lock = &(GetNamedLWLockTranche(PG_TLE_EXTNAME))->lock;
-        ConditionVariableInit(&clientauth_ss->bgw_process_cv);
-        ConditionVariableInit(&clientauth_ss->available_entry_cv);
-        clientauth_ss->idx_insert = 0;
-        clientauth_ss->idx_process = 0;
 
-        for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++) {
+        /* Initialize the condition variables associated with each background worker */
+        for (int i = 0; i < clientauth_num_parallel_workers; i++)
+        {
+            ConditionVariableInit(&clientauth_ss->bgw_process_cvs[i]);
+            elog(LOG, "bgw_process_cv_%d memory address: %p", i, &clientauth_ss->bgw_process_cvs[i]);
+            ConditionVariableInit(&clientauth_ss->available_entry_cvs[i]);
+            elog(LOG, "available_entry_cvs_%d memory address: %p", i, &clientauth_ss->available_entry_cvs[i]);
+        }
+
+        /* Initialize each queue entry */
+        for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++)
+        {
+            int bgw_idx = i % clientauth_num_parallel_workers;
+
             ConditionVariableInit(&clientauth_ss->requests[i].client_cv);
+            elog(LOG, "client_cv_%d memory address: %p", i, &clientauth_ss->requests[i].client_cv);
+            clientauth_ss->requests[i].bgw_process_cv_ptr = &clientauth_ss->bgw_process_cvs[bgw_idx];
+            clientauth_ss->requests[i].available_entry_cv_ptr = &clientauth_ss->available_entry_cvs[bgw_idx];
+
             clientauth_ss->requests[i].done_processing = true;
-            clientauth_ss->requests[i].needs_processing = false;
             clientauth_ss->requests[i].available_entry = true;
         }
     }
