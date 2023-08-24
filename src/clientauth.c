@@ -128,7 +128,7 @@ static int	enable_clientauth_feature = FEATURE_OFF;
 static char *clientauth_database_name = "postgres";
 
 /* GUC that determines the number of background workers */
-static int	clientauth_num_parallel_workers = 2;
+static int	clientauth_num_parallel_workers = 1;
 
 /* GUC that determines users that clientauth feature skips */
 static char *clientauth_users_to_skip = "";
@@ -331,6 +331,9 @@ clientauth_launcher_main(Datum arg)
 {
 	int			bgw_idx = DatumGetInt32(arg);
 
+	/* Keeps track of which of its entries the worker will look at first. */
+	int			idx_offset = 0;
+
 	/* Establish signal handlers before unblocking signals */
 	pqsignal(SIGHUP, clientauth_sighup);
 	pqsignal(SIGTERM, die);
@@ -355,12 +358,6 @@ clientauth_launcher_main(Datum arg)
 		PortSubset	port;
 		int			status;
 
-		/*
-		 * Tracks whether each entry in the queue needs to be processed. Most
-		 * entries will be false just because they don't belong to this worker
-		 */
-		bool		need_to_process[CLIENT_AUTH_MAX_PENDING_ENTRIES];
-
 		/* Tracks which entry to process this loop. */
 		int			idx;
 
@@ -382,9 +379,6 @@ clientauth_launcher_main(Datum arg)
 		MemoryContext old_context;
 		ResourceOwner old_owner;
 
-		for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++)
-			need_to_process[i] = false;
-
 		/*
 		 * Sleep until clientauth_hook signals that a connection is ready to
 		 * process
@@ -397,14 +391,17 @@ clientauth_launcher_main(Datum arg)
 			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 
 			/*
-			 * Check if this worker's assigned entries need processing
+			 * Check if this worker's assigned entries need processing.
+			 * idx_offset helps the worker pick up each entry more evenly
+			 * rather than always picking the first entry if it's occupied.
 			 */
-			for (int i = bgw_idx; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i += clientauth_num_parallel_workers)
+			for (int i = bgw_idx + idx_offset; i < CLIENT_AUTH_MAX_PENDING_ENTRIES + idx_offset; i += clientauth_num_parallel_workers)
 			{
-				if (!clientauth_ss->requests[i].done_processing)
+				idx = i % CLIENT_AUTH_MAX_PENDING_ENTRIES;
+				if (!clientauth_ss->requests[idx].done_processing)
 				{
-					idx = i;
 					need_to_wake = true;
+					idx_offset = (idx_offset + clientauth_num_parallel_workers) % CLIENT_AUTH_MAX_PENDING_ENTRIES;
 					break;
 				}
 			}
