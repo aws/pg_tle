@@ -26,14 +26,14 @@
  * consume.
  *
  * A connection is successful if any of the following are true: 1. clientauth
- * is disabled 2. clientauth is on and pg_tle is not installed on the
- * clientauth database 3. clientauth is on and there are no clientauth
- * functions registered 4. the registered functions are called and all return
+ * is disabled, 2. clientauth is on and pg_tle is not installed on the
+ * clientauth database, 3. clientauth is on and there are no clientauth
+ * functions registered, 4. the registered functions are called and all return
  * either the empty string or void
  *
  * A connection is rejected if any of the following are true: 1. clientauth
- * is required and pg_tle is not installed on the clientauth database 2.
- * clientauth is required and there are no clientauth functions registered 3.
+ * is required and pg_tle is not installed on the clientauth database, 2.
+ * clientauth is required and there are no clientauth functions registered, 3.
  * the registered functions are called and any return a non-empty string or
  * throw an error
  *
@@ -48,7 +48,6 @@
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/user.h"
-#include "common/hashfn.h"
 #include "executor/spi.h"
 #include "libpq/auth.h"
 #include "nodes/pg_list.h"
@@ -102,39 +101,43 @@ PGDLLEXPORT void clientauth_launcher_main(Datum arg);
 
 /* Set up our hooks */
 static ClientAuthentication_hook_type prev_clientauth_hook = NULL;
-static void	clientauth_hook(Port * port, int status);
+static void clientauth_hook(Port *port, int status);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
-static void	clientauth_shmem_startup(void);
+static void clientauth_shmem_startup(void);
 
 #if (PG_VERSION_NUM >= 150000)
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
-static void	clientauth_shmem_request(void);
+static void clientauth_shmem_request(void);
 #endif
 
 /* Helper functions */
 static Size clientauth_shared_memsize(void);
-static void	clientauth_sighup(SIGNAL_ARGS);
+static void clientauth_sighup(SIGNAL_ARGS);
 
 void		clientauth_init(void);
-static bool	can_allow_without_executing(void);
-static bool	can_reject_without_executing(void);
-static bool	check_skip_user(const char *user_name);
-static bool	check_skip_database(const char *database_name);
+static bool can_allow_without_executing(void);
+static bool can_reject_without_executing(void);
+static bool check_skip_user(const char *user_name);
+static bool check_skip_database(const char *database_name);
 
 /* GUC that determines whether clientauth is enabled */
 static int	enable_clientauth_feature = FEATURE_OFF;
+
 /* GUC that determines which database SPI_exec runs against */
-static char    *clientauth_database_name = "postgres";
+static char *clientauth_database_name = "postgres";
+
 /* GUC that determines the number of background workers */
 static int	clientauth_num_parallel_workers = 2;
+
 /* GUC that determines users that clientauth feature skips */
-static char    *clientauth_users_to_skip = "";
+static char *clientauth_users_to_skip = "";
+
 /* GUC that determines databases that clientauth feature skips */
-static char    *clientauth_databases_to_skip = "";
+static char *clientauth_databases_to_skip = "";
 
 /* Global flags */
-static bool	clientauth_reload_config = false;
+static bool clientauth_reload_config = false;
 
 /*
  * Fixed-length subset of Port, passed to user function. A corresponding SQL
@@ -147,63 +150,73 @@ static bool	clientauth_reload_config = false;
  * else connections will fail, since the BGW main function needs a code
  * change to understand and pass the new struct/base type definition.
  */
-typedef struct PortSubset {
+typedef struct PortSubset
+{
 	bool		noblock;
 
 	char		remote_host[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 	char		remote_hostname[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
-	int		remote_hostname_resolv;
-	int		remote_hostname_errcode;
+	int			remote_hostname_resolv;
+	int			remote_hostname_errcode;
 
 	char		database_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 	char		user_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
-}		PortSubset;
+}			PortSubset;
 
 /* Represents a pending connection */
-typedef struct ClientAuthStatusEntry {
+typedef struct ClientAuthStatusEntry
+{
 	/* Data forwarded from ClientAuthentication_hook */
 	PortSubset	port_info;
-	int		status;
+	int			status;
 
-	/* Points to the CV corresponding to this entry's worker. */
-	ConditionVariable *bgw_process_cv_ptr;
 	/*
-	 * Signalled when background worker returns and clientauth can
+	 * Points to the CV used to signal this entry's worker that work is
+	 * available.
+	 */
+	ConditionVariable *bgw_process_cv_ptr;
+
+	/*
+	 * Signalled when background worker returns and client backend can
 	 * continue to process
 	 */
 	ConditionVariable client_cv;
-	/* Points to the CV corresponding to this entry's worker. */
+
+	/*
+	 * Points to the CV used by this entry's worker to signal that the entry
+	 * is available.
+	 */
 	ConditionVariable *available_entry_cv_ptr;
 
 	/* Keeps track of this entry's state */
-	bool		needs_processing;
 	bool		done_processing;
 	bool		available_entry;
 
 	/* Error message to be emitted back to client */
 	bool		error;
 	char		error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
-}		ClientAuthStatusEntry;
+}			ClientAuthStatusEntry;
 
 /*
  * Shared state between clientauth and background workers. Contains array of
  * pending connections
  */
-typedef struct ClientAuthBgwShmemSharedState {
+typedef struct ClientAuthBgwShmemSharedState
+{
 	/*
-	 * Controls accesses to this struct. Any process should hold this
-	 * lock before accessing this struct
+	 * Controls accesses to this struct. Any process should hold this lock
+	 * before accessing this struct
 	 */
-	LWLock	       *lock;
+	LWLock	   *lock;
 
 	/*
 	 * bgw_process_cv[idx] is signalled to tell worker idx to process its
 	 * entries. available_entry_cv[idx] is signalled to tell clients that
 	 * worker idx has a free slot.
 	 *
-	 * Only the first clientauth_num_parallel_workers entries of each
-	 * array will be initialized! clientauth_num_parallel_workers is
-	 * restricted to be less than CLIENT_AUTH_MAX_PENDING_ENTRIES.
+	 * Only the first clientauth_num_parallel_workers entries of each array
+	 * will be initialized! clientauth_num_parallel_workers is restricted to
+	 * be less than CLIENT_AUTH_MAX_PENDING_ENTRIES.
 	 *
 	 * requests[idx] contains a pointer to each of the CVs that the entry
 	 * corresponds to. Use those instead of directly using these CVs.
@@ -213,7 +226,7 @@ typedef struct ClientAuthBgwShmemSharedState {
 
 	/* Connection queue state */
 	ClientAuthStatusEntry requests[CLIENT_AUTH_MAX_PENDING_ENTRIES];
-}		ClientAuthBgwShmemSharedState;
+}			ClientAuthBgwShmemSharedState;
 
 static ClientAuthBgwShmemSharedState * clientauth_ss = NULL;
 
@@ -228,10 +241,7 @@ clientauth_init(void)
 	RequestAddinShmemSpace(clientauth_shared_memsize());
 #endif
 
-	/*
-	 * PG15 requires shared memory space to be requested in
-	 * shmem_request_hook
-	 */
+	/* PG15 requires shared memory space to be requested in shmem_request_hook */
 #if (PG_VERSION_NUM >= 150000)
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = clientauth_shmem_request;
@@ -247,57 +257,57 @@ clientauth_init(void)
 
 	/* Define our GUC parameters */
 	DefineCustomEnumVariable(
-				 "pgtle.enable_clientauth",
-				 gettext_noop("Sets the behavior for interacting with the pg_tle clientauth feature."),
-				 NULL,
-				 &enable_clientauth_feature,
-				 FEATURE_OFF,
-				 feature_mode_options,
-				 PGC_SIGHUP,
-				 GUC_SUPERUSER_ONLY,
-				 NULL, NULL, NULL);
+							 "pgtle.enable_clientauth",
+							 gettext_noop("Sets the behavior for interacting with the pg_tle clientauth feature."),
+							 NULL,
+							 &enable_clientauth_feature,
+							 FEATURE_OFF,
+							 feature_mode_options,
+							 PGC_SIGHUP,
+							 GUC_SUPERUSER_ONLY,
+							 NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
-				   "pgtle.clientauth_db_name",
-	 gettext_noop("Database in which pg_tle clientauth hook executes."),
-				   NULL,
-				   &clientauth_database_name,
-				   "postgres",
-				   PGC_POSTMASTER,
-				   GUC_SUPERUSER_ONLY,
-				   NULL, NULL, NULL);
+							   "pgtle.clientauth_db_name",
+							   gettext_noop("Database in which pg_tle clientauth hook executes."),
+							   NULL,
+							   &clientauth_database_name,
+							   "postgres",
+							   PGC_POSTMASTER,
+							   GUC_SUPERUSER_ONLY,
+							   NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-				"pgtle.clientauth_num_parallel_workers",
-				gettext_noop("Number of parallel background workers used by clientauth feature."),
-				NULL,
-				&clientauth_num_parallel_workers,
-				2,
-				1,
-				CLIENT_AUTH_MAX_PENDING_ENTRIES,
-				PGC_POSTMASTER,
-				GUC_SUPERUSER_ONLY,
-				NULL, NULL, NULL);
+							"pgtle.clientauth_num_parallel_workers",
+							gettext_noop("Number of parallel background workers used by clientauth feature."),
+							NULL,
+							&clientauth_num_parallel_workers,
+							1,
+							1,
+							(MaxConnections < CLIENT_AUTH_MAX_PENDING_ENTRIES) ? MaxConnections : CLIENT_AUTH_MAX_PENDING_ENTRIES,
+							PGC_POSTMASTER,
+							GUC_SUPERUSER_ONLY,
+							NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
-				   "pgtle.clientauth_users_to_skip",
-				   gettext_noop("Comma-delimited list of users that pg_tle clientauth hook skips."),
-				   NULL,
-				   &clientauth_users_to_skip,
-				   "",
-				   PGC_SIGHUP,
-				   GUC_LIST_INPUT,
-				   NULL, NULL, NULL);
+							   "pgtle.clientauth_users_to_skip",
+							   gettext_noop("Comma-delimited list of users that pg_tle clientauth hook skips."),
+							   NULL,
+							   &clientauth_users_to_skip,
+							   "",
+							   PGC_SIGHUP,
+							   GUC_LIST_INPUT,
+							   NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
-				   "pgtle.clientauth_databases_to_skip",
-				   gettext_noop("Comma-delimited list of databases that pg_tle clientauth hook skips."),
-				   NULL,
-				   &clientauth_databases_to_skip,
-				   "",
-				   PGC_SIGHUP,
-				   GUC_LIST_INPUT,
-				   NULL, NULL, NULL);
+							   "pgtle.clientauth_databases_to_skip",
+							   gettext_noop("Comma-delimited list of databases that pg_tle clientauth hook skips."),
+							   NULL,
+							   &clientauth_databases_to_skip,
+							   "",
+							   PGC_SIGHUP,
+							   GUC_LIST_INPUT,
+							   NULL, NULL, NULL);
 
 	/* Create background workers */
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
@@ -308,7 +318,8 @@ clientauth_init(void)
 	sprintf(worker.bgw_function_name, "clientauth_launcher_main");
 	snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
 
-	for (int i = 0; i < clientauth_num_parallel_workers; i++) {
+	for (int i = 0; i < clientauth_num_parallel_workers; i++)
+	{
 		snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
 		worker.bgw_main_arg = Int32GetDatum(i);
 		RegisterBackgroundWorker(&worker);
@@ -318,7 +329,7 @@ clientauth_init(void)
 void
 clientauth_launcher_main(Datum arg)
 {
-	int		bgw_idx = DatumGetInt32(arg);
+	int			bgw_idx = DatumGetInt32(arg);
 
 	/* Establish signal handlers before unblocking signals */
 	pqsignal(SIGHUP, clientauth_sighup);
@@ -329,68 +340,70 @@ clientauth_launcher_main(Datum arg)
 	BackgroundWorkerInitializeConnection(clientauth_database_name, NULL, 0);
 
 	/* Main worker loop */
-	while (true) {
+	while (true)
+	{
 		/* SPI return value */
-		int		ret;
+		int			ret;
 
 		/* User functions gotten from pgtle.feature_info */
-		List	       *proc_names;
-		ListCell       *proc_item;
+		List	   *proc_names;
+		ListCell   *proc_item;
 
 		/*
-		 * Arguments to ClientAuthentication_hook, copied from shared
-		 * memory
+		 * Arguments to ClientAuthentication_hook, copied from shared memory
 		 */
 		PortSubset	port;
-		int		status;
+		int			status;
 
 		/*
-		 * Tracks whether each entry in the queue needs to be
-		 * processed. Most entries will be false just because they
-		 * don't belong to this worker
+		 * Tracks whether each entry in the queue needs to be processed. Most
+		 * entries will be false just because they don't belong to this worker
 		 */
 		bool		need_to_process[CLIENT_AUTH_MAX_PENDING_ENTRIES];
 
-		int		idx;
+		/* Tracks which entry to process this loop. */
+		int			idx;
 
 		/*
-		 * Tracks whether this worker can allow or reject all
-		 * connections without executing user functions
+		 * Tracks whether this worker can allow or reject all connections
+		 * without executing user functions
 		 */
 		bool		allow_without_executing = false;
 		bool		reject_without_executing = false;
 
 		/*
-		 * Values returned by the user function, to be copied into
-		 * shared memory
+		 * Values returned by the user function, to be copied into shared
+		 * memory
 		 */
 		char		error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
 		bool		error;
 
 		/* Used for starting a subtransaction */
-		MemoryContext	old_context;
-		ResourceOwner	old_owner;
+		MemoryContext old_context;
+		ResourceOwner old_owner;
 
 		for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++)
 			need_to_process[i] = false;
 
 		/*
-		 * Sleep until clientauth_hook signals that a connection is
-		 * ready to process
+		 * Sleep until clientauth_hook signals that a connection is ready to
+		 * process
 		 */
 		ConditionVariablePrepareToSleep(clientauth_ss->requests[bgw_idx].bgw_process_cv_ptr);
-		while (true) {
+		while (true)
+		{
 			bool		need_to_wake = false;
+
 			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 
 			/*
-			 * Check if this worker's assigned entries need
-			 * processing
+			 * Check if this worker's assigned entries need processing
 			 */
-			for (int i = bgw_idx; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i += clientauth_num_parallel_workers) {
-				if (clientauth_ss->requests[i].needs_processing) {
+			for (int i = bgw_idx; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i += clientauth_num_parallel_workers)
+			{
+				if (!clientauth_ss->requests[i].done_processing)
+				{
 					idx = i;
-					clientauth_ss->requests[i].needs_processing = false;
 					need_to_wake = true;
 					break;
 				}
@@ -408,7 +421,8 @@ clientauth_launcher_main(Datum arg)
 		CHECK_FOR_INTERRUPTS();
 
 		/* In case of a SIGHUP, just reload the configuration. */
-		if (clientauth_reload_config) {
+		if (clientauth_reload_config)
+		{
 			clientauth_reload_config = false;
 			ProcessConfigFile(PGC_SIGHUP);
 		}
@@ -420,27 +434,29 @@ clientauth_launcher_main(Datum arg)
 		ret = SPI_connect();
 		if (ret != SPI_OK_CONNECT)
 			ereport(ERROR,
-				(errcode(ERRCODE_CONNECTION_EXCEPTION),
-				 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
-			 PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
+					(errcode(ERRCODE_CONNECTION_EXCEPTION),
+					 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
+							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		/*
-		 * Check if we can allow or reject without executing the
-		 * user's functions
+		 * Check if we can allow or reject without executing the user's
+		 * functions
 		 */
 		allow_without_executing = can_allow_without_executing();
 		reject_without_executing = can_reject_without_executing();
 
-		if (allow_without_executing || reject_without_executing) {
+		if (allow_without_executing || reject_without_executing)
+		{
 			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 			clientauth_ss->requests[idx].done_processing = true;
 			clientauth_ss->requests[idx].error = reject_without_executing;
 
-			if (reject_without_executing) {
+			if (reject_without_executing)
+			{
 				snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
-					 "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
+						 "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
 			}
 
 			LWLockRelease(clientauth_ss->lock);
@@ -457,8 +473,8 @@ clientauth_launcher_main(Datum arg)
 		proc_names = feature_proc(clientauth_feature);
 
 		/*
-		 * Start processing the entry. First, copy the entry to local
-		 * memory.
+		 * Start processing the entry. Copy the entry to local memory and then
+		 * release the lock to unblock other oworkers/clients.
 		 */
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 		memcpy(&port, &clientauth_ss->requests[idx].port_info, sizeof(port));
@@ -466,38 +482,39 @@ clientauth_launcher_main(Datum arg)
 		LWLockRelease(clientauth_ss->lock);
 
 		error = false;
-		error_msg[0] = 0;
+		error_msg[0] = '\0';
 
 		old_context = CurrentMemoryContext;
 		old_owner = CurrentResourceOwner;
 
 		/*
-		 * Wrap these SPI calls in a subtransaction so that we can
-		 * gracefully handle query errors
+		 * Wrap these SPI calls in a subtransaction so that we can gracefully
+		 * handle query errors
 		 */
 		BeginInternalSubTransaction(NULL);
 		PG_TRY();
 		{
-			foreach(proc_item, proc_names) {
-				char	       *query;
-				char	       *func_name = lfirst(proc_item);
-				char	       *port_subset_str;
-				Oid		hookargtypes[SPI_NARGS_2] = {TEXTOID, INT4OID};
+			foreach(proc_item, proc_names)
+			{
+				char	   *query;
+				char	   *func_name = lfirst(proc_item);
+				char	   *port_subset_str;
+				Oid			hookargtypes[SPI_NARGS_2] = {TEXTOID, INT4OID};
 				Datum		hookargs[SPI_NARGS_2];
 				char		hooknulls[SPI_NARGS_2];
 
 				query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
-						 func_name,
-					  quote_identifier(PG_TLE_NSPNAME));
+								 func_name,
+								 quote_identifier(PG_TLE_NSPNAME));
 
 				port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
-							   port.noblock,
-							   port.remote_host,
-						       port.remote_hostname,
-						port.remote_hostname_resolv,
-					       port.remote_hostname_errcode,
-							 port.database_name,
-							   port.user_name);
+										   port.noblock,
+										   port.remote_host,
+										   port.remote_hostname,
+										   port.remote_hostname_resolv,
+										   port.remote_hostname_errcode,
+										   port.database_name,
+										   port.user_name);
 
 				hookargs[0] = CStringGetTextDatum(port_subset_str);
 				hookargs[1] = Int32GetDatum(status);
@@ -505,31 +522,30 @@ clientauth_launcher_main(Datum arg)
 				SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
 
 				/*
-				 * Look at the first item of the first row
-				 * for the return value. If nothing is
-				 * returned (i.e. SPI_tuptable == NULL),
-				 * consider this an "empty string" and accept
-				 * the connection.
+				 * Look at the first item of the first row for the return
+				 * value. If nothing is returned (i.e. SPI_tuptable == NULL),
+				 * consider this an "empty string" and accept the connection.
 				 */
-				if (SPI_tuptable != NULL) {
-					SPITupleTable  *tuptable = SPI_tuptable;
+				if (SPI_tuptable != NULL)
+				{
+					SPITupleTable *tuptable = SPI_tuptable;
 					TupleDesc	tupdesc = tuptable->tupdesc;
 					char		buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
 
 					/*
-					 * Only look at first item of first
-					 * row
+					 * Only look at first item of first row
 					 */
 					HeapTuple	tuple = tuptable->vals[0];
+
 					snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
 
 					/*
-					 * If return value is not an empty
-					 * string, then there is an error and
-					 * we should reject. Skip any
-					 * remaining functions
+					 * If return value is not an empty string, then there is
+					 * an error and we should reject. Skip any remaining
+					 * functions
 					 */
-					if (strcmp(buf, "") != 0) {
+					if (strcmp(buf, "") != 0)
+					{
 						snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
 						error = true;
 						break;
@@ -538,8 +554,7 @@ clientauth_launcher_main(Datum arg)
 			}
 
 			/*
-			 * Done with our queries, so release the
-			 * subtransaction
+			 * Done with our queries, so release the subtransaction
 			 */
 			ReleaseCurrentSubTransaction();
 			MemoryContextSwitchTo(old_context);
@@ -548,10 +563,10 @@ clientauth_launcher_main(Datum arg)
 		PG_CATCH();
 		{
 			/*
-			 * There is a query error, copy the error message
-			 * from SPI and rollback the subtransaction
+			 * There is a query error, copy the error message from SPI and
+			 * rollback the subtransaction
 			 */
-			ErrorData      *edata;
+			ErrorData  *edata;
 
 			MemoryContextSwitchTo(old_context);
 			edata = CopyErrorData();
@@ -561,8 +576,7 @@ clientauth_launcher_main(Datum arg)
 			CurrentResourceOwner = old_owner;
 
 			/*
-			 * Return the error from SPI to the user and reject
-			 * the connection
+			 * Return the error from SPI to the user and reject the connection
 			 */
 			snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", edata->message);
 			error = true;
@@ -591,13 +605,14 @@ clientauth_launcher_main(Datum arg)
 }
 
 static void
-clientauth_hook(Port * port, int status)
+clientauth_hook(Port *port, int status)
 {
 	/*
-	 * Determine the queue index that this client will insert into based
-	 * on its PID
+	 * Determine the queue index that this client will insert into based on
+	 * its PID. This should be roughly sequential in the case of a connection
+	 * storm.
 	 */
-	int		idx = MyProc->pid % CLIENT_AUTH_MAX_PENDING_ENTRIES;
+	int			idx = MyProc->pid % CLIENT_AUTH_MAX_PENDING_ENTRIES;
 	char		error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
 	bool		error;
 
@@ -605,18 +620,21 @@ clientauth_hook(Port * port, int status)
 		prev_clientauth_hook(port, status);
 
 	/* Skip if this user is on the skip list */
-	if (check_skip_user(port->user_name)) {
+	if (check_skip_user(port->user_name))
+	{
 		elog(LOG, "%s is on pgtle.clientauth_users_to_skip, skipping", port->user_name);
 		return;
 	}
 	/* Skip if this database is on the skip list */
-	if (check_skip_database(port->database_name)) {
+	if (check_skip_database(port->database_name))
+	{
 		elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->database_name);
 		return;
 	}
 
 	ConditionVariablePrepareToSleep(clientauth_ss->requests[idx].available_entry_cv_ptr);
-	while (true) {
+	while (true)
+	{
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 		if (clientauth_ss->requests[idx].available_entry)
 			break;
@@ -630,21 +648,21 @@ clientauth_hook(Port * port, int status)
 
 	/* Copy fields in port to entry */
 	snprintf(clientauth_ss->requests[idx].port_info.remote_host,
-		 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
-		 "%s",
-		 port->remote_host == NULL ? "" : port->remote_host);
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->remote_host == NULL ? "" : port->remote_host);
 	snprintf(clientauth_ss->requests[idx].port_info.remote_hostname,
-		 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
-		 "%s",
-		 port->remote_hostname == NULL ? "" : port->remote_hostname);
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->remote_hostname == NULL ? "" : port->remote_hostname);
 	snprintf(clientauth_ss->requests[idx].port_info.database_name,
-		 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
-		 "%s",
-		 port->database_name == NULL ? "" : port->database_name);
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->database_name == NULL ? "" : port->database_name);
 	snprintf(clientauth_ss->requests[idx].port_info.user_name,
-		 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
-		 "%s",
-		 port->user_name == NULL ? "" : port->user_name);
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->user_name == NULL ? "" : port->user_name);
 	clientauth_ss->requests[idx].port_info.noblock = port->noblock;
 	clientauth_ss->requests[idx].port_info.remote_hostname_resolv = port->remote_hostname_resolv;
 	clientauth_ss->requests[idx].port_info.remote_hostname_errcode = port->remote_hostname_errcode;
@@ -652,14 +670,14 @@ clientauth_hook(Port * port, int status)
 
 	/* Set flag to tell BGWs that this entry needs to be processed */
 	clientauth_ss->requests[idx].done_processing = false;
-	clientauth_ss->requests[idx].needs_processing = true;
 
 	/* Signal BGW */
 	LWLockRelease(clientauth_ss->lock);
 	ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
 
 	ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
-	while (true) {
+	while (true)
+	{
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 		if (clientauth_ss->requests[idx].done_processing)
 			break;
@@ -691,15 +709,17 @@ clientauth_shmem_startup(void)
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 	clientauth_ss = ShmemInitStruct(clientauth_shmem_name, clientauth_shared_memsize(), &found);
 
-	if (!found) {
+	if (!found)
+	{
 		/* Initialize clientauth_ss */
 		clientauth_ss->lock = &(GetNamedLWLockTranche(PG_TLE_EXTNAME))->lock;
 
 		/*
-		 * Initialize the condition variables associated with each
-		 * background worker
+		 * Initialize the condition variables associated with each background
+		 * worker
 		 */
-		for (int i = 0; i < clientauth_num_parallel_workers; i++) {
+		for (int i = 0; i < clientauth_num_parallel_workers; i++)
+		{
 			ConditionVariableInit(&clientauth_ss->bgw_process_cvs[i]);
 			elog(LOG, "bgw_process_cv_%d memory address: %p", i, &clientauth_ss->bgw_process_cvs[i]);
 			ConditionVariableInit(&clientauth_ss->available_entry_cvs[i]);
@@ -707,8 +727,9 @@ clientauth_shmem_startup(void)
 		}
 
 		/* Initialize each queue entry */
-		for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++) {
-			int		bgw_idx = i % clientauth_num_parallel_workers;
+		for (int i = 0; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i++)
+		{
+			int			bgw_idx = i % clientauth_num_parallel_workers;
 
 			ConditionVariableInit(&clientauth_ss->requests[i].client_cv);
 			elog(LOG, "client_cv_%d memory address: %p", i, &clientauth_ss->requests[i].client_cv);
@@ -735,8 +756,11 @@ clientauth_shmem_request(void)
 }
 #endif
 
-static Size clientauth_shared_memsize(void){
+static Size
+clientauth_shared_memsize(void)
+{
 	Size		size;
+
 	size = MAXALIGN(sizeof(ClientAuthBgwShmemSharedState));
 
 	return size;
@@ -753,27 +777,29 @@ clientauth_sighup(SIGNAL_ARGS)
  * If one (or more) of the following is true, then the connection can be
  * accepted without executing user functions.
  *
- * 1. pgtle.enable_clientauth is OFF 2. pgtle.enable_clientauth is ON and the
- * pg_tle extension is not installed on clientauth_database_name 3.
+ * 1. pgtle.enable_clientauth is OFF, 2. pgtle.enable_clientauth is ON and the
+ * pg_tle extension is not installed on clientauth_database_name, 3.
  * pgtle.enable_clientauth is ON and no functions are registered with the
  * clientauth feature
  */
 static bool
 can_allow_without_executing()
 {
-	List	       *proc_names;
-	Oid		extOid;
+	List	   *proc_names;
+	Oid			extOid;
 
 	if (enable_clientauth_feature == FEATURE_OFF)
 		return true;
 
-	if (enable_clientauth_feature == FEATURE_ON) {
+	if (enable_clientauth_feature == FEATURE_ON)
+	{
 		extOid = get_extension_oid(PG_TLE_EXTNAME, true);
 		if (extOid == InvalidOid)
 			return true;
 
 		proc_names = feature_proc(clientauth_feature);
-		if (list_length(proc_names) <= 0) {
+		if (list_length(proc_names) <= 0)
+		{
 			list_free(proc_names);
 			return true;
 		}
@@ -788,22 +814,24 @@ can_allow_without_executing()
  * rejected without executing user functions.
  *
  * 1. pgtle.enable_clientauth is REQUIRE and the pg_tle extension is not
- * installed on clientauth_database_name 2. pgtle.enable_clientauth is
+ * installed on clientauth_database_name, 2. pgtle.enable_clientauth is
  * REQUIRE and no functions are registered with the clientauth feature
  */
 static bool
 can_reject_without_executing()
 {
-	List	       *proc_names;
-	Oid		extOid;
+	List	   *proc_names;
+	Oid			extOid;
 
-	if (enable_clientauth_feature == FEATURE_REQUIRE) {
+	if (enable_clientauth_feature == FEATURE_REQUIRE)
+	{
 		extOid = get_extension_oid(PG_TLE_EXTNAME, true);
 		if (extOid == InvalidOid)
 			return true;
 
 		proc_names = feature_proc(clientauth_feature);
-		if (list_length(proc_names) <= 0) {
+		if (list_length(proc_names) <= 0)
+		{
 			list_free(proc_names);
 			return true;
 		}
@@ -821,18 +849,20 @@ static bool
 check_skip_user(const char *user_name)
 {
 	bool		skip = false;
-	char	       *users_copy;
-	List	       *users = NIL;
-	ListCell       *lc;
+	char	   *users_copy;
+	List	   *users = NIL;
+	ListCell   *lc;
 
 	users_copy = pstrdup(clientauth_users_to_skip);
 	if (!SplitIdentifierString(users_copy, ',', &users))
 		elog(ERROR, "could not parse pgtle.clientauth_users_to_skip");
 
-	foreach(lc, users) {
-		char	       *user = (char *)lfirst(lc);
+	foreach(lc, users)
+	{
+		char	   *user = (char *) lfirst(lc);
 
-		if (strcmp(user, user_name) == 0) {
+		if (strcmp(user, user_name) == 0)
+		{
 			skip = true;
 			break;
 		}
@@ -852,18 +882,20 @@ static bool
 check_skip_database(const char *database_name)
 {
 	bool		skip = false;
-	char	       *databases_copy;
-	List	       *databases = NIL;
-	ListCell       *lc;
+	char	   *databases_copy;
+	List	   *databases = NIL;
+	ListCell   *lc;
 
 	databases_copy = pstrdup(clientauth_databases_to_skip);
 	if (!SplitIdentifierString(databases_copy, ',', &databases))
 		elog(ERROR, "could not parse pgtle.clientauth_databases_to_skip");
 
-	foreach(lc, databases) {
-		char	       *database = (char *)lfirst(lc);
+	foreach(lc, databases)
+	{
+		char	   *database = (char *) lfirst(lc);
 
-		if (strcmp(database, database_name) == 0) {
+		if (strcmp(database, database_name) == 0)
+		{
 			skip = true;
 			break;
 		}
