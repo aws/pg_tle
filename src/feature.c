@@ -32,6 +32,7 @@
 #include "constants.h"
 #include "feature.h"
 #include "tleextension.h"
+#include "utils/varlena.h"
 
 static void check_valid_name(char *val, const char *featurename);
 
@@ -124,6 +125,36 @@ feature_proc(const char *featurename)
 	PG_END_TRY();
 
 	return procs;
+}
+
+/* Check if a string is contained in a GUC parameter consisting of a comma-separated list of fields. */
+bool
+check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_name)
+{
+	bool		skip = false;
+	char	   *guc_copy;
+	List	   *guc_list = NIL;
+	ListCell   *lc;
+
+	guc_copy = pstrdup(guc_var);
+	if (!SplitIdentifierString(guc_copy, ',', &guc_list))
+		elog(ERROR, "could not parse %s", guc_name);
+
+	foreach(lc, guc_list)
+	{
+		char	   *guc_str = (char *) lfirst(lc);
+
+		if (strcmp(guc_str, str) == 0)
+		{
+			skip = true;
+			break;
+		}
+	}
+
+	pfree(guc_copy);
+	list_free(guc_list);
+
+	return skip;
 }
 
 /*  Check for semi-colon to prevent SPI_exec from running multiple queries accidentally */

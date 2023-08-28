@@ -118,8 +118,6 @@ static void clientauth_sighup(SIGNAL_ARGS);
 void		clientauth_init(void);
 static bool can_allow_without_executing(void);
 static bool can_reject_without_executing(void);
-static bool check_skip_user(const char *user_name);
-static bool check_skip_database(const char *database_name);
 
 /* GUC that determines whether clientauth is enabled */
 static int	enable_clientauth_feature = FEATURE_OFF;
@@ -617,13 +615,13 @@ clientauth_hook(Port *port, int status)
 		prev_clientauth_hook(port, status);
 
 	/* Skip if this user is on the skip list */
-	if (check_skip_user(port->user_name))
+	if (check_string_in_guc_list(port->user_name, clientauth_users_to_skip, "pgtle.clientauth_users_to_skip"))
 	{
 		elog(LOG, "%s is on pgtle.clientauth_users_to_skip, skipping", port->user_name);
 		return;
 	}
 	/* Skip if this database is on the skip list */
-	if (check_skip_database(port->database_name))
+	if (check_string_in_guc_list(port->database_name, clientauth_databases_to_skip, "pgtle.clientauth_databases_to_skip"))
 	{
 		elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->database_name);
 		return;
@@ -836,70 +834,4 @@ can_reject_without_executing()
 	}
 
 	return false;
-}
-
-/*
- * Check if user should be skipped according to
- * pgtle.clientauth_users_to_skip GUC
- */
-static bool
-check_skip_user(const char *user_name)
-{
-	bool		skip = false;
-	char	   *users_copy;
-	List	   *users = NIL;
-	ListCell   *lc;
-
-	users_copy = pstrdup(clientauth_users_to_skip);
-	if (!SplitIdentifierString(users_copy, ',', &users))
-		elog(ERROR, "could not parse pgtle.clientauth_users_to_skip");
-
-	foreach(lc, users)
-	{
-		char	   *user = (char *) lfirst(lc);
-
-		if (strcmp(user, user_name) == 0)
-		{
-			skip = true;
-			break;
-		}
-	}
-
-	pfree(users_copy);
-	list_free(users);
-
-	return skip;
-}
-
-/*
- * Check if database should be skipped according to
- * pgtle.clientauth_databases_to_skip GUC
- */
-static bool
-check_skip_database(const char *database_name)
-{
-	bool		skip = false;
-	char	   *databases_copy;
-	List	   *databases = NIL;
-	ListCell   *lc;
-
-	databases_copy = pstrdup(clientauth_databases_to_skip);
-	if (!SplitIdentifierString(databases_copy, ',', &databases))
-		elog(ERROR, "could not parse pgtle.clientauth_databases_to_skip");
-
-	foreach(lc, databases)
-	{
-		char	   *database = (char *) lfirst(lc);
-
-		if (strcmp(database, database_name) == 0)
-		{
-			skip = true;
-			break;
-		}
-	}
-
-	pfree(databases_copy);
-	list_free(databases);
-
-	return skip;
 }
