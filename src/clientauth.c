@@ -228,6 +228,8 @@ typedef struct ClientAuthBgwShmemSharedState
 
 static ClientAuthBgwShmemSharedState * clientauth_ss = NULL;
 
+void		clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUTH_USER_ERROR_MAX_STRLEN], PortSubset * port, int *status);
+
 void
 clientauth_init(void)
 {
@@ -346,10 +348,6 @@ clientauth_launcher_main(Datum arg)
 		/* SPI return value */
 		int			ret;
 
-		/* User functions gotten from pgtle.feature_info */
-		List	   *proc_names;
-		ListCell   *proc_item;
-
 		/*
 		 * Arguments to ClientAuthentication_hook, copied from shared memory
 		 */
@@ -360,20 +358,13 @@ clientauth_launcher_main(Datum arg)
 		int			idx;
 
 		/*
-		 * Tracks whether this worker can allow or reject all connections
-		 * without executing user functions
-		 */
-		bool		allow_without_executing = false;
-		bool		reject_without_executing = false;
-
-		/*
 		 * Values returned by the user function, to be copied into shared
 		 * memory
 		 */
 		char		error_msg[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
 		bool		error;
 
-		/* Used for starting a subtransaction */
+		/* Used for error handling */
 		MemoryContext old_context;
 		ResourceOwner old_owner;
 
@@ -422,62 +413,26 @@ clientauth_launcher_main(Datum arg)
 			ProcessConfigFile(PGC_SIGHUP);
 		}
 
-		/* Start a transaction in which we can run queries */
-		SetCurrentStatementStartTimestamp();
-		StartTransactionCommand();
-
-		ret = SPI_connect();
-		if (ret != SPI_OK_CONNECT)
-			ereport(ERROR,
-					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
-							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
-
-		PushActiveSnapshot(GetTransactionSnapshot());
-
 		/*
-		 * Check if we can allow or reject without executing the user's
-		 * functions
-		 */
-		allow_without_executing = can_allow_without_executing();
-		reject_without_executing = can_reject_without_executing();
-
-		if (allow_without_executing || reject_without_executing)
-		{
-			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-			clientauth_ss->requests[idx].done_processing = true;
-			clientauth_ss->requests[idx].error = reject_without_executing;
-
-			if (reject_without_executing)
-			{
-				snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN,
-						 "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
-			}
-
-			LWLockRelease(clientauth_ss->lock);
-			ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
-
-			SPI_finish();
-			PopActiveSnapshot();
-			CommitTransactionCommand();
-
-			continue;
-		}
-
-		/* Get each function that is registered with clientauth */
-		proc_names = feature_proc(clientauth_feature);
-
-		/*
-		 * Start processing the entry. Copy the entry to local memory and then
-		 * release the lock to unblock other oworkers/clients.
+		 * Copy the entry to local memory and then release the lock to unblock
+		 * other workers/clients.
 		 */
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
 		memcpy(&port, &clientauth_ss->requests[idx].port_info, sizeof(port));
 		status = clientauth_ss->requests[idx].status;
 		LWLockRelease(clientauth_ss->lock);
 
-		error = false;
-		error_msg[0] = '\0';
+		/* Start a transaction in which we can run queries */
+		SetCurrentStatementStartTimestamp();
+		StartTransactionCommand();
+
+		PushActiveSnapshot(GetTransactionSnapshot());
+		ret = SPI_connect();
+		if (ret != SPI_OK_CONNECT)
+			ereport(ERROR,
+					(errcode(ERRCODE_CONNECTION_EXCEPTION),
+					 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
+							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		old_context = CurrentMemoryContext;
 		old_owner = CurrentResourceOwner;
@@ -489,68 +444,8 @@ clientauth_launcher_main(Datum arg)
 		BeginInternalSubTransaction(NULL);
 		PG_TRY();
 		{
-			foreach(proc_item, proc_names)
-			{
-				char	   *query;
-				char	   *func_name = lfirst(proc_item);
-				char	   *port_subset_str;
-				Oid			hookargtypes[SPI_NARGS_2] = {TEXTOID, INT4OID};
-				Datum		hookargs[SPI_NARGS_2];
-				char		hooknulls[SPI_NARGS_2];
+			clientauth_launcher_run_user_functions(&error, &error_msg, &port, &status);
 
-				query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
-								 func_name,
-								 quote_identifier(PG_TLE_NSPNAME));
-
-				port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
-										   port.noblock,
-										   port.remote_host,
-										   port.remote_hostname,
-										   port.remote_hostname_resolv,
-										   port.remote_hostname_errcode,
-										   port.database_name,
-										   port.user_name);
-
-				hookargs[0] = CStringGetTextDatum(port_subset_str);
-				hookargs[1] = Int32GetDatum(status);
-
-				SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
-
-				/*
-				 * Look at the first item of the first row for the return
-				 * value. If nothing is returned (i.e. SPI_tuptable == NULL),
-				 * consider this an "empty string" and accept the connection.
-				 */
-				if (SPI_tuptable != NULL)
-				{
-					SPITupleTable *tuptable = SPI_tuptable;
-					TupleDesc	tupdesc = tuptable->tupdesc;
-					char		buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
-
-					/*
-					 * Only look at first item of first row
-					 */
-					HeapTuple	tuple = tuptable->vals[0];
-
-					snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
-
-					/*
-					 * If return value is not an empty string, then there is
-					 * an error and we should reject. Skip any remaining
-					 * functions
-					 */
-					if (strcmp(buf, "") != 0)
-					{
-						snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
-						error = true;
-						break;
-					}
-				}
-			}
-
-			/*
-			 * Done with our queries, so release the subtransaction
-			 */
 			ReleaseCurrentSubTransaction();
 			MemoryContextSwitchTo(old_context);
 			CurrentResourceOwner = old_owner;
@@ -579,6 +474,11 @@ clientauth_launcher_main(Datum arg)
 		}
 		PG_END_TRY();
 
+		/* Finish our transaction */
+		SPI_finish();
+		PopActiveSnapshot();
+		CommitTransactionCommand();
+
 		/*
 		 * Copy execution results back to shared memory and signal
 		 * clientauth_hook
@@ -589,14 +489,106 @@ clientauth_launcher_main(Datum arg)
 		snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", error_msg);
 		LWLockRelease(clientauth_ss->lock);
 		ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
-
-		list_free(proc_names);
-
-		/* Finish our transaction */
-		SPI_finish();
-		PopActiveSnapshot();
-		CommitTransactionCommand();
 	}
+}
+
+/* Run the user's functions. This procedure should not do any transaction
+ * management or shared memory accesses. Expect that an SPI connection has
+ * already been established.
+ *
+ * error and error_msg are pointers where this procedure will store the results of function execution.
+ *
+ * port_info and status are pointers to data that this procedure uses to execute functions.
+ */
+void
+clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUTH_USER_ERROR_MAX_STRLEN], PortSubset * port, int *status)
+{
+	List	   *proc_names;
+	ListCell   *proc_item;
+
+	/* By default, there is no error */
+	*error = false;
+	*error_msg[0] = '\0';
+
+	/*
+	 * Check if we can allow or reject without executing the user's functions
+	 */
+	if (can_allow_without_executing())
+	{
+		*error = false;
+		return;
+	}
+	if (can_reject_without_executing())
+	{
+		*error = true;
+		snprintf(*error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
+		return;
+	}
+
+	/* Get each function that is registered with clientauth */
+	proc_names = feature_proc(clientauth_feature);
+
+	foreach(proc_item, proc_names)
+	{
+		char	   *query;
+		char	   *func_name = lfirst(proc_item);
+		char	   *port_subset_str;
+		Oid			hookargtypes[SPI_NARGS_2] = {TEXTOID, INT4OID};
+		Datum		hookargs[SPI_NARGS_2];
+		char		hooknulls[SPI_NARGS_2];
+
+		query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
+						 func_name,
+						 quote_identifier(PG_TLE_NSPNAME));
+
+		port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
+								   port->noblock,
+								   port->remote_host,
+								   port->remote_hostname,
+								   port->remote_hostname_resolv,
+								   port->remote_hostname_errcode,
+								   port->database_name,
+								   port->user_name);
+
+		hookargs[0] = CStringGetTextDatum(port_subset_str);
+		hookargs[1] = Int32GetDatum(*status);
+
+		SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0);
+
+		/*
+		 * Look at the first item of the first row for the return value. If
+		 * nothing is returned (i.e. SPI_tuptable == NULL), consider this an
+		 * "empty string" and accept the connection.
+		 */
+		if (SPI_tuptable != NULL)
+		{
+			SPITupleTable *tuptable = SPI_tuptable;
+			TupleDesc	tupdesc = tuptable->tupdesc;
+			char		buf[CLIENT_AUTH_USER_ERROR_MAX_STRLEN];
+
+			/*
+			 * Only look at first item of first row
+			 */
+			HeapTuple	tuple = tuptable->vals[0];
+
+			snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
+
+			/*
+			 * If return value is not an empty string, then there is an error
+			 * and we should reject. Skip any remaining functions
+			 */
+			if (strcmp(buf, "") != 0)
+			{
+				snprintf(*error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
+				*error = true;
+				SPI_finish();
+				return;
+			}
+		}
+	}
+
+	/* No error! */
+	SPI_finish();
 }
 
 static void
@@ -626,6 +618,9 @@ clientauth_hook(Port *port, int status)
 		elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->database_name);
 		return;
 	}
+	/* Skip if clientauth feature is off */
+	if (enable_clientauth_feature == FEATURE_OFF)
+		return;
 
 	ConditionVariablePrepareToSleep(clientauth_ss->requests[idx].available_entry_cv_ptr);
 	while (true)

@@ -22,6 +22,7 @@
 ### 8.  Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
 ### 9.  Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
 ### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 11. Rejects connections when no schema qualified function is found
 
 use strict;
 use warnings;
@@ -175,13 +176,25 @@ $node->command_ok(
 
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth'))]);
 
-### 10.  Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 $node->psql('postgres', qq[DROP EXTENSION pg_tle CASCADE;]);
-$node->psql('postgres', 'SELECT pg_reload_conf();');
 
 $node->psql('not_excluded', 'select', stderr => \$psql_err);
 like($psql_err, qr/FATAL:  pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature/,
     "clientauth rejects connection when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name");
+$node->command_ok(
+    ['psql', '-c', 'select;'],
+    "can still connect if database is in pgtle.clientauth_databases_to_skip");
+
+### 11. Rejects connections when no schema qualified function is found
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->psql('postgres', qq[CREATE EXTENSION pg_tle CASCADE;]);
+$node->psql('postgres', qq[INSERT INTO pgtle.feature_info VALUES ('clientauth', '', 'dummy_function', '')]);
+
+$node->psql('not_excluded', 'select', stderr => \$psql_err);
+like($psql_err, qr/FATAL:  table, schema, and proname must be present in "pgtle.feature_info"/,
+    "clientauth rejects connections when no schema qualified function is found");
 $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
