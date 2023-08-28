@@ -345,9 +345,6 @@ clientauth_launcher_main(Datum arg)
 	/* Main worker loop */
 	while (true)
 	{
-		/* SPI return value */
-		int			ret;
-
 		/*
 		 * Arguments to ClientAuthentication_hook, copied from shared memory
 		 */
@@ -427,12 +424,6 @@ clientauth_launcher_main(Datum arg)
 		StartTransactionCommand();
 
 		PushActiveSnapshot(GetTransactionSnapshot());
-		ret = SPI_connect();
-		if (ret != SPI_OK_CONNECT)
-			ereport(ERROR,
-					(errcode(ERRCODE_CONNECTION_EXCEPTION),
-					 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
-							PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 		old_context = CurrentMemoryContext;
 		old_owner = CurrentResourceOwner;
@@ -475,7 +466,6 @@ clientauth_launcher_main(Datum arg)
 		PG_END_TRY();
 
 		/* Finish our transaction */
-		SPI_finish();
 		PopActiveSnapshot();
 		CommitTransactionCommand();
 
@@ -493,10 +483,9 @@ clientauth_launcher_main(Datum arg)
 }
 
 /* Run the user's functions. This procedure should not do any transaction
- * management or shared memory accesses. Expect that an SPI connection has
- * already been established.
+ * management (other than opening an SPI connection) or shared memory accesses.
  *
- * error and error_msg are pointers where this procedure will store the results of function execution.
+ * error and error_msg are pointers to where this procedure will store the results of function execution.
  *
  * port_info and status are pointers to data that this procedure uses to execute functions.
  */
@@ -505,21 +494,31 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 {
 	List	   *proc_names;
 	ListCell   *proc_item;
+	int			ret;
 
 	/* By default, there is no error */
 	*error = false;
 	*error_msg[0] = '\0';
+
+	ret = SPI_connect();
+	if (ret != SPI_OK_CONNECT)
+		ereport(ERROR,
+				(errcode(ERRCODE_CONNECTION_EXCEPTION),
+				 errmsg("\"%s.clientauth\" feature was not able to connect to the database \"%s\"",
+						PG_TLE_NSPNAME, get_database_name(MyDatabaseId))));
 
 	/*
 	 * Check if we can allow or reject without executing the user's functions
 	 */
 	if (can_allow_without_executing())
 	{
+		SPI_finish();
 		*error = false;
 		return;
 	}
 	if (can_reject_without_executing())
 	{
+		SPI_finish();
 		*error = true;
 		snprintf(*error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature");
 		return;
@@ -579,9 +578,9 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 			 */
 			if (strcmp(buf, "") != 0)
 			{
+				SPI_finish();
 				snprintf(*error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", buf);
 				*error = true;
-				SPI_finish();
 				return;
 			}
 		}
