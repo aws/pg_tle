@@ -172,3 +172,216 @@ SET password_encryption TO 'md5';
 -- set to "password"
 ERROR:  password must not be found in a common password dictionary
 ```
+
+### Client authentication hook (`clientauth`)
+
+You can use the client authentication hook (`clientauth`) to provide additional control over the authentication process. Functions registered to the hook are called after a client finishes authentication, whether or not the authentication is successful.
+
+**Warning: clientauth functions are executed as superuser!** Please define functions carefully and be aware of potential security risks.
+
+#### Function definition
+
+A `clientauth` hook function takes the following arguments
+
+clientauth_hook(port pgtle.clientauth_port_subset, status integer)
+
+* `port` (`pgtle.clientauth_port_subset`) - an object containing the following fields. These are a subset of the Port object that client authentication hook passes to internal C functions.
+  * `noblock` (`bool`)
+  * `remote_host` (`text`)
+  * `remote_hostname` (`text`)
+  * `remote_hostname_resolv` (`integer`)
+  * `remote_hostname_errcode` (`integer`)
+  * `database_name` (`text`)
+  * `user_name` (`text`)
+* `status` (`integer`) - connection status code. This can be one of the following:
+  * 0 (`STATUS_OK`)
+  * 1 (`STATUS_ERROR`)
+
+#### Configuration
+
+##### `pgtle.enable_clientauth`
+
+Controls whether a `clientauth` hook is enabled. There are three settings:
+
+* `off` — Disables the `clientauth` hook. This is the default.
+* `on` — only calls `clientauth` hook if one is present in the table.
+* `require` — requires a `clientauth` hook to be defined. **Warning**: connections will be rejected if no functions are registered to the `clientauth` hook.
+
+Context: SIGHUP. **Note: A database restart is needed to enable the clientauth feature**, i.e. to switch from `off` to `on` or `require`. This is because the background workers need to be registered on postmaster startup. A database restart is not needed to disable the clientauth feature (i.e. switch from `on` or `require` to `off`), but restarting is recommended in order to prevent the background workers from consuming resources unnecessarily.
+
+#### `pgtle.clientauth_db_name`
+
+Controls which database to query for the registered `clientauth` function. All `clientauth` functions should be created in this database. When a client connects to any database in the cluster, the functions in `clientauth_db_name` will be executed.
+
+Context: Postmaster
+
+Default: `postgres`
+
+#### `pgtle.clientauth_num_parallel_workers`
+
+Controls the number of background workers to handle connection requests in parallel. This value can be increased to handle large connection storms and/or `clientauth` functions that are expected to run long. Note that `clientauth_num_parallel_workers` should always be less than `max_worker_processes`, with enough headroom for other workers to be started.
+
+Context: Postmaster.
+
+Default: 1
+
+Minimum: 1
+
+Maximum: `min(max_connections, 256)`
+
+#### `pgtle.clientauth_users_to_skip`
+
+Comma-separated list of users that will be skipped by the `clientauth` feature. If the connecting user is on this list, `clientauth` functions will not be executed and the connection will flow as if `clientauth` was disabled.
+
+Context: SIGHUP
+
+Default: `""`
+
+#### `pgtle.clientauth_databases_to_skip`
+
+Comma-separated list of databases that will be skipped by the `clientauth` feature. If the connecting database is on this list, `clientauth` functions will not be executed and the connection will flow as if `clientauth` was disabled.
+
+Context: SIGHUP
+
+Default: `""`
+
+#### Example
+
+The following examples demonstrates how to write a hook function that rejects a connection if the user has failed to authenticate 5 or more times in a row. After writing this function, the example shows how to register the hook function as part of the `clientauth` hook.
+
+This example is available in the `examples` directory as a standalone `.sql` file.
+
+```sql
+SELECT pgtle.install_extension(
+  'client_lockout',
+  '1.0',
+  'Lock out users after 5 consecutive failed login attempts',
+$_pgtle_$
+  CREATE SCHEMA client_lockout;
+
+  CREATE TABLE client_lockout.failed_attempts (
+    user_name           text    PRIMARY KEY,
+    num_failed_attempts integer
+  );
+
+  CREATE FUNCTION client_lockout.hook_function(port pgtle.clientauth_port_subset, status integer)
+  RETURNS void AS $$
+    DECLARE
+      num_attempts integer;
+    BEGIN
+      -- Get number of consecutive failed attempts by this user
+      SELECT COALESCE(num_failed_attempts, 0) FROM client_lockout.failed_attempts
+        WHERE user_name = port.user_name
+        INTO num_attempts;
+
+      -- If at least 5 consecutive failed attempts, reject
+      IF num_attempts >= 5 THEN
+        RAISE EXCEPTION '% has failed 5 or more times consecutively, please contact the database administrator', port.user_name;
+      END IF;
+
+      -- If password is wrong, increment counter
+      IF status = -1 THEN
+        INSERT INTO client_lockout.failed_attempts (user_name, num_failed_attempts)
+          VALUES (port.user_name, 0)
+          ON CONFLICT (user_name) DO UPDATE SET num_failed_attempts = client_lockout.failed_attempts.num_failed_attempts + 1;
+      END IF;
+
+      -- If password is right, reset counter to 0
+      IF status = 0 THEN
+        INSERT INTO client_lockout.failed_attempts (user_name, num_failed_attempts)
+          VALUES (port.user_name, 0)
+          ON CONFLICT (user_name) DO UPDATE SET num_failed_attempts = 0;
+      END IF;
+    END
+  $$ LANGUAGE plpgsql;
+
+  -- Allow extension owner to reset the password attempts of any user to 0
+  CREATE FUNCTION client_lockout.reset_attempts(target_user_name text)
+  RETURNS void AS $$
+    BEGIN
+      INSERT INTO client_lockout.failed_attempts (user_name, num_failed_attempts)
+        VALUES (target_user_name, 0)
+        ON CONFLICT (user_name) DO UPDATE SET num_failed_attempts = 0;
+    END
+  $$ LANGUAGE plpgsql;
+
+  SELECT pgtle.register_feature('client_lockout.hook_function', 'clientauth');
+
+  REVOKE ALL ON SCHEMA client_lockout FROM PUBLIC;
+$_pgtle_$
+);
+```
+
+To enable the `clientauth` hook, you will need to set `pgtle.enable_clientauth` to `on` or `require` and restart the database. For example:
+
+```sql
+ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
+```
+
+Then restart the database (e.g. `pg_ctl restart`).
+
+If you are using Amazon RDS or Amazon Aurora, you will need to adjust the parameter group. For example, if you are using a parameter group called `pgtle-pg` that was referenced in the [installation instructions]('01_install.md'), you can run this command:
+
+```shell
+aws rds modify-db-parameter-group \
+    --region us-east-1 \
+    --db-parameter-group-name pgtle-pg \
+    --parameters "ParameterName=pgtle.enable_clientauth,ParameterValue=on,ApplyMethod=pending-reboot"
+```
+
+If you are using a database instance called `pg-tle-is-fun`, you can restart the database with this command:
+
+```shell
+aws rds reboot-db-instance\
+    --region us-east-1 \
+    --db-instance-identifier pg-tle-is-fun
+```
+
+You can check that the value is set using the `SHOW` command:
+
+```sql
+SHOW pgtle.enable_clientauth;
+```
+
+If the value is `on`, you will see the following output:
+
+```
+ pgtle.enable_clientauth
+-----------------------------
+ on
+```
+
+Here is example output of the above `clientauth` hook in action. First, a TLE admin user creates the `client_lockout` extension in the `pgtle.clientauth_db_name` database.
+
+```
+CREATE EXTENSION client_lockout;
+```
+
+Now the hook is active. After failing to authenticate 5 times, a user receives this message on subsequent attempts:
+
+```
+$ psql -d postgres -U tle_user
+Password for user test:
+psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: FATAL:  tle_user has failed 5 or more times consecutively, please contact the database administrator
+```
+
+The database administrator can use the `client_lockout.reset_attempts` function to unlock the user.
+
+```
+postgres=# select client_lockout.reset_attempts('tle_user');
+ reset_attempts
+----------------
+
+(1 row)
+```
+
+Then the user can authenticate again.
+
+```
+$ psql -d postgres -U tle_user
+Password for user test:
+psql (17devel)
+Type "help" for help.
+
+postgres=>
+```
