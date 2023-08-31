@@ -25,17 +25,18 @@
  * function(s) is written to the shared memory queue for the client to
  * consume.
  *
- * A connection is successful if any of the following are true: 1. clientauth
- * is disabled, 2. clientauth is on and pg_tle is not installed on the
- * clientauth database, 3. clientauth is on and there are no clientauth
- * functions registered, 4. the registered functions are called and all return
- * either the empty string or void
+ * A connection is successful if any of the following are true:
  *
- * A connection is rejected if any of the following are true: 1. clientauth
- * is required and pg_tle is not installed on the clientauth database, 2.
- * clientauth is required and there are no clientauth functions registered, 3.
- * the registered functions are called and any return a non-empty string or
- * throw an error
+ * 1. clientauth is disabled,
+ * 2. clientauth is on and pg_tle is not installed on the clientauth database,
+ * 3. clientauth is on and there are no clientauth functions registered,
+ * 4. the registered functions are called and all return either the empty string or void
+ *
+ * A connection is rejected if any of the following are true:
+ *
+ * 1. clientauth is required and pg_tle is not installed on the clientauth database,
+ * 2. clientauth is required and there are no clientauth functions registered,
+ * 3. the registered functions are called and any return a non-empty string or throw an error
  *
  * Note that if the connecting user or database is found in
  * pgtle.clientauth_users_to_skip or pgtle.clientauth_databases_to_skip, then
@@ -263,7 +264,7 @@ clientauth_init(void)
 							 &enable_clientauth_feature,
 							 FEATURE_OFF,
 							 feature_mode_options,
-							 PGC_SIGHUP,
+							 PGC_POSTMASTER,
 							 GUC_SUPERUSER_ONLY,
 							 NULL, NULL, NULL);
 
@@ -309,20 +310,28 @@ clientauth_init(void)
 							   GUC_LIST_INPUT,
 							   NULL, NULL, NULL);
 
-	/* Create background workers */
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-	worker.bgw_restart_time = 1;
-	worker.bgw_notify_pid = 0;
-	sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
-	sprintf(worker.bgw_function_name, "clientauth_launcher_main");
-	snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
-
-	for (int i = 0; i < clientauth_num_parallel_workers; i++)
+	/*
+	 * If clientauth feature is enabled at postmaster startup, then register
+	 * background workers. pgtle.enable_clientauth's context is set to
+	 * PGC_POSTMASTER so that we can register background workers on postmaster
+	 * startup only if they are needed.
+	 */
+	if (enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
 	{
-		snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
-		worker.bgw_main_arg = Int32GetDatum(i);
-		RegisterBackgroundWorker(&worker);
+		worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+		worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
+		worker.bgw_restart_time = 1;
+		worker.bgw_notify_pid = 0;
+		sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
+		sprintf(worker.bgw_function_name, "clientauth_launcher_main");
+		snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
+
+		for (int i = 0; i < clientauth_num_parallel_workers; i++)
+		{
+			snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
+			worker.bgw_main_arg = Int32GetDatum(i);
+			RegisterBackgroundWorker(&worker);
+		}
 	}
 }
 
@@ -474,16 +483,18 @@ clientauth_launcher_main(Datum arg)
 		 * clientauth_hook
 		 */
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-		clientauth_ss->requests[idx].done_processing = true;
 		clientauth_ss->requests[idx].error = error;
 		snprintf(clientauth_ss->requests[idx].error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", error_msg);
+		clientauth_ss->requests[idx].done_processing = true;
 		LWLockRelease(clientauth_ss->lock);
 		ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
 	}
 }
 
-/* Run the user's functions. This procedure should not do any transaction
- * management (other than opening an SPI connection) or shared memory accesses.
+/* Run the user's functions.
+ *
+ * This procedure should not do any transaction management (other than opening an SPI connection)
+ * or shared memory accesses.
  *
  * error and error_msg are pointers to where this procedure will store the results of function execution.
  *
@@ -605,22 +616,20 @@ clientauth_hook(Port *port, int status)
 	if (prev_clientauth_hook)
 		prev_clientauth_hook(port, status);
 
-	/* Skip if this user is on the skip list */
-	if (check_string_in_guc_list(port->user_name, clientauth_users_to_skip, "pgtle.clientauth_users_to_skip"))
-	{
-		elog(LOG, "%s is on pgtle.clientauth_users_to_skip, skipping", port->user_name);
-		return;
-	}
-	/* Skip if this database is on the skip list */
-	if (check_string_in_guc_list(port->database_name, clientauth_databases_to_skip, "pgtle.clientauth_databases_to_skip"))
-	{
-		elog(LOG, "%s is on pgtle.clientauth_databases_to_skip, skipping", port->database_name);
-		return;
-	}
 	/* Skip if clientauth feature is off */
 	if (enable_clientauth_feature == FEATURE_OFF)
 		return;
+	/* Skip if this user is on the skip list */
+	if (check_string_in_guc_list(port->user_name, clientauth_users_to_skip, "pgtle.clientauth_users_to_skip"))
+		return;
+	/* Skip if this database is on the skip list */
+	if (check_string_in_guc_list(port->database_name, clientauth_databases_to_skip, "pgtle.clientauth_databases_to_skip"))
+		return;
 
+	/*
+	 * If the queue entry is not available, wait until another client using it
+	 * has signalled that they are done
+	 */
 	ConditionVariablePrepareToSleep(clientauth_ss->requests[idx].available_entry_cv_ptr);
 	while (true)
 	{
@@ -710,9 +719,7 @@ clientauth_shmem_startup(void)
 		for (int i = 0; i < clientauth_num_parallel_workers; i++)
 		{
 			ConditionVariableInit(&clientauth_ss->bgw_process_cvs[i]);
-			elog(LOG, "bgw_process_cv_%d memory address: %p", i, &clientauth_ss->bgw_process_cvs[i]);
 			ConditionVariableInit(&clientauth_ss->available_entry_cvs[i]);
-			elog(LOG, "available_entry_cvs_%d memory address: %p", i, &clientauth_ss->available_entry_cvs[i]);
 		}
 
 		/* Initialize each queue entry */
@@ -721,7 +728,6 @@ clientauth_shmem_startup(void)
 			int			bgw_idx = i % clientauth_num_parallel_workers;
 
 			ConditionVariableInit(&clientauth_ss->requests[i].client_cv);
-			elog(LOG, "client_cv_%d memory address: %p", i, &clientauth_ss->requests[i].client_cv);
 			clientauth_ss->requests[i].bgw_process_cv_ptr = &clientauth_ss->bgw_process_cvs[bgw_idx];
 			clientauth_ss->requests[i].available_entry_cv_ptr = &clientauth_ss->available_entry_cvs[bgw_idx];
 
@@ -766,10 +772,9 @@ clientauth_sighup(SIGNAL_ARGS)
  * If one (or more) of the following is true, then the connection can be
  * accepted without executing user functions.
  *
- * 1. pgtle.enable_clientauth is OFF, 2. pgtle.enable_clientauth is ON and the
- * pg_tle extension is not installed on clientauth_database_name, 3.
- * pgtle.enable_clientauth is ON and no functions are registered with the
- * clientauth feature
+ * 1. pgtle.enable_clientauth is OFF,
+ * 2. pgtle.enable_clientauth is ON and the pg_tle extension is not installed on clientauth_database_name,
+ * 3. pgtle.enable_clientauth is ON and no functions are registered with the clientauth feature
  */
 static bool
 can_allow_without_executing()
@@ -802,9 +807,8 @@ can_allow_without_executing()
  * If one (or more) of the following is true, then the connection can be
  * rejected without executing user functions.
  *
- * 1. pgtle.enable_clientauth is REQUIRE and the pg_tle extension is not
- * installed on clientauth_database_name, 2. pgtle.enable_clientauth is
- * REQUIRE and no functions are registered with the clientauth feature
+ * 1. pgtle.enable_clientauth is REQUIRE and the pg_tle extension is not installed on clientauth_database_name,
+ * 2. pgtle.enable_clientauth is REQUIRE and no functions are registered with the clientauth feature
  */
 static bool
 can_reject_without_executing()

@@ -39,7 +39,7 @@ static void check_valid_name(char *val, const char *featurename);
 List *
 feature_proc(const char *featurename)
 {
-	List		   *procs = NIL;
+	List	   *procs = NIL;
 	MemoryContext oldcontext = CurrentMemoryContext;
 	MemoryContext spicontext;
 
@@ -50,7 +50,7 @@ feature_proc(const char *featurename)
 		char	   *query;
 		uint64		j;
 		int			ret;
-		Oid			featargtypes[SPI_NARGS_1] = { TEXTOID };
+		Oid			featargtypes[SPI_NARGS_1] = {TEXTOID};
 		Datum		featargs[SPI_NARGS_1];
 
 		ret = SPI_connect();
@@ -66,7 +66,7 @@ feature_proc(const char *featurename)
 		 */
 
 		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) $1::%s.pg_tle_features ORDER BY proname",
-			 quote_identifier(PG_TLE_NSPNAME), quote_identifier(FEATURE_TABLE), quote_identifier(PG_TLE_NSPNAME));
+						 quote_identifier(PG_TLE_NSPNAME), quote_identifier(FEATURE_TABLE), quote_identifier(PG_TLE_NSPNAME));
 		featargs[0] = CStringGetTextDatum(featurename);
 
 		ret = SPI_execute_with_args(query, 1, featargtypes, featargs, NULL, true, 0);
@@ -131,7 +131,7 @@ feature_proc(const char *featurename)
 bool
 check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_name)
 {
-	bool		skip = false;
+	bool		match = false;
 	char	   *guc_copy;
 	List	   *guc_list = NIL;
 	ListCell   *lc;
@@ -146,7 +146,7 @@ check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_n
 
 		if (strcmp(guc_str, str) == 0)
 		{
-			skip = true;
+			match = true;
 			break;
 		}
 	}
@@ -154,7 +154,7 @@ check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_n
 	pfree(guc_copy);
 	list_free(guc_list);
 
-	return skip;
+	return match;
 }
 
 /*  Check for semi-colon to prevent SPI_exec from running multiple queries accidentally */

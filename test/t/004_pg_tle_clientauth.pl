@@ -121,7 +121,7 @@ like($psql_err, qr/FATAL:  clientauth function error/,
 
 ### 6. Functions do not take effect when pgtle.enable_clientauth = 'off'
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'off'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->restart;
 
 $node->command_ok(
     ['psql', '-U', 'testuser', '-c', 'select;'],
@@ -133,7 +133,7 @@ $node->command_ok(
 ### 7. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testuser,testuser2'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->restart;
 
 $node->command_ok(
     ['psql', '-U', 'testuser', '-c', 'select;'],
@@ -165,7 +165,7 @@ like($psql_err, qr/FATAL:  clientauth function error/,
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')]);
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('error', 'clientauth')]);
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'require'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->restart;
 
 $node->psql('not_excluded', 'select', stderr => \$psql_err);
 like($psql_err, qr/FATAL:  pgtle.enable_clientauth is set to require, but pg_tle is not installed or there are no functions registered with the clientauth feature/,
@@ -188,7 +188,7 @@ $node->command_ok(
 
 ### 11. Rejects connections when no schema qualified function is found
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->restart;
 $node->psql('postgres', qq[CREATE EXTENSION pg_tle CASCADE;]);
 $node->psql('postgres', qq[INSERT INTO pgtle.feature_info VALUES ('clientauth', '', 'dummy_function', '')]);
 
