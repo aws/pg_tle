@@ -667,6 +667,11 @@ clientauth_hook(Port *port, int status)
 	}
 	ConditionVariableCancelSleep();
 
+	/*
+	 * Signal BGW before doing anything. This avoids a deadlock if this client
+	 * terminates after grabbing the entry but before signalling anybody.
+	 */
+	ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
 	clientauth_ss->requests[idx].pid = MyProc->pid;
 
 	/* Copy fields in port to entry */
@@ -691,11 +696,6 @@ clientauth_hook(Port *port, int status)
 	clientauth_ss->requests[idx].port_info.remote_hostname_errcode = port->remote_hostname_errcode;
 	clientauth_ss->requests[idx].status = status;
 
-	/*
-	 * Set flags after signalling BGW. This avoids a deadlock if this client
-	 * terminates after grabbing the entry but before signalling anybody.
-	 */
-	ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
 	clientauth_ss->requests[idx].available_entry = false;
 	clientauth_ss->requests[idx].done_processing = false;
 	LWLockRelease(clientauth_ss->lock);
