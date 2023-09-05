@@ -80,6 +80,7 @@
 #include "storage/latch.h"
 #include "storage/lwlock.h"
 #include "storage/proc.h"
+#include "storage/procarray.h"
 #include "storage/shm_mq.h"
 #include "storage/shm_toc.h"
 #include "storage/shmem.h"
@@ -147,7 +148,7 @@ static bool clientauth_reload_config = false;
  * Future versions of pg_tle may add fields to PortSubset without breaking a
  * user's functions. However, the background workers need to be restarted or
  * else connections will fail, since the BGW main function needs a code
- * change to understand and pass the new struct/base type definition.
+ * change to understand and pass the new struct and SQL type definition.
  */
 typedef struct PortSubset
 {
@@ -190,6 +191,9 @@ typedef struct ClientAuthStatusEntry
 	/* Keeps track of this entry's state */
 	bool		done_processing;
 	bool		available_entry;
+
+	/* PID of backend process that is currently using this entry */
+	int			pid;
 
 	/* Error message to be emitted back to client */
 	bool		error;
@@ -488,6 +492,13 @@ clientauth_launcher_main(Datum arg)
 		clientauth_ss->requests[idx].done_processing = true;
 		LWLockRelease(clientauth_ss->lock);
 		ConditionVariableSignal(&clientauth_ss->requests[idx].client_cv);
+
+		/*
+		 * Just in case the client backend has terminated uncleanly, also
+		 * signal the next waiting client to check whether the current client
+		 * still exists.
+		 */
+		ConditionVariableSignal(clientauth_ss->requests[idx].available_entry_cv_ptr);
 	}
 }
 
@@ -634,7 +645,21 @@ clientauth_hook(Port *port, int status)
 	while (true)
 	{
 		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
-		if (clientauth_ss->requests[idx].available_entry)
+
+		/*
+		 * Check if the process that's holding this entry still exists. If it
+		 * doesn't then it must have terminated uncleanly and we can set
+		 * available_entry to true.
+		 */
+		if (!BackendPidGetProc(clientauth_ss->requests[idx].pid))
+			clientauth_ss->requests[idx].available_entry = true;
+
+		/*
+		 * In case the previous client terminated uncleanly, make sure the
+		 * background worker is finished with the previous entry before we
+		 * continue.
+		 */
+		if (clientauth_ss->requests[idx].available_entry && clientauth_ss->requests[idx].done_processing)
 			break;
 
 		LWLockRelease(clientauth_ss->lock);
@@ -642,7 +667,7 @@ clientauth_hook(Port *port, int status)
 	}
 	ConditionVariableCancelSleep();
 
-	clientauth_ss->requests[idx].available_entry = false;
+	clientauth_ss->requests[idx].pid = MyProc->pid;
 
 	/* Copy fields in port to entry */
 	snprintf(clientauth_ss->requests[idx].port_info.remote_host,
@@ -666,12 +691,14 @@ clientauth_hook(Port *port, int status)
 	clientauth_ss->requests[idx].port_info.remote_hostname_errcode = port->remote_hostname_errcode;
 	clientauth_ss->requests[idx].status = status;
 
-	/* Set flag to tell BGWs that this entry needs to be processed */
-	clientauth_ss->requests[idx].done_processing = false;
-
-	/* Signal BGW */
-	LWLockRelease(clientauth_ss->lock);
+	/*
+	 * Set flags after signalling BGW. This avoids a deadlock if this client
+	 * terminates after grabbing the entry but before signalling anybody.
+	 */
 	ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
+	clientauth_ss->requests[idx].available_entry = false;
+	clientauth_ss->requests[idx].done_processing = false;
+	LWLockRelease(clientauth_ss->lock);
 
 	ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
 	while (true)
