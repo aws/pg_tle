@@ -390,7 +390,7 @@ clientauth_launcher_main(Datum arg)
 		{
 			bool		need_to_wake = false;
 
-			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+			LWLockAcquire(clientauth_ss->lock, LW_SHARED);
 
 			/*
 			 * Check if this worker's assigned entries need processing.
@@ -430,7 +430,7 @@ clientauth_launcher_main(Datum arg)
 		 * Copy the entry to local memory and then release the lock to unblock
 		 * other workers/clients.
 		 */
-		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+		LWLockAcquire(clientauth_ss->lock, LW_SHARED);
 		memcpy(&port, &clientauth_ss->requests[idx].port_info, sizeof(port));
 		status = clientauth_ss->requests[idx].status;
 		LWLockRelease(clientauth_ss->lock);
@@ -709,7 +709,7 @@ clientauth_hook(Port *port, int status)
 	ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
 	while (true)
 	{
-		LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+		LWLockAcquire(clientauth_ss->lock, LW_SHARED);
 		if (clientauth_ss->requests[idx].done_processing)
 			break;
 
