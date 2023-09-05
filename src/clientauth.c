@@ -319,8 +319,11 @@ clientauth_init(void)
 	 * background workers. pgtle.enable_clientauth's context is set to
 	 * PGC_POSTMASTER so that we can register background workers on postmaster
 	 * startup only if they are needed.
+	 *
+	 * Don't start the background workers if we are in pg_upgrade either.
 	 */
-	if (enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
+	if ((enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
+		&& !IsBinaryUpgrade)
 	{
 		worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 		worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
@@ -629,6 +632,9 @@ clientauth_hook(Port *port, int status)
 
 	/* Skip if clientauth feature is off */
 	if (enable_clientauth_feature == FEATURE_OFF)
+		return;
+	/* Skip if this is a binary upgrade */
+	if (IsBinaryUpgrade)
 		return;
 	/* Skip if this user is on the skip list */
 	if (check_string_in_guc_list(port->user_name, clientauth_users_to_skip, "pgtle.clientauth_users_to_skip"))
