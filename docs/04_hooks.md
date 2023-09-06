@@ -181,7 +181,7 @@ You can use the client authentication hook (`clientauth`) to provide additional 
 
 #### Function definition
 
-A `clientauth` hook function takes the following arguments
+A `clientauth` hook function takes the following arguments and returns either `text` or `void`.
 
 clientauth_hook(port pgtle.clientauth_port_subset, status integer)
 
@@ -194,8 +194,14 @@ clientauth_hook(port pgtle.clientauth_port_subset, status integer)
   * `database_name` (`text`)
   * `user_name` (`text`)
 * `status` (`integer`) - connection status code. This can be one of the following:
-  * 0 (`STATUS_OK`)
-  * 1 (`STATUS_ERROR`)
+  * 0, representing successful connection
+  * -1, representing a connection error
+
+If the function returns a non-empty string or raises an exception, the string or exception message is interpreted as an error. `clientauth` will return the error to the user and fail their connection.
+
+If the function returns an empty string or void, `clientauth` will allow the connection.
+
+Runtime errors in the function will also be returned to the user as an error message, causing their connection to fail.
 
 #### Configuration
 
