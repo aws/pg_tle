@@ -248,7 +248,7 @@ clientauth_init(void)
 							 &enable_clientauth_feature,
 							 FEATURE_OFF,
 							 feature_mode_options,
-							 PGC_POSTMASTER,
+							 PGC_SIGHUP,
 							 GUC_SUPERUSER_ONLY,
 							 NULL, NULL, NULL);
 
@@ -294,8 +294,11 @@ clientauth_init(void)
 							   GUC_LIST_INPUT,
 							   NULL, NULL, NULL);
 
-    /* Do not proceed to install hooks if we are in pg_upgrade */
+    /* Do not register hooks or background workers if we are in pg_upgrade */
     if (IsBinaryUpgrade)
+        return;
+    /* Do not register hooks or background workers if clientauth is disabled */
+    if (enable_clientauth_feature == FEATURE_OFF)
         return;
 
 	/* For PG<=15, request shared memory space in _init */
@@ -318,28 +321,19 @@ clientauth_init(void)
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = clientauth_shmem_startup;
 
-	/*
-	 * If clientauth feature is enabled at postmaster startup, then register
-	 * background workers. pgtle.enable_clientauth's context is set to
-	 * PGC_POSTMASTER so that we can register background workers on postmaster
-	 * startup only if they are needed.
-	 */
-	if (enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
-	{
-		worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-		worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-		worker.bgw_restart_time = 1;
-		worker.bgw_notify_pid = 0;
-		sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
-		sprintf(worker.bgw_function_name, "clientauth_launcher_main");
-		snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
+	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
+	worker.bgw_restart_time = 1;
+	worker.bgw_notify_pid = 0;
+	sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
+	sprintf(worker.bgw_function_name, "clientauth_launcher_main");
+	snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
 
-		for (int i = 0; i < clientauth_num_parallel_workers; i++)
-		{
-			snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
-			worker.bgw_main_arg = Int32GetDatum(i);
-			RegisterBackgroundWorker(&worker);
-		}
+	for (int i = 0; i < clientauth_num_parallel_workers; i++)
+	{
+		snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
+		worker.bgw_main_arg = Int32GetDatum(i);
+		RegisterBackgroundWorker(&worker);
 	}
 }
 
