@@ -16,13 +16,14 @@
 ### 2.  Basic client auth function allows connections based on connection info
 ### 3.  Two client auth functions can be registered and both trigger
 ### 4.  Functions with fatal runtime errors are returned as errors
-### 5.  Functions that raise exceptions are returned as errors
-### 6.  Functions do not take effect when pgtle.enable_clientauth = 'off'
-### 7.  Functions do not take effect when user is on pgtle.clientauth_users_to_skip
-### 8.  Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
-### 9.  Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
-### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
-### 11. Rejects connections when no schema qualified function is found
+### 5.  If a function returns a table, the first column of the first row is returned to the user
+### 6.  Functions that raise exceptions are returned as errors
+### 7.  Functions do not take effect when pgtle.enable_clientauth = 'off'
+### 8.  Functions do not take effect when user is on pgtle.clientauth_users_to_skip
+### 9.  Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 12. Rejects connections when no schema qualified function is found
 
 use strict;
 use warnings;
@@ -45,12 +46,10 @@ $node->psql('postgres', 'CREATE ROLE testuser LOGIN');
 
 ### 1. Basic client auth function rejects invalid connections
 $node->psql('postgres', q[
-    CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS text AS $$
+    CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
             IF port.user_name = 'testuser' THEN
-                RETURN 'testuser is not allowed to connect';
-            ELSE
-                RETURN '';
+                RAISE EXCEPTION 'testuser is not allowed to connect';
             END IF;
         END
     $$ LANGUAGE plpgsql]);
@@ -105,7 +104,28 @@ like($psql_err, qr/FATAL:  control reached end of function without RETURN/,
     "function with fatal runtime error returns an error");
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('bad_function', 'clientauth')]);
 
-### 5. Functions that raise exceptions are returned as errors
+### 5. If a function returns a table, the first column of the first row is returned to the user
+$node->psql('postgres', qq[CREATE TABLE test_table(f1 text, f2 text)]);
+$node->psql('postgres', qq[INSERT INTO test_table VALUES ('table 1, 1', 'table 1, 2'), ('table 2, 1', 'table 2, 2'), ('', 'table 3, 2')]);
+$node->psql('postgres', q[
+    CREATE FUNCTION return_table(port pgtle.clientauth_port_subset, status integer) RETURNS TABLE(f1 text, f2 text) AS $$
+        BEGIN
+            IF port.user_name = 'testuser2' THEN
+                RETURN QUERY SELECT * FROM test_table;
+            ELSE
+                RETURN QUERY SELECT * FROM test_table WHERE test_table.f1 = '';
+            END IF;
+        END
+    $$ LANGUAGE plpgsql;]);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('return_table', 'clientauth')]);
+$node->psql('postgres', 'select', extra_params => ['-U', 'testuser2'], stderr => \$psql_err);
+like($psql_err, qr/FATAL:  table 1, 1/,
+    "function that returns table returns the first item to user");
+$node->command_ok(
+    ['psql', '-c', qq[SELECT pgtle.unregister_feature('return_table', 'clientauth')]],
+    "function that returns table with empty string as first item allows connection");
+
+### 6. Functions that raise exceptions are returned as errors
 $node->psql('postgres', q[
     CREATE FUNCTION error(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
@@ -119,7 +139,7 @@ $node->psql('postgres', 'select', extra_params => ['-U', 'testuser2'], stderr =>
 like($psql_err, qr/FATAL:  clientauth function error/,
     "function that raises exception is returned as error");
 
-### 6. Functions do not take effect when pgtle.enable_clientauth = 'off'
+### 7. Functions do not take effect when pgtle.enable_clientauth = 'off'
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'off'));
 $node->restart;
 
@@ -130,7 +150,7 @@ $node->command_ok(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when pgtle.enable_clientauth = 'off'");
 
-### 7. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
+### 8. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testuser,testuser2'));
 $node->restart;
@@ -142,7 +162,7 @@ $node->command_ok(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when testuser2 is in pgtle.clientauth_users_to_skip");
 
-### 8. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 9. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
 $node->psql('postgres', 'CREATE DATABASE not_excluded');
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'postgres'));
@@ -161,7 +181,7 @@ $node->psql('not_excluded', 'select', extra_params => ['-U', 'testuser2'], stder
 like($psql_err, qr/FATAL:  clientauth function error/,
     "clientauth function rejects testuser2 when database is not on pgtle.clientauth_databases_to_skip");
 
-### 9. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')]);
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('error', 'clientauth')]);
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'require'));
@@ -176,7 +196,7 @@ $node->command_ok(
 
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth'))]);
 
-### 10. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 $node->psql('postgres', qq[DROP EXTENSION pg_tle CASCADE;]);
 
 $node->psql('not_excluded', 'select', stderr => \$psql_err);
@@ -186,7 +206,7 @@ $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
 
-### 11. Rejects connections when no schema qualified function is found
+### 12. Rejects connections when no schema qualified function is found
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
 $node->restart;
 $node->psql('postgres', qq[CREATE EXTENSION pg_tle CASCADE;]);

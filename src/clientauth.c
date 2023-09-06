@@ -562,7 +562,7 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 		Datum		hookargs[SPI_NARGS_2];
 		char		hooknulls[SPI_NARGS_2];
 
-		query = psprintf("SELECT %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
+		query = psprintf("SELECT * FROM %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
 						 func_name,
 						 quote_identifier(PG_TLE_NSPNAME));
 
@@ -597,6 +597,7 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 			HeapTuple	tuple = tuptable->vals[0];
 
 			snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
+            elog(LOG, "buf: %s, natts: %d, numvals: %d", buf, tupdesc->natts, tuptable->numvals);
 
 			/*
 			 * If return value is not an empty string, then there is an error
