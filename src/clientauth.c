@@ -597,7 +597,6 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 			HeapTuple	tuple = tuptable->vals[0];
 
 			snprintf(buf, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", SPI_getvalue(tuple, tupdesc, 1));
-            elog(LOG, "buf: %s, natts: %d, numvals: %d", buf, tupdesc->natts, tuptable->numvals);
 
 			/*
 			 * If return value is not an empty string, then there is an error
