@@ -240,26 +240,6 @@ clientauth_init(void)
 {
 	BackgroundWorker worker;
 
-	/* For PG<=15, request shared memory space in _init */
-#if (PG_VERSION_NUM < 150000)
-	RequestNamedLWLockTranche(PG_TLE_EXTNAME, 1);
-	RequestAddinShmemSpace(clientauth_shared_memsize());
-#endif
-
-	/* PG15 requires shared memory space to be requested in shmem_request_hook */
-#if (PG_VERSION_NUM >= 150000)
-	prev_shmem_request_hook = shmem_request_hook;
-	shmem_request_hook = clientauth_shmem_request;
-#endif
-
-	/* Install our client authentication hook */
-	prev_clientauth_hook = ClientAuthentication_hook;
-	ClientAuthentication_hook = clientauth_hook;
-
-	/* Install our shmem hooks */
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = clientauth_shmem_startup;
-
 	/* Define our GUC parameters */
 	DefineCustomEnumVariable(
 							 "pgtle.enable_clientauth",
@@ -314,16 +294,37 @@ clientauth_init(void)
 							   GUC_LIST_INPUT,
 							   NULL, NULL, NULL);
 
+    /* Do not proceed to install hooks if we are in pg_upgrade */
+    if (IsBinaryUpgrade)
+        return;
+
+	/* For PG<=15, request shared memory space in _init */
+#if (PG_VERSION_NUM < 150000)
+	RequestNamedLWLockTranche(PG_TLE_EXTNAME, 1);
+	RequestAddinShmemSpace(clientauth_shared_memsize());
+#endif
+
+	/* PG15 requires shared memory space to be requested in shmem_request_hook */
+#if (PG_VERSION_NUM >= 150000)
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = clientauth_shmem_request;
+#endif
+
+	/* Install our client authentication hook */
+	prev_clientauth_hook = ClientAuthentication_hook;
+	ClientAuthentication_hook = clientauth_hook;
+
+	/* Install our shmem hooks */
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = clientauth_shmem_startup;
+
 	/*
 	 * If clientauth feature is enabled at postmaster startup, then register
 	 * background workers. pgtle.enable_clientauth's context is set to
 	 * PGC_POSTMASTER so that we can register background workers on postmaster
 	 * startup only if they are needed.
-	 *
-	 * Don't start the background workers if we are in pg_upgrade either.
 	 */
-	if ((enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
-		&& !IsBinaryUpgrade)
+	if (enable_clientauth_feature == FEATURE_ON || enable_clientauth_feature == FEATURE_REQUIRE)
 	{
 		worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 		worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
@@ -632,9 +633,6 @@ clientauth_hook(Port *port, int status)
 
 	/* Skip if clientauth feature is off */
 	if (enable_clientauth_feature == FEATURE_OFF)
-		return;
-	/* Skip if this is a binary upgrade */
-	if (IsBinaryUpgrade)
 		return;
 	/* Skip if this user is on the skip list */
 	if (check_string_in_guc_list(port->user_name, clientauth_users_to_skip, "pgtle.clientauth_users_to_skip"))
