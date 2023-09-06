@@ -294,12 +294,12 @@ clientauth_init(void)
 							   GUC_LIST_INPUT,
 							   NULL, NULL, NULL);
 
-    /* Do not register hooks or background workers if we are in pg_upgrade */
-    if (IsBinaryUpgrade)
-        return;
-    /* Do not register hooks or background workers if clientauth is disabled */
-    if (enable_clientauth_feature == FEATURE_OFF)
-        return;
+	/* Do not register hooks or background workers if we are in pg_upgrade */
+	if (IsBinaryUpgrade)
+		return;
+	/* Do not register hooks or background workers if clientauth is disabled */
+	if (enable_clientauth_feature == FEATURE_OFF)
+		return;
 
 	/* For PG<=15, request shared memory space in _init */
 #if (PG_VERSION_NUM < 150000)
@@ -666,13 +666,13 @@ clientauth_hook(Port *port, int status)
 	ConditionVariableCancelSleep();
 
 	/*
-	 * Signal BGW before doing anything. This avoids a deadlock if this client
-	 * terminates after grabbing the entry but before signalling anybody.
+	 * Signal BGW and copy the client auth data to shared memory. Once the
+	 * backend releases clientauth_ss->lock, the BGW proceeds to process the
+	 * request.
 	 */
 	ConditionVariableSignal(clientauth_ss->requests[idx].bgw_process_cv_ptr);
 	clientauth_ss->requests[idx].pid = MyProc->pid;
 
-	/* Copy fields in port to entry */
 	snprintf(clientauth_ss->requests[idx].port_info.remote_host,
 			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
 			 "%s",
