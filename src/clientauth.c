@@ -413,7 +413,7 @@ clientauth_launcher_main(Datum arg)
 			if (need_to_wake)
 				break;
 
-			ConditionVariableSleep(clientauth_ss->requests[bgw_idx].bgw_process_cv_ptr, WAIT_EVENT_MQ_RECEIVE);
+			ConditionVariableSleep(clientauth_ss->requests[bgw_idx].bgw_process_cv_ptr, WAIT_EVENT_MESSAGE_QUEUE_RECEIVE);
 		}
 		ConditionVariableCancelSleep();
 
@@ -667,7 +667,7 @@ clientauth_hook(Port *port, int status)
 			break;
 
 		LWLockRelease(clientauth_ss->lock);
-		ConditionVariableSleep(clientauth_ss->requests[idx].available_entry_cv_ptr, WAIT_EVENT_MQ_RECEIVE);
+		ConditionVariableSleep(clientauth_ss->requests[idx].available_entry_cv_ptr, WAIT_EVENT_MESSAGE_QUEUE_RECEIVE);
 	}
 	ConditionVariableCancelSleep();
 
@@ -712,7 +712,7 @@ clientauth_hook(Port *port, int status)
 			break;
 
 		LWLockRelease(clientauth_ss->lock);
-		ConditionVariableSleep(&clientauth_ss->requests[idx].client_cv, WAIT_EVENT_MQ_RECEIVE);
+		ConditionVariableSleep(&clientauth_ss->requests[idx].client_cv, WAIT_EVENT_MESSAGE_QUEUE_RECEIVE);
 	}
 	ConditionVariableCancelSleep();
 
