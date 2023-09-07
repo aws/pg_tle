@@ -572,7 +572,7 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
 
-		if (SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0) < 0)
+		if (SPI_execute_with_args(query, SPI_NARGS_2, hookargtypes, hookargs, hooknulls, true, 0) != SPI_OK_SELECT)
 			ereport(ERROR,
 					errmsg("unable to execute function \"%s\"", func_name));
 
