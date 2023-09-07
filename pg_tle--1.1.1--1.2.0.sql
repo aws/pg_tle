@@ -13,28 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "postgres.h"
 
-#include "tleextension.h"
-#include "passcheck.h"
-#include "clientauth.h"
-#include "fmgr.h"
+/*
+ * Updates since v1.1.1
+ *    1. Introduced clientauth feature
+ */
 
-PG_MODULE_MAGIC;
+-- complain if script is sourced in psql, rather than via CREATE EXTENSION
+\echo Use "CREATE EXTENSION pg_tle" to load this file. \quit
 
-void		_PG_init(void);
-void		_PG_fini(void);
+ALTER TYPE pgtle.pg_tle_features ADD VALUE 'clientauth';
 
-void
-_PG_init(void)
-{
-    pg_tle_init();
-	passcheck_init();
-    clientauth_init();
-}
+CREATE TYPE pgtle.clientauth_port_subset AS (
+    noblock                 boolean,
 
-void
-_PG_fini(void)
-{
-    pg_tle_fini();
-}
+    remote_host             text,
+    remote_hostname         text,
+    remote_hostname_resolv  integer,
+    remote_hostname_errcode integer,
+
+    database_name           text,
+    user_name               text
+);

@@ -32,13 +32,14 @@
 #include "constants.h"
 #include "feature.h"
 #include "tleextension.h"
+#include "utils/varlena.h"
 
 static void check_valid_name(char *val, const char *featurename);
 
 List *
 feature_proc(const char *featurename)
 {
-	List		   *procs = NIL;
+	List	   *procs = NIL;
 	MemoryContext oldcontext = CurrentMemoryContext;
 	MemoryContext spicontext;
 
@@ -49,7 +50,7 @@ feature_proc(const char *featurename)
 		char	   *query;
 		uint64		j;
 		int			ret;
-		Oid			featargtypes[SPI_NARGS_1] = { TEXTOID };
+		Oid			featargtypes[SPI_NARGS_1] = {TEXTOID};
 		Datum		featargs[SPI_NARGS_1];
 
 		ret = SPI_connect();
@@ -65,7 +66,7 @@ feature_proc(const char *featurename)
 		 */
 
 		query = psprintf("SELECT schema_name, proname FROM %s.%s WHERE feature OPERATOR(pg_catalog.=) $1::%s.pg_tle_features ORDER BY proname",
-			 quote_identifier(PG_TLE_NSPNAME), quote_identifier(FEATURE_TABLE), quote_identifier(PG_TLE_NSPNAME));
+						 quote_identifier(PG_TLE_NSPNAME), quote_identifier(FEATURE_TABLE), quote_identifier(PG_TLE_NSPNAME));
 		featargs[0] = CStringGetTextDatum(featurename);
 
 		ret = SPI_execute_with_args(query, 1, featargtypes, featargs, NULL, true, 0);
@@ -124,6 +125,36 @@ feature_proc(const char *featurename)
 	PG_END_TRY();
 
 	return procs;
+}
+
+/* Check if a string is contained in a GUC parameter consisting of a comma-separated list of fields. */
+bool
+check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_name)
+{
+	bool		match = false;
+	char	   *guc_copy;
+	List	   *guc_list = NIL;
+	ListCell   *lc;
+
+	guc_copy = pstrdup(guc_var);
+	if (!SplitIdentifierString(guc_copy, ',', &guc_list))
+		elog(ERROR, "could not parse %s", guc_name);
+
+	foreach(lc, guc_list)
+	{
+		char	   *guc_str = (char *) lfirst(lc);
+
+		if (strcmp(guc_str, str) == 0)
+		{
+			match = true;
+			break;
+		}
+	}
+
+	pfree(guc_copy);
+	list_free(guc_list);
+
+	return match;
 }
 
 /*  Check for semi-colon to prevent SPI_exec from running multiple queries accidentally */

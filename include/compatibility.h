@@ -557,5 +557,14 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #define CHECK_CAN_SET_ROLE(member, role) check_can_set_role(member, role)
 #endif
 
+/*
+ * PostgreSQL version 17+
+ *
+ * Renames WAIT_EVENT_MQ_* to WAIT_EVENT_MESSAGE_QUEUE_*
+ */
+#if (PG_VERSION_NUM < 170000)
+#define WAIT_EVENT_MESSAGE_QUEUE_RECEIVE WAIT_EVENT_MQ_RECEIVE
+#endif
+
 
 #endif	/* SET_USER_COMPAT_H */
