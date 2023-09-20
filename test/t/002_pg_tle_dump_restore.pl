@@ -27,6 +27,8 @@ use PostgreSQL::Test::Utils;
 
 use Test::More;
 
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
+
 my $node = PostgreSQL::Test::Cluster->new('dump_restore_test');
 $node->init;
 $node->append_conf(
@@ -189,7 +191,7 @@ $node->command_ok(
 
 # dump again, saving the output to file
 my $pgport = $node->port;
-my $dumpfilename = 'dbdump.sql';
+my $dumpfilename = "$tempdir/dbdump.sql";
 $node->command_ok(
     [
         'pg_dump', '-p', $pgport, '-f', $dumpfilename, '-d', $testdb

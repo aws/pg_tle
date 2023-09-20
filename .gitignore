@@ -4,6 +4,14 @@
 pg_tle*.control
 regression.*
 results/*
+src/*.bc
 src/guc-file.c
 .deps
 tmp_check
+src/*.gcno
+src/*.gcda
+src/*.gcov
+src/*.gcov.out
+lcov*.info
+coverage/
+coverage-html-stamp

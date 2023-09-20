@@ -274,7 +274,7 @@
  * cast will have on its input and output types and the cast function.
  * ----------------------------------------------------------------
  */
-inline ObjectAddress
+static inline ObjectAddress
 CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 		   char castmethod, DependencyType behavior)
 {
