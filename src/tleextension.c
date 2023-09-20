@@ -189,6 +189,7 @@ static Oid	get_required_extension(char *reqExtensionName,
 								   bool cascade,
 								   List *parents,
 								   bool is_create);
+static Oid	get_tlefunc_oid_if_exists(const char *funcname);
 static void get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 												 Tuplestorestate *tupstore,
 												 TupleDesc tupdesc);
@@ -1879,6 +1880,15 @@ CreateExtensionInternal(char *extensionName,
 	ObjectAddress address;
 	ListCell   *lc;
 	bool		prevTLEState;
+	char	   *ctlname;
+	Oid			ctlfuncid;
+	char	   *sqlname;
+	Oid			sqlfuncid;
+	List	   *evi_list;
+	ExtensionVersionInfo *evi_start;
+	ExtensionVersionInfo *evi_target;
+	ObjectAddress ctlfunc,
+				sqlfunc;
 
 	/*
 	 * We have to do some state checking here if we are cascading through a
@@ -1926,12 +1936,11 @@ CreateExtensionInternal(char *extensionName,
 		updateVersions = NIL;	/* Also easy, no extra scripts */
 	else
 	{
-		/* Look for best way to install this version */
-		List	   *evi_list;
-		ExtensionVersionInfo *evi_start;
-		ExtensionVersionInfo *evi_target;
-
-		/* Extract the version update graph from the script directory */
+		/*
+		 * Look for best way to install this version
+		 *
+		 * Extract the version update graph from the script directory
+		 */
 		evi_list = get_ext_ver_list(pcontrol);
 
 		/* Identify the target version */
@@ -2102,6 +2111,61 @@ CreateExtensionInternal(char *extensionName,
 						  versionName, updateVersions,
 						  origSchemaName, cascade, is_create);
 
+	if (tleext)
+	{
+		/* Record dependency on .control and .sql functions */
+		ctlname = psprintf("%s.control", extensionName);
+		ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
+		if (ctlfuncid == InvalidOid)
+			elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extensionName), quote_identifier(PG_TLE_NSPNAME));
+
+		sqlname = psprintf("%s--%s.sql", extensionName, versionName);
+		sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+		elog(LOG, "extensionName: %s, versionName: %s, sqlfuncid: %d", extensionName, versionName, sqlfuncid);
+
+		/*
+		 * Record dependencies on control function and sql function for base
+		 * version
+		 */
+		ctlfunc.classId = ProcedureRelationId;
+		ctlfunc.objectId = ctlfuncid;
+		ctlfunc.objectSubId = 0;
+		recordDependencyOn(&address, &ctlfunc, DEPENDENCY_NORMAL);
+
+		if (sqlfuncid != InvalidOid)
+		{
+			sqlfunc.classId = ProcedureRelationId;
+			sqlfunc.objectId = sqlfuncid;
+			sqlfunc.objectSubId = 0;
+			recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
+		}
+
+		/*
+		 * If necessary update scripts are found, record dependency on each
+		 * script
+		 */
+		if (updateVersions != NULL)
+		{
+			const char *oldVersionName = versionName;
+			ListCell   *lcv;
+
+			foreach(lcv, updateVersions)
+			{
+				ObjectAddress upgradesqlfunc;
+
+				versionName = (char *) lfirst(lcv);
+				sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
+				sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+				upgradesqlfunc.classId = ProcedureRelationId;
+				upgradesqlfunc.objectId = sqlfuncid;
+				upgradesqlfunc.objectSubId = 0;
+
+				recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
+			}
+		}
+	}
+
 	if (prevTLEState != tleext)
 	{
 		if (prevTLEState)
@@ -2214,22 +2278,11 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 	DefElem    *d_cascade = NULL;
 	char	   *schemaName = NULL;
 	char	   *versionName = NULL;
-	char	   *ctlname = NULL;
-	char	   *sqlname = NULL;
 	char	   *extname = NULL;
 	bool		cascade = false;
 	ListCell   *lc;
 	ObjectAddress retobj;
-	ObjectAddress ctlfunc,
-				sqlfunc;
-	Oid			ctlfuncid = InvalidOid;
-	Oid			sqlfuncid = InvalidOid;
 	ExtensionControlFile *pcontrol = NULL;
-	List	   *evi_list;
-	List	   *updateVersions;
-	ExtensionVersionInfo *evi_start;
-	ExtensionVersionInfo *evi_target;
-
 
 	/* Determine if this is a pg_tle extnsion rather than a "real" extension */
 	if (strncmp(pstate->p_sourcetext, PG_TLE_MAGIC, sizeof(PG_TLE_MAGIC)) == 0)
@@ -2323,85 +2376,6 @@ tleCreateExtension(ParseState *pstate, CreateExtensionStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("version to install must be specified")));
-	}
-
-	/*
-	 * Look up the control and sql functions for this extension. Add
-	 * dependencies to pg_depend for this extension to depend on those
-	 * functions. This is to inform pg_dump/pg_restore that the functions are
-	 * prerequisites for creating the extension. Because otherwise, the
-	 * default order of objects dumped puts creation of all function objects
-	 * after creation of all extension objects.
-	 */
-
-	ctlname = psprintf("%s.control", extname);
-	ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
-	if (ctlfuncid == InvalidOid)
-		elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
-
-	/*
-	 * The sql script for the installed version may not exist if the version
-	 * was installed via an upgrade script. Look for a starting version that
-	 * does have an existing install script, and then record a dependency on
-	 * the install script and all upgrade scripts.
-	 */
-
-	/* Extract the version update graph from the script directory */
-	evi_list = get_ext_ver_list(pcontrol);
-
-	/* Identify the target version */
-	evi_target = get_ext_ver_info(versionName, &evi_list);
-
-	/* Identify best path to reach target */
-	evi_start = find_install_path(evi_list, evi_target, &updateVersions);
-
-	/* Fail if no path ... */
-	if (evi_start == NULL)
-		elog(ERROR, "could not find sql function %s for extension %s in schema %s", quote_identifier(sqlname), quote_identifier(extname), quote_identifier(PG_TLE_NSPNAME));
-
-	/* Otherwise, use the best starting version */
-	versionName = evi_start->name;
-	sqlname = psprintf("%s--%s.sql", extname, versionName);
-	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
-	/*
-	 * Record dependencies on control function and sql function for base
-	 * version.
-	 */
-	ctlfunc.classId = ProcedureRelationId;
-	ctlfunc.objectId = ctlfuncid;
-	ctlfunc.objectSubId = 0;
-
-	sqlfunc.classId = ProcedureRelationId;
-	sqlfunc.objectId = sqlfuncid;
-	sqlfunc.objectSubId = 0;
-
-	recordDependencyOn(&retobj, &ctlfunc, DEPENDENCY_NORMAL);
-	recordDependencyOn(&retobj, &sqlfunc, DEPENDENCY_NORMAL);
-
-	/*
-	 * If necessary update scripts are found, record dependency on each
-	 * script.
-	 */
-	if (updateVersions != NULL)
-	{
-		const char *oldVersionName = versionName;
-		ListCell   *lcv;
-
-		foreach(lcv, updateVersions)
-		{
-			ObjectAddress upgradesqlfunc;
-
-			versionName = (char *) lfirst(lcv);
-			sqlname = psprintf("%s--%s--%s.sql", extname, oldVersionName, versionName);
-			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
-			upgradesqlfunc.classId = ProcedureRelationId;
-			upgradesqlfunc.objectId = sqlfuncid;
-			upgradesqlfunc.objectSubId = 0;
-
-			recordDependencyOn(&retobj, &upgradesqlfunc, DEPENDENCY_NORMAL);
-		}
 	}
 
 	/* end pg_tle extensions */
