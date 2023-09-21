@@ -16,7 +16,7 @@
 #
 # 1. Install and create a regular TLE
 # 2. Install and create a TLE with an indirect version upgrade path
-# 3. Install and create a TLE that depends on another TLE
+# 3. Install and create a TLE that depends on another TLE with an indirect version
 # 4. Create a custom data type
 # 5. Create a custom operator
 
