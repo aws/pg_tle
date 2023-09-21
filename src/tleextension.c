@@ -2113,7 +2113,10 @@ CreateExtensionInternal(char *extensionName,
 
 	if (tleext)
 	{
-		/* Record dependency on .control and .sql functions */
+		/*
+		 * Record dependencies on .control and .sql functions so that they are
+		 * dumped/restored before the TLE
+		 */
 		ctlname = psprintf("%s.control", extensionName);
 		ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
 		if (ctlfuncid == InvalidOid)
@@ -2121,17 +2124,14 @@ CreateExtensionInternal(char *extensionName,
 
 		sqlname = psprintf("%s--%s.sql", extensionName, versionName);
 		sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-		elog(LOG, "extensionName: %s, versionName: %s, sqlfuncid: %d", extensionName, versionName, sqlfuncid);
 
-		/*
-		 * Record dependencies on control function and sql function for base
-		 * version
-		 */
+		/* Record dependencies on control function */
 		ctlfunc.classId = ProcedureRelationId;
 		ctlfunc.objectId = ctlfuncid;
 		ctlfunc.objectSubId = 0;
 		recordDependencyOn(&address, &ctlfunc, DEPENDENCY_NORMAL);
 
+		/* If it exists, record dependencies on sql function for base version */
 		if (sqlfuncid != InvalidOid)
 		{
 			sqlfunc.classId = ProcedureRelationId;
