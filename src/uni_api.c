@@ -28,13 +28,13 @@ void		_PG_fini(void);
 void
 _PG_init(void)
 {
-    pg_tle_init();
+	pg_tle_init();
 	passcheck_init();
-    clientauth_init();
+	clientauth_init();
 }
 
 void
 _PG_fini(void)
 {
-    pg_tle_fini();
+	pg_tle_fini();
 }
