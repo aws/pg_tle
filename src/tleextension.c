@@ -2113,10 +2113,7 @@ CreateExtensionInternal(char *extensionName,
 
 	if (tleext)
 	{
-		/*
-		 * Record dependencies on .control and .sql functions so that they are
-		 * dumped/restored before the TLE
-		 */
+		/* Record dependencies on .control and .sql functions */
 		ctlname = psprintf("%s.control", extensionName);
 		ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
 		if (ctlfuncid == InvalidOid)
