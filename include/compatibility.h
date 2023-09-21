@@ -51,7 +51,7 @@
 #define getObjectIdentity(address) \
 	getObjectIdentity(address,false)
 
-#endif /* 14+ */
+#endif							/* 14+ */
 
 /*
  * PostgreSQL version 13+
@@ -73,7 +73,7 @@
 	standard_ProcessUtility(pstmt, queryString,	context, params, queryEnv, dest, qc)
 #endif
 
-#endif /* 13+ */
+#endif							/* 13+ */
 
 /*
  * PostgreSQL version 10+
@@ -99,7 +99,7 @@
 
 #define pu_parsetree ((Node *) pstmt->utilityStmt)
 
-#endif /* 10+ */
+#endif							/* 10+ */
 
 #if !defined(PG_VERSION_NUM) || PG_VERSION_NUM < 100000
 #error "This extension only builds with PostgreSQL 9.4 or later"
@@ -177,7 +177,7 @@
 		error_context_stack = _save_context_stack; \
 	} while (0)
 
-#endif	/* macro defs (e.g. PG_FINALLY) */
+#endif							/* macro defs (e.g. PG_FINALLY) */
 
 /* also prior to pg13, add some newer macro defs */
 #ifndef TYPALIGN_CHAR
@@ -258,7 +258,7 @@
 
 #define ereport(elevel, ...)	\
 	ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
-	
+
 #endif
 
 #if PG_VERSION_NUM < 130000
@@ -566,5 +566,4 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #define WAIT_EVENT_MESSAGE_QUEUE_RECEIVE WAIT_EVENT_MQ_RECEIVE
 #endif
 
-
-#endif	/* SET_USER_COMPAT_H */
+#endif							/* SET_USER_COMPAT_H */

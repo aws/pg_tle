@@ -121,8 +121,9 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		 */
 		if (password_type > 2)
 			ereport(ERROR,
-				errmsg("unspported password type"),
-				errhint("This password type needs to be implemented in \"%s\".", PG_TLE_EXTNAME));
+					errmsg("unspported password type"),
+					errhint("This password type needs to be implemented in \"%s\".",
+							PG_TLE_EXTNAME));
 
 		ret = SPI_connect();
 		if (ret != SPI_OK_CONNECT)
@@ -134,17 +135,20 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		/* Format the queries we need to execute */
 		foreach(item, proc_names)
 		{
-			char			*query;
-			char			*func_name = lfirst(item);
-			Oid				hookargtypes[SPI_NARGS_5] = { TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID };
-			Datum			hookargs[SPI_NARGS_5];
-			char			hooknulls[SPI_NARGS_5];
+			char	   *query;
+			char	   *func_name = lfirst(item);
+			Oid			hookargtypes[SPI_NARGS_5] = {TEXTOID, TEXTOID, TEXTOID, TIMESTAMPTZOID, BOOLOID};
+			Datum		hookargs[SPI_NARGS_5];
+			char		hooknulls[SPI_NARGS_5];
 
 			memset(hooknulls, ' ', sizeof(hooknulls));
 
-			/* func_name is already using quote_identifier from when it was assembled */
+			/*
+			 * func_name is already using quote_identifier from when it was
+			 * assembled
+			 */
 			query = psprintf("SELECT %s($1::pg_catalog.text, $2::pg_catalog.text, $3::%s.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)",
-				func_name, quote_identifier(PG_TLE_NSPNAME));
+							 func_name, quote_identifier(PG_TLE_NSPNAME));
 
 			hookargs[0] = CStringGetTextDatum(username);
 			hookargs[1] = CStringGetTextDatum(shadow_pass);

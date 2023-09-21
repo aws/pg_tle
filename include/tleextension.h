@@ -44,12 +44,13 @@ extern void tleRemoveExtensionById(Oid extId);
 extern ObjectAddress tleExecAlterExtensionStmt(ParseState *pstate, AlterExtensionStmt *stmt);
 
 extern ObjectAddress tleExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt,
-													ObjectAddress *objAddr);
+													   ObjectAddress *objAddr);
 
-extern ObjectAddress tleAlterExtensionNamespace(const char *extensionName, const char *newschema,
-											 Oid *oldschema);
+extern ObjectAddress tleAlterExtensionNamespace(const char *extensionName,
+												const char *newschema,
+												Oid *oldschema);
 
-void pg_tle_init(void);
-void pg_tle_fini(void);
+void		pg_tle_init(void);
+void		pg_tle_fini(void);
 
 #endif							/* TLEEXTENSION_H */
