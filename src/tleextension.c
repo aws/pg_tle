@@ -1887,8 +1887,8 @@ CreateExtensionInternal(char *extensionName,
 	List	   *evi_list;
 	ExtensionVersionInfo *evi_start;
 	ExtensionVersionInfo *evi_target;
-	ObjectAddress ctlfunc,
-				sqlfunc;
+	ObjectAddress ctlfunc;
+	ObjectAddress sqlfunc;
 
 	/*
 	 * We have to do some state checking here if we are cascading through a
