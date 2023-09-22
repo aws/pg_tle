@@ -16,8 +16,9 @@
 #
 # 1. Install and create a regular TLE
 # 2. Install and create a TLE with an indirect version upgrade path
-# 3. Create a custom data type
-# 4. Create a custom operator
+# 3. Install and create a TLE that depends on another TLE with an indirect version
+# 4. Create a custom data type
+# 5. Create a custom operator
 
 use strict;
 use warnings;
@@ -115,7 +116,99 @@ like  ($stderr, qr//, 'create_tle_2');
 $node->psql($testdb, 'SELECT bar()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/1/, 'select_tle_function_2');
 
-# 3. Create a custom data type
+# 3. Install and create a TLE that depends on another TLE with an indirect version
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_extension
+    (
+      'test_cascade_dependency_2',
+      '1.0',
+      'Test TLE Functions',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_cascade_dependency_func_2()
+      RETURNS INT AS \$\$
+      (
+        SELECT -1
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle');
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_extension
+    (
+      'test_cascade_dependency',
+      '1.0',
+      'Test TLE Functions',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_cascade_dependency_func()
+      RETURNS INT AS \$\$
+      (
+        SELECT 0
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$,
+      array['test_cascade_dependency_2']
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle');
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_update_path
+    (
+      'test_cascade_dependency',
+      '1.0',
+      '1.1',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_cascade_dependency_func()
+      RETURNS INT AS \$\$
+      (
+        SELECT 1
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle_update_path');
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.set_default_version('test_cascade_dependency', '1.1')
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'set_default_version');
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_extension
+    (
+      'test_cascade',
+      '1.0',
+      'Test TLE Functions',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_cascade_func()
+      RETURNS INT AS \$\$
+      (
+        SELECT 1
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$,
+      array['test_cascade_dependency']
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle');
+
+$node->psql($testdb, "CREATE EXTENSION test_cascade CASCADE", stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_tle');
+
+$node->psql($testdb, 'SELECT test_cascade_func()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1/, 'select_tle_function');
+$node->psql($testdb, 'SELECT test_cascade_dependency_func()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1/, 'select_tle_function');
+$node->psql($testdb, 'SELECT test_cascade_dependency_func_2()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/-1/, 'select_tle_function');
+
+# 4. Create a custom data type
 
 $node->psql($testdb, 'SELECT pgtle.create_shell_type(\'public\', \'test_citext\')', stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'create_shell_type');
@@ -146,7 +239,7 @@ like  ($stderr, qr//, 'insert_custom_data_type');
 $node->psql($testdb, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/TEST/, 'select_custom_data_type');
 
-# 4. Create a custom data operator
+# 5. Create a custom data operator
 
 $node->psql($testdb, qq[CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) RETURNS int AS
     \$\$
@@ -219,12 +312,21 @@ like  ($stdout, qr/42/, 'select_tle_function_from_restored_db');
 $node->psql($restored_db, 'SELECT bar()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_2');
 
-# 3. Verify custom data type
+# 3. Verify TLE with dependency
+
+$node->psql($restored_db, 'SELECT test_cascade_func()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_3');
+$node->psql($restored_db, 'SELECT test_cascade_dependency_func()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_3');
+$node->psql($restored_db, 'SELECT test_cascade_dependency_func_2()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/-1/, 'select_tle_function_from_restored_db_3');
+
+# 4. Verify custom data type
 
 $node->psql($restored_db, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/TEST/, 'select_custom_data_type_from_restored_db');
 
-# 4. Verify custom data operator
+# 5. Verify custom data operator
 
 $node->psql($restored_db, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/t/, 'operator_from_restored_db');
