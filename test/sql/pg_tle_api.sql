@@ -35,6 +35,24 @@ SELECT pg_reload_conf();
 \c -
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
+
+-- Test validuntil_null and validuntil_time
+CREATE OR REPLACE FUNCTION test_validuntil(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+  if validuntil_null then
+    RAISE EXCEPTION 'Password needs a VALID UNTIL time';
+  end if;
+  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('test_validuntil', 'passcheck');
+-- Expect failure since no VALID UNTIL time is given
+ALTER ROLE testuser with password 'pass';
+-- Expect failure with the given valid until time in the error message
+ALTER ROLE testuser with password 'pass' VALID UNTIL '2023-01-01';
+
 -- Insert a value into the feature table
 CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
@@ -47,6 +65,7 @@ $$
 LANGUAGE PLPGSQL;
 
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature('test_validuntil', 'passcheck');
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
@@ -112,6 +131,7 @@ DROP SCHEMA testuser_2;
 DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
+DROP FUNCTION test_validuntil;
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
 -- OK, one more test. we're going to put a passcheck function in its own schema

@@ -50,6 +50,33 @@ SELECT pg_reload_conf();
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
 ERROR:  "pgtle.enable_password_check" feature is set to require, however no entries exist in "pgtle.feature_info" with the feature "passcheck"
+-- Test validuntil_null and validuntil_time
+CREATE OR REPLACE FUNCTION test_validuntil(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
+$$
+BEGIN
+  if validuntil_null then
+    RAISE EXCEPTION 'Password needs a VALID UNTIL time';
+  end if;
+  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+END;
+$$
+LANGUAGE PLPGSQL;
+SELECT pgtle.register_feature('test_validuntil', 'passcheck');
+ register_feature 
+------------------
+ 
+(1 row)
+
+-- Expect failure since no VALID UNTIL time is given
+ALTER ROLE testuser with password 'pass';
+ERROR:  Password needs a VALID UNTIL time
+CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
+SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
+-- Expect failure with the given valid until time in the error message
+ALTER ROLE testuser with password 'pass' VALID UNTIL '2023-01-01';
+ERROR:  VALID UNTIL time: 2023-01-01
+CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,timestamp with time zone,boolean) line 6 at RAISE
+SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Insert a value into the feature table
 CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
@@ -63,6 +90,12 @@ LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
  register_feature 
 ------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature('test_validuntil', 'passcheck');
+ unregister_feature 
+--------------------
  
 (1 row)
 
@@ -192,6 +225,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+DROP FUNCTION test_validuntil;
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
 -- OK, one more test. we're going to put a passcheck function in its own schema
