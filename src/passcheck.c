@@ -161,7 +161,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 			}
 			else
 			{
-				hookargs[3] = TimestampTzGetDatum(validuntil_time);
+				hookargs[3] = validuntil_time;
 				hookargs[4] = BoolGetDatum(false);
 			}
 
