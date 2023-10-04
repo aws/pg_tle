@@ -37,16 +37,26 @@ SELECT pg_reload_conf();
 ALTER ROLE testuser with password 'pass';
 
 -- Test validuntil_null and validuntil_time
-CREATE OR REPLACE FUNCTION test_validuntil(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
+ALTER SYSTEM SET pgtle.enable_password_check = 'on';
+SELECT pg_reload_conf();
+CREATE OR REPLACE FUNCTION test_validuntil(
+    username text,
+    shadow_pass text,
+    password_types pgtle.password_types,
+    validuntil_time TimestampTz,
+    validuntil_null boolean
+) RETURNS void AS
 $$
 BEGIN
-  if validuntil_null then
+  IF validuntil_null THEN
     RAISE EXCEPTION 'Password needs a VALID UNTIL time';
-  end if;
-  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+  END IF;
+  RAISE NOTICE 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
 END;
 $$
 LANGUAGE PLPGSQL;
+-- Positive case before registering the feature
+ALTER ROLE testuser with password 'pass';
 SELECT pgtle.register_feature('test_validuntil', 'passcheck');
 -- Expect failure since no VALID UNTIL time is given
 ALTER ROLE testuser with password 'pass';
@@ -54,7 +64,13 @@ ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'pass' VALID UNTIL '2023-01-01';
 
 -- Insert a value into the feature table
-CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(
+    username text,
+    shadow_pass text,
+    password_types pgtle.password_types,
+    validuntil_time TimestampTz,
+    validuntil_null boolean
+) RETURNS void AS
 $$
 BEGIN
 if length(shadow_pass) < 8 then
