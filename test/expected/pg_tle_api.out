@@ -70,9 +70,7 @@ BEGIN
   IF validuntil_null THEN
     RAISE EXCEPTION 'Password needs a VALID UNTIL time';
   END IF;
-  -- Raise EXCEPTION (instead of NOTICE) because background worker does not emit
-  -- non-error logs to the client
-  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+  RAISE NOTICE 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
 END;
 $$
 LANGUAGE PLPGSQL;
@@ -91,9 +89,7 @@ CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,times
 SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Expect failure with the given valid until time in the error message
 ALTER ROLE testuser with password 'pass' VALID UNTIL '2023-01-01';
-ERROR:  VALID UNTIL time: 2023-01-01
-CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,timestamp with time zone,boolean) line 8 at RAISE
-SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
+NOTICE:  VALID UNTIL time: 2023-01-01
 -- Insert a value into the feature table
 CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(
     username text,

@@ -51,9 +51,7 @@ BEGIN
   IF validuntil_null THEN
     RAISE EXCEPTION 'Password needs a VALID UNTIL time';
   END IF;
-  -- Raise EXCEPTION (instead of NOTICE) because background worker does not emit
-  -- non-error logs to the client
-  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+  RAISE NOTICE 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
 END;
 $$
 LANGUAGE PLPGSQL;
@@ -87,7 +85,6 @@ SELECT pgtle.unregister_feature('test_validuntil', 'passcheck');
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
-
 -- Test that by default a role has access to the feature_info table
 CREATE ROLE testuser_2 with LOGIN;
 CREATE SCHEMA testuser_2 AUTHORIZATION testuser_2;

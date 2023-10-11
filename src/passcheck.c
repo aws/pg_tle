@@ -496,7 +496,7 @@ passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 		if (enable_passcheck_feature == FEATURE_REQUIRE)
 			ereport(ERROR,
 					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\"%s",
-							PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature, database_error_msg));
+						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature, database_error_msg));
 		return;
 	}
 
