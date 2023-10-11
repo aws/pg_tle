@@ -193,7 +193,25 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 		data.validuntil_time = DatumGetTimestampTz(validuntil_time);
 		data.validuntil_null = validuntil_null;
 
-		passcheck_run_user_functions(&data);
+		PG_TRY();
+		{
+			passcheck_run_user_functions(&data);
+		}
+		PG_CATCH();
+		{
+			/*
+			 * Hide information on the err other than the err message to
+			 * prevent passwords from being logged.
+			 */
+			errhidestmt(true);
+			errhidecontext(true);
+			internalerrquery(NULL);
+
+			SPI_finish();
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
 		return;
 	}
 
@@ -402,6 +420,7 @@ passcheck_worker_main(Datum arg)
 		errhidestmt(true);
 		errhidecontext(true);
 		internalerrquery(NULL);
+		SPI_finish();
 
 		MemoryContextSwitchTo(old_context);
 		edata = CopyErrorData();
@@ -457,11 +476,8 @@ passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 
 	char		database_error_msg[PASSCHECK_ERROR_MSG_MAX_STRLEN];
 
-	elog(LOG, "pre database_error_msg");
-
 	if (strcmp("", passcheck_database_name) != 0)
 	{
-		elog(LOG, "writing to database_error_msg");
 		snprintf(database_error_msg, PASSCHECK_ERROR_MSG_MAX_STRLEN, " in the passcheck database \"%s\"", passcheck_database_name);
 	}
 	else
@@ -480,11 +496,11 @@ passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 	extOid = get_extension_oid(extension_name, true);
 	if (extOid == InvalidOid)
 	{
-		SPI_finish();
 		if (enable_passcheck_feature == FEATURE_REQUIRE)
 			ereport(ERROR,
 					errmsg("\"%s.enable_password_check\" feature is set to require but extension \"%s\" is not installed%s",
 						   PG_TLE_NSPNAME, PG_TLE_EXTNAME, database_error_msg));
+		SPI_finish();
 		return;
 	}
 
@@ -492,11 +508,11 @@ passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 	proc_names = feature_proc(password_check_feature);
 	if (list_length(proc_names) <= 0)
 	{
-		SPI_finish();
 		if (enable_passcheck_feature == FEATURE_REQUIRE)
 			ereport(ERROR,
 					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\"%s",
 						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature, database_error_msg));
+		SPI_finish();
 		return;
 	}
 
@@ -506,7 +522,6 @@ passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 	 */
 	if (passcheck_hook_data->password_type > 2)
 	{
-		SPI_finish();
 		ereport(ERROR,
 				errmsg("Unsupported password type. This password type needs to be implemented in \"%s\".", PG_TLE_EXTNAME));
 	}
