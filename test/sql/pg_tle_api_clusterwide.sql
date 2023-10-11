@@ -11,26 +11,24 @@
 --  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
+
+-- These are the same tests as pg_tle_api.sql but with a pgtle.passcheck_db_name set.
+-- Ensures that passcheck feature still functions as expected with cluster-wide enabled.
+
+ALTER SYSTEM SET pgtle.passcheck_db_name = 'contrib_regression';
+SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Expect password to go through since we haven't enabled the feature
 CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
 ALTER SYSTEM SET pgtle.enable_password_check = 'off';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 -- reconnect to ensure reload settings are propagated immediately
 \c -
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 -- reconnect to ensure reload settings are propagated immediately
 \c -
 -- Do not expect an error
@@ -40,24 +38,14 @@ CREATE EXTENSION pg_tle;
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'require';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 -- reconnect to ensure reload settings are propagated immediately
 \c -
 -- Expect an error for require if no entries are present
 ALTER ROLE testuser with password 'pass';
-ERROR:  "pgtle.enable_password_check" feature is set to require, however no entries exist in "pgtle.feature_info" with the feature "passcheck"
+
 -- Test validuntil_null and validuntil_time
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 CREATE OR REPLACE FUNCTION test_validuntil(
     username text,
     shadow_pass text,
@@ -79,21 +67,11 @@ LANGUAGE PLPGSQL;
 -- Positive case before registering the feature
 ALTER ROLE testuser with password 'pass';
 SELECT pgtle.register_feature('test_validuntil', 'passcheck');
- register_feature 
-------------------
- 
-(1 row)
-
 -- Expect failure since no VALID UNTIL time is given
 ALTER ROLE testuser with password 'pass';
-ERROR:  Password needs a VALID UNTIL time
-CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
-SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Expect failure with the given valid until time in the error message
 ALTER ROLE testuser with password 'pass' VALID UNTIL '2023-01-01';
-ERROR:  VALID UNTIL time: 2023-01-01
-CONTEXT:  PL/pgSQL function test_validuntil(text,text,pgtle.password_types,timestamp with time zone,boolean) line 8 at RAISE
-SQL statement "SELECT public.test_validuntil($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
+
 -- Insert a value into the feature table
 CREATE OR REPLACE FUNCTION password_check_length_greater_than_8(
     username text,
@@ -110,32 +88,18 @@ end if;
 END;
 $$
 LANGUAGE PLPGSQL;
+
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
- register_feature 
-------------------
- 
-(1 row)
-
 SELECT pgtle.unregister_feature('test_validuntil', 'passcheck');
- unregister_feature 
---------------------
- 
-(1 row)
-
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
-ERROR:  Passwords needs to be longer than 8
-CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
-SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 ALTER ROLE testuser with password 'passwords';
+
 -- Test that by default a role has access to the feature_info table
 CREATE ROLE testuser_2 with LOGIN;
 CREATE SCHEMA testuser_2 AUTHORIZATION testuser_2;
 SET SESSION AUTHORIZATION testuser_2;
 ALTER ROLE testuser_2 with password 'pass';
-ERROR:  Passwords needs to be longer than 8
-CONTEXT:  PL/pgSQL function password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean) line 4 at RAISE
-SQL statement "SELECT public.password_check_length_greater_than_8($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 -- Test that by default unprivileged users do not have permission to insert into table
 -- or have access to functions
 CREATE OR REPLACE FUNCTION testuser_2.unpriv_function_passcheck(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
@@ -148,14 +112,11 @@ END;
 $$
 LANGUAGE PLPGSQL;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'testuser_2', 'unpriv_function_passcheck', 'public.unpriv_function_passcheck(pg_catalog.text,pg_catalog.text,pgtle.password_types,timestamp with time zone,boolean)');
-ERROR:  permission denied for table feature_info
 SELECT pgtle.register_feature('testuser_2.unpriv_function_passcheck', 'passcheck');
-ERROR:  permission denied for function register_feature
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
-ERROR:  permission denied for function unregister_feature
 DELETE FROM pgtle.feature_info where feature = 'passcheck';
-ERROR:  permission denied for table feature_info
 RESET SESSION AUTHORIZATION;
+
 CREATE OR REPLACE FUNCTION password_check_only_nums(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 DECLARE x NUMERIC;
@@ -168,86 +129,34 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('password_check_only_nums', 'passcheck');
- register_feature 
-------------------
- 
-(1 row)
-
 -- Test both functions are called
 ALTER ROLE testuser with password 'passwords';
-ERROR:  Passwords can only have numbers
-CONTEXT:  PL/pgSQL function password_check_only_nums(text,text,pgtle.password_types,timestamp with time zone,boolean) line 7 at RAISE
-SQL statement "SELECT public.password_check_only_nums($1::pg_catalog.text, $2::pg_catalog.text, $3::pgtle.password_types, $4::pg_catalog.timestamptz, $5::pg_catalog.bool)"
 ALTER ROLE testuser with password '123456789';
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_nums', '');
 -- Expect to fail cause no schema qualified function found
 ALTER ROLE testuser with password '123456789';
-ERROR:  table, schema, and proname must be present in "pgtle.feature_info"
 -- test insert of duplicate hook and fail
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
-ERROR:  duplicate key value violates unique constraint "feature_info_pkey"
-DETAIL:  Key (feature, schema_name, proname)=(passcheck, public, password_check_length_greater_than_8) already exists.
-CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
-PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 24 at SQL statement
 -- unregister hooks
 SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
- unregister_feature 
---------------------
- 
-(1 row)
-
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
- unregister_feature 
---------------------
- 
-(1 row)
-
 -- fail on unregistering a hook that does not exist
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
-ERROR:  Could not unregister "password_check_length_greater_than_8": does not exist.
-CONTEXT:  PL/pgSQL function pgtle.unregister_feature(regproc,pgtle.pg_tle_features) line 44 at RAISE
 -- try the register if not exists
 SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
- register_feature_if_not_exists 
---------------------------------
- t
-(1 row)
-
 SELECT pgtle.register_feature_if_not_exists('password_check_length_greater_than_8', 'passcheck');
- register_feature_if_not_exists 
---------------------------------
- f
-(1 row)
-
 -- try the unregister if exists
 SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
- unregister_feature_if_exists 
-------------------------------
- t
-(1 row)
-
 SELECT pgtle.unregister_feature_if_exists('password_check_length_greater_than_8', 'passcheck');
- unregister_feature_if_exists 
-------------------------------
- f
-(1 row)
-
 TRUNCATE TABLE pgtle.feature_info;
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'test_foo;select foo()', '');
 ALTER ROLE testuser with password '123456789';
-ERROR:  "passcheck" feature does not support calling out to functions/schemas that contain ";"
-HINT:  Check the "pgtle.feature_info" table does not contain ';'.
 DROP ROLE testuser;
 DROP FUNCTION testuser_2.unpriv_function_passcheck;
 DROP SCHEMA testuser_2;
 DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
- pg_reload_conf 
-----------------
- t
-(1 row)
-
 DROP FUNCTION test_validuntil;
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
@@ -265,23 +174,11 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
- register_feature 
-------------------
- 
-(1 row)
-
 -- try to drop the schema while the code is still referenced
 -- fail
 DROP SCHEMA pass CASCADE;
-NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
-ERROR:  Function is referenced in pgtle.feature_info
-CONTEXT:  PL/pgSQL function pgtle.pg_tle_feature_info_sql_drop() line 27 at RAISE
 -- unregister the feature
 SELECT pgtle.unregister_feature('pass.password_check_length_greater_than_8', 'passcheck');
- unregister_feature 
---------------------
- 
-(1 row)
 
 -- one more...register the feature in the extension can drop it on its own
 -- the feature should NOT be in the table
@@ -292,10 +189,6 @@ SELECT EXISTS(
     proname = 'password_check_length_greater_than_8'
   LIMIT 1
 );
- exists 
---------
- f
-(1 row)
 
 SELECT pgtle.install_extension
 (
@@ -316,12 +209,8 @@ $_pgtle_$
   SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
 $_pgtle_$
 );
- install_extension 
--------------------
- t
-(1 row)
-
 CREATE EXTENSION test_unregister_feature;
+
 -- the feature should be in the table
 SELECT EXISTS(
   SELECT 1 FROM pgtle.feature_info
@@ -330,12 +219,9 @@ SELECT EXISTS(
     proname = 'password_check_length_greater_than_8'
   LIMIT 1
 );
- exists 
---------
- t
-(1 row)
 
 DROP EXTENSION test_unregister_feature;
+
 -- the feature should NOT be in the table
 SELECT EXISTS(
   SELECT 1 FROM pgtle.feature_info
@@ -344,18 +230,8 @@ SELECT EXISTS(
     proname = 'password_check_length_greater_than_8'
   LIMIT 1
 );
- exists 
---------
- f
-(1 row)
 
 SELECT pgtle.uninstall_extension('test_unregister_feature');
- uninstall_extension 
----------------------
- t
-(1 row)
-
 -- now drop everything
 DROP SCHEMA pass CASCADE;
-NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
 DROP EXTENSION pg_tle;

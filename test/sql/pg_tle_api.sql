@@ -12,10 +12,6 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 
-ALTER SYSTEM SET pgtle.passcheck_db_name = 'contrib_regression';
-SELECT pg_reload_conf();
--- reconnect to ensure reload settings are propagated immediately
-\c -
 -- Expect password to go through since we haven't enabled the feature
 CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'

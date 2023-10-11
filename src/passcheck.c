@@ -73,7 +73,7 @@ static void passcheck_shmem_request(void);
 static Size passcheck_shared_memsize(void);
 
 static int	enable_passcheck_feature = FEATURE_OFF;
-static char *passcheck_database_name = "postgres";
+static char *passcheck_database_name = "";
 
 static const char *extension_name = PG_TLE_EXTNAME;
 static const char *password_check_feature = "passcheck";
@@ -114,7 +114,7 @@ typedef struct PasscheckBgwShmemSharedState
 
 static PasscheckBgwShmemSharedState * passcheck_ss = NULL;
 
-static void passcheck_worker_run_user_functions(PasswordCheckHookData * passcheck_data);
+static void passcheck_run_user_functions(PasswordCheckHookData * passcheck_data);
 
 void
 passcheck_init(void)
@@ -154,7 +154,7 @@ passcheck_init(void)
 							   gettext_noop("Database containing pg_tle passcheck hook functions."),
 							   NULL,
 							   &passcheck_database_name,
-							   "postgres",
+							   "",
 							   PGC_SIGHUP,
 							   0,
 							   NULL, NULL, NULL);
@@ -177,6 +177,25 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 
 	if (enable_passcheck_feature == FEATURE_OFF)
 		return;
+
+	/*
+	 * If pgtle.passcheck_db_name is empty (e.g. not set), then use the legacy
+	 * mode of querying the current database directly without using a
+	 * background worker.
+	 */
+	if (strcmp("", passcheck_database_name) == 0)
+	{
+		PasswordCheckHookData data;
+
+		snprintf(data.username, PASSCHECK_DATA_MAX_STRLEN, "%s", username);
+		snprintf(data.shadow_pass, PASSCHECK_DATA_MAX_STRLEN, "%s", shadow_pass);
+		data.password_type = password_type;
+		data.validuntil_time = DatumGetTimestampTz(validuntil_time);
+		data.validuntil_null = validuntil_null;
+
+		passcheck_run_user_functions(&data);
+		return;
+	}
 
 	/*
 	 * Control flow:
@@ -362,7 +381,7 @@ passcheck_worker_main(Datum arg)
 	BeginInternalSubTransaction(NULL);
 	PG_TRY();
 	{
-		passcheck_worker_run_user_functions(&passcheck_hook_data);
+		passcheck_run_user_functions(&passcheck_hook_data);
 
 		ReleaseCurrentSubTransaction();
 		MemoryContextSwitchTo(old_context);
@@ -426,17 +445,29 @@ passcheck_worker_main(Datum arg)
  * Run the user's functions. This procedure should not do any transaction
  * management (other than opening an SPI connection) or shared memory accesses.
  *
- * error and error_msg are pointers to where this procedure will store the results of function execution.
- *
  * passcheck_data is a pointer to the hook data that this procedure uses to execute functions.
  */
-void
-passcheck_worker_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
+static void
+passcheck_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 {
 	int			ret;
 	Oid			extOid;
 	List	   *proc_names;
 	ListCell   *item;
+
+	char		database_error_msg[PASSCHECK_ERROR_MSG_MAX_STRLEN];
+
+	elog(LOG, "pre database_error_msg");
+
+	if (strcmp("", passcheck_database_name) != 0)
+	{
+		elog(LOG, "writing to database_error_msg");
+		snprintf(database_error_msg, PASSCHECK_ERROR_MSG_MAX_STRLEN, " in the passcheck database \"%s\"", passcheck_database_name);
+	}
+	else
+	{
+		database_error_msg[0] = '\0';
+	}
 
 	ret = SPI_connect();
 	if (ret != SPI_OK_CONNECT)
@@ -452,8 +483,8 @@ passcheck_worker_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 		SPI_finish();
 		if (enable_passcheck_feature == FEATURE_REQUIRE)
 			ereport(ERROR,
-					errmsg("\"%s.enable_password_check\" feature is set to require but extension \"%s\" is not installed in the passcheck database \"%s\"",
-						   PG_TLE_NSPNAME, PG_TLE_EXTNAME, passcheck_database_name));
+					errmsg("\"%s.enable_password_check\" feature is set to require but extension \"%s\" is not installed%s",
+						   PG_TLE_NSPNAME, PG_TLE_EXTNAME, database_error_msg));
 		return;
 	}
 
@@ -464,8 +495,8 @@ passcheck_worker_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 		SPI_finish();
 		if (enable_passcheck_feature == FEATURE_REQUIRE)
 			ereport(ERROR,
-					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\" in the passcheck database \"%s\"",
-						   PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature, passcheck_database_name));
+					errmsg("\"%s.enable_password_check\" feature is set to require, however no entries exist in \"%s.feature_info\" with the feature \"%s\"%s",
+							PG_TLE_NSPNAME, PG_TLE_NSPNAME, password_check_feature, database_error_msg));
 		return;
 	}
 
@@ -502,7 +533,7 @@ passcheck_worker_run_user_functions(PasswordCheckHookData * passcheck_hook_data)
 		hookargs[1] = CStringGetTextDatum(passcheck_hook_data->shadow_pass);
 		hookargs[2] = CStringGetTextDatum(pass_types[passcheck_hook_data->password_type]);
 
-		if (passcheck_ss->data.validuntil_null)
+		if (passcheck_hook_data->validuntil_null)
 		{
 			hooknulls[3] = 'n';
 			hookargs[4] = BoolGetDatum(true);
