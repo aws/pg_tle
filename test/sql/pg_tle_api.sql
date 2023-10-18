@@ -44,6 +44,8 @@ ALTER ROLE testuser with password 'pass';
 -- Test validuntil_null and validuntil_time
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 CREATE OR REPLACE FUNCTION test_validuntil(
     username text,
     shadow_pass text,
