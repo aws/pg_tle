@@ -95,7 +95,7 @@
  */
 #define CLIENT_AUTH_USER_ERROR_MAX_STRLEN 256
 
-static const char *clientauth_shmem_name = "clientauth_bgw_ss";
+static const char *clientauth_shmem_name = "pgtle_clientauth";
 static const char *clientauth_feature = "clientauth";
 
 /* Background worker main entry function */
@@ -303,7 +303,7 @@ clientauth_init(void)
 
 	/* For PG<=15, request shared memory space in _init */
 #if (PG_VERSION_NUM < 150000)
-	RequestNamedLWLockTranche(PG_TLE_EXTNAME, 1);
+	RequestNamedLWLockTranche(clientauth_shmem_name, 1);
 	RequestAddinShmemSpace(clientauth_shared_memsize());
 #endif
 
@@ -737,7 +737,7 @@ clientauth_shmem_startup(void)
 	if (!found)
 	{
 		/* Initialize clientauth_ss */
-		clientauth_ss->lock = &(GetNamedLWLockTranche(PG_TLE_EXTNAME))->lock;
+		clientauth_ss->lock = &(GetNamedLWLockTranche(clientauth_shmem_name))->lock;
 
 		/*
 		 * Initialize the condition variables associated with each background
@@ -773,7 +773,7 @@ clientauth_shmem_request(void)
 	if (prev_shmem_request_hook)
 		prev_shmem_request_hook();
 
-	RequestNamedLWLockTranche(PG_TLE_EXTNAME, 1);
+	RequestNamedLWLockTranche(clientauth_shmem_name, 1);
 	RequestAddinShmemSpace(clientauth_shared_memsize());
 }
 #endif

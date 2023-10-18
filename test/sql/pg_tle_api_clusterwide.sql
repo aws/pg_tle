@@ -12,6 +12,13 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 
+-- These are the same tests as pg_tle_api.sql but with a pgtle.passcheck_db_name set.
+-- Ensures that passcheck feature still functions as expected with cluster-wide enabled.
+
+ALTER SYSTEM SET pgtle.passcheck_db_name = 'contrib_regression';
+SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
 -- Expect password to go through since we haven't enabled the feature
 CREATE ROLE testuser with password 'pass';
 -- Test 'on' / 'off' / 'require'
@@ -56,7 +63,9 @@ BEGIN
   IF validuntil_null THEN
     RAISE EXCEPTION 'Password needs a VALID UNTIL time';
   END IF;
-  RAISE NOTICE 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
+  -- Raise EXCEPTION (instead of NOTICE) because background worker does not emit
+  -- non-error logs to the client
+  RAISE EXCEPTION 'VALID UNTIL time: %', to_char(validuntil_time, 'YYYY-MM-DD');
 END;
 $$
 LANGUAGE PLPGSQL;
@@ -90,6 +99,7 @@ SELECT pgtle.unregister_feature('test_validuntil', 'passcheck');
 -- Expect failure since pass is shorter than 8
 ALTER ROLE testuser with password 'pass';
 ALTER ROLE testuser with password 'passwords';
+
 -- Test that by default a role has access to the feature_info table
 CREATE ROLE testuser_2 with LOGIN;
 CREATE SCHEMA testuser_2 AUTHORIZATION testuser_2;
