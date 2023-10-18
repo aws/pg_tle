@@ -4,10 +4,6 @@ PostgreSQL provides hooks for extending its functionality without creating a for
 
 `pg_tle` enables you to build Trusted Language Extensions that can let you write hook functions and register them through a SQL API. This section of the documentation describes the available hooks and provides examples for how to use them in your Trusted Language Extensions.
 
-## Scope
-
-Note that some hooks are available globally across a PostgreSQL cluster (e.g. `check_password_hook`). If you register a global hook function, you will need to ensure you run `CREATE EXTENSION pg_tle;` in all of your databases.
-
 ## General information
 
 All hook functions need to be registered with `pg_tle`. Additionally, to enable some hooks you may need to set additional configuration parameters. The documentation on each `pg_tle` hook provides details on its specific setup and configuration.
@@ -34,7 +30,7 @@ SELECT pgtle.unregister_feature('my_password_check_rules', 'passcheck');
 
 ## Hooks
 
-This section describes the hooks that `pg_tle` makes availble to Trusted Language Extensions.
+This section describes the hooks that `pg_tle` makes available to Trusted Language Extensions.
 
 ### Password check hook (`passcheck`)
 
@@ -55,6 +51,10 @@ passcheck_hook(username text, password text, password_type pgtle.password_types,
 * `valid_until` (`timestamptz`) - if set, the time until the password on the account no longer works.
 * `valid_null` (`bool`) - if true, `valid_until` is set to `NULL`.
 
+By default, the `passcheck` feature executes functions that are registered in the current database. You will need to ensure that you run `CREATE EXTENSION pg_tle;` in all of your databases. You will also need to create and register passcheck functions in every database that they should take effect in.
+
+In `pg_tle` versions 1.3.0 and higher, the parameter `pgtle.passcheck_db_name` can be set for the `passcheck` feature to execute functions registered in a single database across the database cluster. If `pgtle.passcheck_db_name` is set, only registered passcheck functions in that database will be executed.
+
 #### Configuration
 
 ##### `pgtle.enable_password_check`
@@ -65,9 +65,25 @@ Controls whether a `passcheck` hook is enabled. There are three settings:
 * `on` — only calls password check hook if one is present in the table.
 * `require` — requires a password check hook to be defined.
 
+Context: SIGHUP
+
+Default: `off`
+
+##### `pgtle.passcheck_db_name`
+
+Available in `pg_tle` versions 1.3.0 and higher. If set, controls which database to query for the registered `passcheck` function. All `passcheck` functions should be created and registered in this database. **Warning: if `pgtle.passcheck_db_name` is set, `passcheck` functions are executed as superuser!** Please define functions carefully and be aware of potential security risks.
+
+If empty, the currently-connected database is queried for the registered `passcheck` function. `passcheck` functions should be created and registered in each database that they should take effect in.
+
+Context: SIGHUP
+
+Default: `""` (empty string)
+
 #### Example
 
 The following examples demonstrates how to write a hook function that checks to see if a user-supplied password is in a common password dictionary. After writing this function, the example shows how to register the hook function as part of the `passcheck` hook.
+
+More examples are available in the `examples` directory as standalone `.sql` files for use-cases such as enforcing password expiry dates.
 
 ```sql
 SELECT pgtle.install_extension (
@@ -134,6 +150,13 @@ ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
 SELECT pg_catalog.pg_reload_conf();
 ```
 
+Optionally, in order for `passcheck` functions to take effect across the database cluster, you will need to set `pgtle.passcheck_db_name`. For example:
+
+```sql
+ALTER SYSTEM SET pgtle.passcheck_db_name TO `my_pgtle_hooks_db`;
+SELECT pg_catalog.pg_reload_conf();
+```
+
 If you are using Amazon RDS or Amazon Aurora, you will need to adjust the parameter group. For example, if you are using a parameter group called `pgtle-pg` that was referenced in the [installation instructions]('01_install.md'), you can run this command:
 
 ```shell
@@ -160,6 +183,7 @@ If the value is `on`, you will see the following output:
 Here is example output of the above `passcheck` hook in action:
 
 ```
+-- note that if pgtle.passcheck_db_name is set, make sure to run CREATE EXTENSION in the pgtle.passcheck_db_name database
 CREATE EXTENSION my_password_check_rules;
 
 CREATE ROLE test_role PASSWORD 'password';
