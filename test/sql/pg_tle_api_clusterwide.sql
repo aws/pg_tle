@@ -26,6 +26,7 @@ ALTER SYSTEM SET pgtle.enable_password_check = 'off';
 SELECT pg_reload_conf();
 -- reconnect to ensure reload settings are propagated immediately
 \c -
+-- Expect password to go through since we haven't enabled the feature
 ALTER ROLE testuser with password 'pass';
 ALTER SYSTEM SET pgtle.enable_password_check = 'on';
 SELECT pg_reload_conf();
@@ -40,7 +41,11 @@ ALTER SYSTEM SET pgtle.enable_password_check = 'require';
 SELECT pg_reload_conf();
 -- reconnect to ensure reload settings are propagated immediately
 \c -
+-- Expect an error for require if pg_tle is not created
+DROP EXTENSION pg_tle;
+ALTER ROLE testuser with password 'pass';
 -- Expect an error for require if no entries are present
+CREATE EXTENSION pg_tle;
 ALTER ROLE testuser with password 'pass';
 
 -- Test validuntil_null and validuntil_time
@@ -117,6 +122,7 @@ SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passche
 DELETE FROM pgtle.feature_info where feature = 'passcheck';
 RESET SESSION AUTHORIZATION;
 
+-- Register a second function to check that both functions are called
 CREATE OR REPLACE FUNCTION password_check_only_nums(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
 $$
 DECLARE x NUMERIC;
@@ -133,7 +139,7 @@ SELECT pgtle.register_feature('password_check_only_nums', 'passcheck');
 ALTER ROLE testuser with password 'passwords';
 ALTER ROLE testuser with password '123456789';
 INSERT INTO pgtle.feature_info VALUES ('passcheck', '', 'password_check_only_nums', '');
--- Expect to fail cause no schema qualified function found
+-- Expect to fail because no schema qualified function found
 ALTER ROLE testuser with password '123456789';
 -- test insert of duplicate hook and fail
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
