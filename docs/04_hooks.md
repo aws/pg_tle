@@ -51,7 +51,7 @@ passcheck_hook(username text, password text, password_type pgtle.password_types,
 * `valid_until` (`timestamptz`) - if set, the time until the password on the account no longer works.
 * `valid_null` (`bool`) - if true, `valid_until` is set to `NULL`.
 
-By default, the `passcheck` feature executes functions that are registered in the current database. You will need to ensure that you run `CREATE EXTENSION pg_tle;` in all of your databases. You will also need to create and register passcheck functions in every database that they should take effect in.
+By default, the `passcheck` feature executes functions that are registered in the current database. You should ensure that you install the `pg_tle` extension via `CREATE EXTENSION` and register `passcheck` functions in all of your databases for which you wish to enable this feature.
 
 In `pg_tle` versions 1.3.0 and higher, the parameter `pgtle.passcheck_db_name` can be set for the `passcheck` feature to execute functions registered in a single database across the database cluster. If `pgtle.passcheck_db_name` is set, only registered passcheck functions in that database will be executed.
 
