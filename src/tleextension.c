@@ -30,7 +30,6 @@
 #include <unistd.h>
 
 #include "access/genam.h"
-#include "utils/fmgrprotos.h"
 #if PG_VERSION_NUM < 120000
 #include "access/heapam.h"
 #endif
