@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 #include "access/genam.h"
+#include "utils/fmgrprotos.h"
 #if PG_VERSION_NUM < 120000
 #include "access/heapam.h"
 #endif
@@ -492,7 +493,10 @@ check_valid_extension_name(const char *extensionname)
 
 	while (extensionname[idx] != '\0')
 	{
-		if (!isalnum(extensionname[idx]) && extensionname[idx] != '_' && extensionname[idx] != '-')
+		if (!isalnum(extensionname[idx]) &&
+			extensionname[idx] != '_' &&
+			extensionname[idx] != '-' &&
+			extensionname[idx] != '@')
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("invalid extension name: \"%s\"", extensionname),
