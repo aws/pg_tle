@@ -486,8 +486,8 @@ check_valid_extension_name(const char *extensionname)
 	 * Check for alphanumeric character in extension name for now. Although
 	 * this does prevent some naming schemes, it's a more straight forward
 	 * prevention for preventing certain injection attacks due to the way the
-	 * way we rely on functions currently. Allow the '_' or '-' character to
-	 * provide a nice separator if desired.
+	 * way we rely on functions currently. Allow the '_', '-', or '@'
+	 * character to provide a nice separator if desired.
 	 */
 
 	while (extensionname[idx] != '\0')
