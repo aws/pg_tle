@@ -13,6 +13,8 @@ SELECT pgtle.install_extension
     '1.0',
     'extension for uuid v7',
 $_pg_tle_$
+    -- Uuid v7 is a 128-bit binary value generated from unix epoch timestamp in ms (milliseconds) converted
+    -- into a u64 in Big-endian format and encoded with a series of random bytes
     CREATE FUNCTION generate_uuid_v7()
         RETURNS uuid
         AS $$
@@ -28,16 +30,29 @@ $_pg_tle_$
                 let now = pgrx::clock_timestamp();
 
                 // Extract the epoch from the timestamp and convert to millisecond
-                let epoch_in_millis_numeric: AnyNumeric = now.extract_part(DateTimeParts::Epoch).unwrap() * 1000;
+                let epoch_in_millis_numeric: AnyNumeric = now
+                    .extract_part(DateTimeParts::Epoch)
+                    .expect("Unable to extract epoch from clock timestamp")
+                    * 1000;
 
                 // Unfortunately we cannot convert AnyNumeric to an u64 directly, so we first convert to a string then u64
                 let epoch_in_millis_normalized = epoch_in_millis_numeric.floor().normalize().to_owned();
-                let millis = epoch_in_millis_normalized.parse::<u64>().unwrap();
+                let millis = epoch_in_millis_normalized
+                    .parse::<u64>()
+                    .expect("Unable to convertg from timestamp from type AnyNumeric to u64");
 
-                generate_uuid_bytes_from_unix_ts_millis(millis, &rng_bytes()[..10].try_into().expect("Unable to generate 10 bytes of random u8"))
+                generate_uuid_bytes_from_unix_ts_millis(
+                    millis,
+                    &rng_bytes()[..10]
+                        .try_into()
+                        .expect("Unable to generate 10 bytes of random u8"),
+                )
             }
 
-            // Returns 16 random u8
+            // Returns 16 random u8.
+            // For this example, we use a thread-local random number generator as suggested by the rand crate.
+            // Replace with a different type of random number generator based on your use case 
+            // https://rust-random.github.io/book/guide-rngs.html
             fn rng_bytes() -> [u8; 16] {
                 rand::random()
             }
@@ -52,7 +67,8 @@ $_pg_tle_$
                 bytes
             }
 
-            // This is a mirror of uuid-rs crate (https://github.com/uuid-rs/uuid/blob/main/src/timestamp.rs#L250)
+            // This is copied from the implementation of uuid-rs crate
+            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L247-L266
             fn encode_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> (u32, u16, u16, [u8; 8]) {
                 let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
                 let millis_low = (millis & 0xFFFF) as u16;
@@ -74,7 +90,8 @@ $_pg_tle_$
                 (millis_high, millis_low, random_and_version, d4)
             }
             
-            // This is a mirror of uuid-rs crate (https://github.com/uuid-rs/uuid/blob/main/src/builder.rs#L123)
+            // This is copied from the implementation of uuid-rs crate
+            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/builder.rs#L122-L141
             fn generate_uuid_bytes_from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> UuidBytes {
                 [
                     (d1 >> 24) as u8,
@@ -98,13 +115,14 @@ $_pg_tle_$
             
             Ok(Some(Uuid::from_bytes(generate_uuid_v7_bytes())))
         $$ LANGUAGE plrust
-    STRICT IMMUTABLE;
+    STRICT VOLATILE;
 
     CREATE FUNCTION uuid_v7_to_timestamptz(uuid UUID)
         RETURNS timestamptz
         as $$
-
-            // This is a mirror of uuid-rs crate (https://github.com/uuid-rs/uuid/blob/main/src/timestamp.rs#L272)
+            // This is copied from the implementation of uuid-rs crate
+            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L268-L279
+            // The timestamp is encoded in first 48 bit of the uuid, decode it to retreive the timestamp
             fn decode_unix_timestamp_millis(uuid_bytes: &[u8; 16]) -> u64 {
                 let millis: u64 = (uuid_bytes[0] as u64) << 40
                     | (uuid_bytes[1] as u64) << 32
@@ -118,9 +136,14 @@ $_pg_tle_$
 
             let bytes = uuid.as_bytes();
             let millis = decode_unix_timestamp_millis(bytes);
-            let micros = millis as f64 / 1000 as f64;
+            // The postgres to_timestamp function takes a double as argument,
+            // whereas the pgrx::to_timestamp takes a f64 as arugment.
+            // Since the timestamp in uuid was computed from extracting the unix epoch
+            // and multiplying by 1000, here we divide it by 1000 to get the precision we
+            // need and convert into a f64.
+            let epoch_in_seconds_with_precision = millis as f64 / 1000 as f64;
 
-            Ok(Some(pgrx::to_timestamp(micros)))
+            Ok(Some(pgrx::to_timestamp(epoch_in_seconds_with_precision)))
         $$ LANGUAGE plrust
     STRICT IMMUTABLE;
 
@@ -135,12 +158,21 @@ $_pg_tle_$
 
             // The implementation is similar to generate_uuid_v7 except we generate uuid based on a given timestamp instead of the current timestmp
             fn generate_uuid_v7_bytes(tz: TimestampWithTimeZone) -> UuidBytes {
-                let epoch_numeric: AnyNumeric = tz.extract_part(DateTimeParts::Epoch).unwrap();
+                let epoch_numeric: AnyNumeric = tz
+                    .extract_part(DateTimeParts::Epoch)
+                    .expect("Unable to extract epoch from clock timestamp");
                 let epoch_in_millis_numeric: AnyNumeric = epoch_numeric * 1000;
                 let epoch_in_millis_normalized = epoch_in_millis_numeric.floor().normalize().to_owned();
-                let millis = epoch_in_millis_normalized.parse::<u64>().unwrap();
+                let millis = epoch_in_millis_normalized
+                    .parse::<u64>()
+                    .expect("Unable to convertg from timestamp from type AnyNumeric to u64");
 
-                generate_uuid_bytes_from_unix_ts_millis(millis, &rng_bytes()[..10].try_into().expect("Unable to generate 10 bytes of random u8"))
+                generate_uuid_bytes_from_unix_ts_millis(
+                    millis,
+                    &rng_bytes()[..10]
+                        .try_into()
+                        .expect("Unable to generate 10 bytes of random u8"),
+                )
             }
 
             fn rng_bytes() -> [u8; 16] {
@@ -199,6 +231,8 @@ $_pg_tle_$
 
             Ok(Some(Uuid::from_bytes(generate_uuid_v7_bytes(tz))))
         $$ LANGUAGE plrust
-    STRICT IMMUTABLE;
+    STRICT VOLATILE;
 $_pg_tle_$
 );
+
+CREATE EXTENSION uuid_v7;

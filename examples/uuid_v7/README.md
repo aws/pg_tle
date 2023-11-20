@@ -17,15 +17,15 @@ This extension supports 3 operations:
 
 ### Installation
 ---
-To install the extension, run the `uuid_v7.sql` file in the desired database and install the extension.
+To install the extension, run the `uuid_v7.sql` file in the desired database
+e.g.
 
-```
-postgres=# create extension uuid_v7;
-CREATE EXTENSION
+```sh
+psql -d postgres -f uuid_v7.sql
 ```
 
 To generate a v7 uuid
-```
+```sql
 postgres=# SELECT generate_uuid_v7();
            generate_uuid_v7
 --------------------------------------
@@ -34,7 +34,7 @@ postgres=# SELECT generate_uuid_v7();
 ```
 
 Newly generated v7 uuid is older than ones generated previously
-```
+```sql
 postgres=# \set uuidv7 '018bbaec-db78-7d42-ab07-9b8055faa6cc'
 postgres=# SELECT generate_uuid_v7() > :'uuidv7';
  ?column?
@@ -43,8 +43,8 @@ postgres=# SELECT generate_uuid_v7() > :'uuidv7';
 (1 row)
 ```
 
-To extract the timestamp from the v7 uuid
-```
+To extract the timestamp from the v7 uuid. Note that since UUID v7 uses millisecond level of precision, the returns timestamp 
+```sql
 postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc');
    uuid_v7_to_timestamptz
 ----------------------------
@@ -53,7 +53,7 @@ postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc')
 ```
 
 To generate a v7 uuid with a given timestamp
-```
+```sql
 postgres=# SELECT timestamptz_to_uuid_v7('2023-11-10 15:29:26.776-05');
         timestamptz_to_uuid_v7
 --------------------------------------
@@ -62,10 +62,21 @@ postgres=# SELECT timestamptz_to_uuid_v7('2023-11-10 15:29:26.776-05');
 ```
 
 The extracted timestamp from the uuid is the same as the timestamp that was given to generate the uuid 
-```
+```sql
 postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7afa-b2e6-c328ae861711');
    uuid_v7_to_timestamptz
 ----------------------------
  2023-11-10 15:29:26.776-05
+(1 row)
+```
+
+To uninstall the extension
+```sql
+postgres=# DROP EXTENSION uuid_v7;
+DROP EXTENSION
+postgres=# SELECT pgtle.uninstall_extension('uuid_v7');
+ uninstall_extension
+---------------------
+ t
 (1 row)
 ```
