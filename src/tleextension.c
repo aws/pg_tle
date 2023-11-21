@@ -1854,6 +1854,57 @@ find_install_path(List *evi_list, ExtensionVersionInfo *evi_target,
 }
 
 /*
+* Figures out which script(s) we need to run to install the desired
+* version of the extension.  If we do not have a script that directly
+* does what is needed, we try to find a sequence of update scripts that
+* will get us there.
+*/
+static List *
+find_versions_to_apply(ExtensionControlFile *pcontrol, const char **versionName)
+{
+	char	   *filename;
+	struct stat fst;
+	List	   *updateVersions;
+	List	   *evi_list;
+	ExtensionVersionInfo *evi_start;
+	ExtensionVersionInfo *evi_target;
+
+	filename = get_extension_script_filename(pcontrol, NULL, *versionName);
+	if (!tleext && stat(filename, &fst) == 0)
+		updateVersions = NIL;	/* Easy, no extra scripts */
+	else if (tleext && funcstat(filename))
+		updateVersions = NIL;	/* Also easy, no extra scripts */
+	else
+	{
+		/*
+		 * Look for best way to install this version
+		 *
+		 * Extract the version update graph from the script directory
+		 */
+		evi_list = get_ext_ver_list(pcontrol);
+
+		/* Identify the target version */
+		evi_target = get_ext_ver_info(*versionName, &evi_list);
+
+		/* Identify best path to reach target */
+		evi_start = find_install_path(evi_list, evi_target,
+									  &updateVersions);
+
+		/* Fail if no path ... */
+		if (evi_start == NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("extension \"%s\" has no installation script nor update path for version \"%s\"",
+							pcontrol->name, *versionName)));
+
+		/* Otherwise, install best starting point and then upgrade */
+		*versionName = evi_start->name;
+	}
+
+	return updateVersions;
+}
+
+/*
  * CREATE EXTENSION worker
  *
  * When CASCADE is specified, CreateExtensionInternal() recurses if required
@@ -1875,7 +1926,6 @@ CreateExtensionInternal(char *extensionName,
 	ExtensionControlFile *pcontrol;
 	ExtensionControlFile *control;
 	char	   *filename;
-	struct stat fst;
 	List	   *updateVersions;
 	List	   *requiredExtensions;
 	List	   *requiredSchemas;
@@ -1887,9 +1937,6 @@ CreateExtensionInternal(char *extensionName,
 	Oid			ctlfuncid;
 	char	   *sqlname;
 	Oid			sqlfuncid;
-	List	   *evi_list;
-	ExtensionVersionInfo *evi_start;
-	ExtensionVersionInfo *evi_target;
 	ObjectAddress ctlfunc;
 	ObjectAddress sqlfunc;
 
@@ -1926,43 +1973,7 @@ CreateExtensionInternal(char *extensionName,
 	}
 	check_valid_version_name(versionName);
 
-	/*
-	 * Figure out which script(s) we need to run to install the desired
-	 * version of the extension.  If we do not have a script that directly
-	 * does what is needed, we try to find a sequence of update scripts that
-	 * will get us there.
-	 */
-	filename = get_extension_script_filename(pcontrol, NULL, versionName);
-	if (!tleext && stat(filename, &fst) == 0)
-		updateVersions = NIL;	/* Easy, no extra scripts */
-	else if (tleext && funcstat(filename))
-		updateVersions = NIL;	/* Also easy, no extra scripts */
-	else
-	{
-		/*
-		 * Look for best way to install this version
-		 *
-		 * Extract the version update graph from the script directory
-		 */
-		evi_list = get_ext_ver_list(pcontrol);
-
-		/* Identify the target version */
-		evi_target = get_ext_ver_info(versionName, &evi_list);
-
-		/* Identify best path to reach target */
-		evi_start = find_install_path(evi_list, evi_target,
-									  &updateVersions);
-
-		/* Fail if no path ... */
-		if (evi_start == NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("extension \"%s\" has no installation script nor update path for version \"%s\"",
-							pcontrol->name, versionName)));
-
-		/* Otherwise, install best starting point and then upgrade */
-		versionName = evi_start->name;
-	}
+	updateVersions = find_versions_to_apply(pcontrol, &versionName);
 
 	/*
 	 * Fetch control parameters for installation target version
@@ -2162,6 +2173,45 @@ CreateExtensionInternal(char *extensionName,
 				upgradesqlfunc.objectSubId = 0;
 
 				recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
+			}
+		}
+
+		/* Record dependencies such that default version can be installed after a pg_dump */
+		if (pcontrol->default_version)
+		{
+			const char *baseVersion = pcontrol->default_version;
+
+			updateVersions = find_versions_to_apply(pcontrol, &baseVersion);
+
+			sqlname = psprintf("%s--%s.sql", extensionName, baseVersion);
+			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+			if (sqlfuncid != InvalidOid)
+			{
+				sqlfunc.classId = ProcedureRelationId;
+				sqlfunc.objectId = sqlfuncid;
+				sqlfunc.objectSubId = 0;
+				recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
+			}
+
+			if (updateVersions != NULL)
+			{
+				const char *oldVersionName = versionName;
+				ListCell   *lcv;
+
+				foreach(lcv, updateVersions)
+				{
+					ObjectAddress upgradesqlfunc;
+
+					versionName = (char *) lfirst(lcv);
+					sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
+					sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+					upgradesqlfunc.classId = ProcedureRelationId;
+					upgradesqlfunc.objectId = sqlfuncid;
+					upgradesqlfunc.objectSubId = 0;
+
+					recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
+				}
 			}
 		}
 	}
