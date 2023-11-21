@@ -120,22 +120,14 @@ $_pg_tle_$
     CREATE FUNCTION uuid_v7_to_timestamptz(uuid UUID)
         RETURNS timestamptz
         as $$
-            // This is copied from the implementation of uuid-rs crate
-            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L268-L279
-            // The timestamp is encoded in first 48 bit of the uuid, decode it to retreive the timestamp
-            fn decode_unix_timestamp_millis(uuid_bytes: &[u8; 16]) -> u64 {
-                let millis: u64 = (uuid_bytes[0] as u64) << 40
-                    | (uuid_bytes[1] as u64) << 32
-                    | (uuid_bytes[2] as u64) << 24
-                    | (uuid_bytes[3] as u64) << 16
-                    | (uuid_bytes[4] as u64) << 8
-                    | (uuid_bytes[5] as u64);
+            // The timestamp of the uuid is encoded in the first 48 bits.
+            // To retrieve the timestamp in milliseconds, convert the first
+            // six u8 encoded in Big-endian format into a u64.
+            let uuid_bytes = uuid.as_bytes();
+            let mut timestamp_bytes = [0u8; 8];
+            timestamp_bytes[2..].copy_from_slice(&uuid_bytes[0..6]);
+            let millis = u64::from_be_bytes(timestamp_bytes);
 
-                millis
-            }
-
-            let bytes = uuid.as_bytes();
-            let millis = decode_unix_timestamp_millis(bytes);
             // The postgres to_timestamp function takes a double as argument,
             // whereas the pgrx::to_timestamp takes a f64 as arugment.
             // Since the timestamp in uuid was computed from extracting the unix epoch
