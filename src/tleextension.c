@@ -1904,6 +1904,54 @@ find_versions_to_apply(ExtensionControlFile *pcontrol, const char **versionName)
 	return updateVersions;
 }
 
+static void
+recordSqlFunctionDependencies(char *extensionName,
+								 const char *versionName,
+								 List *updateVersions,
+								 ObjectAddress address)
+{
+	char	   *sqlname;
+	Oid			sqlfuncid;
+	ObjectAddress sqlfunc;
+
+	sqlname = psprintf("%s--%s.sql", extensionName, versionName);
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+	/* If it exists, record dependencies on sql function for base version */
+	if (sqlfuncid != InvalidOid)
+	{
+		sqlfunc.classId = ProcedureRelationId;
+		sqlfunc.objectId = sqlfuncid;
+		sqlfunc.objectSubId = 0;
+		recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
+	}
+
+	/*
+		* If necessary update scripts are found, record dependency on each
+		* script
+		*/
+	if (updateVersions != NULL)
+	{
+		const char *oldVersionName = versionName;
+		ListCell   *lcv;
+
+		foreach(lcv, updateVersions)
+		{
+			ObjectAddress upgradesqlfunc;
+
+			versionName = (char *) lfirst(lcv);
+			sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
+			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+			upgradesqlfunc.classId = ProcedureRelationId;
+			upgradesqlfunc.objectId = sqlfuncid;
+			upgradesqlfunc.objectSubId = 0;
+
+			recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
+		}
+	}
+}
+
 /*
  * CREATE EXTENSION worker
  *
@@ -1935,10 +1983,7 @@ CreateExtensionInternal(char *extensionName,
 	bool		prevTLEState;
 	char	   *ctlname;
 	Oid			ctlfuncid;
-	char	   *sqlname;
-	Oid			sqlfuncid;
 	ObjectAddress ctlfunc;
-	ObjectAddress sqlfunc;
 
 	/*
 	 * We have to do some state checking here if we are cascading through a
@@ -2133,86 +2178,20 @@ CreateExtensionInternal(char *extensionName,
 		if (ctlfuncid == InvalidOid)
 			elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extensionName), quote_identifier(PG_TLE_NSPNAME));
 
-		sqlname = psprintf("%s--%s.sql", extensionName, versionName);
-		sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
 		/* Record dependencies on control function */
 		ctlfunc.classId = ProcedureRelationId;
 		ctlfunc.objectId = ctlfuncid;
 		ctlfunc.objectSubId = 0;
 		recordDependencyOn(&address, &ctlfunc, DEPENDENCY_NORMAL);
 
-		/* If it exists, record dependencies on sql function for base version */
-		if (sqlfuncid != InvalidOid)
-		{
-			sqlfunc.classId = ProcedureRelationId;
-			sqlfunc.objectId = sqlfuncid;
-			sqlfunc.objectSubId = 0;
-			recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
-		}
-
-		/*
-		 * If necessary update scripts are found, record dependency on each
-		 * script
-		 */
-		if (updateVersions != NULL)
-		{
-			const char *oldVersionName = versionName;
-			ListCell   *lcv;
-
-			foreach(lcv, updateVersions)
-			{
-				ObjectAddress upgradesqlfunc;
-
-				versionName = (char *) lfirst(lcv);
-				sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
-				sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
-				upgradesqlfunc.classId = ProcedureRelationId;
-				upgradesqlfunc.objectId = sqlfuncid;
-				upgradesqlfunc.objectSubId = 0;
-
-				recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
-			}
-		}
+		recordSqlFunctionDependencies(extensionName, versionName, updateVersions, address);
 
 		/* Record dependencies such that default version can be installed after a pg_dump */
 		if (pcontrol->default_version)
 		{
-			const char *baseVersion = pcontrol->default_version;
-
-			updateVersions = find_versions_to_apply(pcontrol, &baseVersion);
-
-			sqlname = psprintf("%s--%s.sql", extensionName, baseVersion);
-			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-			if (sqlfuncid != InvalidOid)
-			{
-				sqlfunc.classId = ProcedureRelationId;
-				sqlfunc.objectId = sqlfuncid;
-				sqlfunc.objectSubId = 0;
-				recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
-			}
-
-			if (updateVersions != NULL)
-			{
-				const char *oldVersionName = versionName;
-				ListCell   *lcv;
-
-				foreach(lcv, updateVersions)
-				{
-					ObjectAddress upgradesqlfunc;
-
-					versionName = (char *) lfirst(lcv);
-					sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
-					sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
-					upgradesqlfunc.classId = ProcedureRelationId;
-					upgradesqlfunc.objectId = sqlfuncid;
-					upgradesqlfunc.objectSubId = 0;
-
-					recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
-				}
-			}
+			const char *defaultVersion = pcontrol->default_version;
+			updateVersions = find_versions_to_apply(pcontrol, &defaultVersion);
+			recordSqlFunctionDependencies(extensionName, defaultVersion, updateVersions, address);
 		}
 	}
 
@@ -4924,6 +4903,9 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	char	   *ctlsql;
 	ExtensionControlFile *control;
 	char	   *filename;
+	List	   *updateVersions;
+	Oid         extensionOid;
+	ObjectAddress extAddress;
 
 	if (PG_ARGISNULL(0))
 		ereport(ERROR,
@@ -5021,6 +5003,25 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");
+
+	/* 
+	 * When default version is updated we update the dependencies so that pg_dump
+	 * can maintain the correct order.
+	 */
+	extensionOid = get_extension_oid(extname, true);
+	if (extensionOid != InvalidOid)
+	{
+		const char *defaultVersion = control->default_version;
+
+		extAddress.classId = ExtensionRelationId;
+		extAddress.objectId = extensionOid;
+		extAddress.objectSubId = 0;
+
+		SET_TLEEXT;
+		updateVersions = find_versions_to_apply(control, &defaultVersion);
+		UNSET_TLEEXT;
+		recordSqlFunctionDependencies(extname, defaultVersion, updateVersions, extAddress);
+	}
 
 	/* flag that we are done manipulating pg_tle artifacts */
 	UNSET_TLEART;
