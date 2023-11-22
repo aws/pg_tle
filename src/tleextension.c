@@ -1905,7 +1905,7 @@ find_versions_to_apply(ExtensionControlFile *pcontrol, const char **versionName)
 }
 
 static void
-recordSqlFunctionDependencies(char *extensionName,
+record_sql_function_dependencies(char *extensionName,
 								 const char *versionName,
 								 List *updateVersions,
 								 ObjectAddress address)
@@ -2184,14 +2184,14 @@ CreateExtensionInternal(char *extensionName,
 		ctlfunc.objectSubId = 0;
 		recordDependencyOn(&address, &ctlfunc, DEPENDENCY_NORMAL);
 
-		recordSqlFunctionDependencies(extensionName, versionName, updateVersions, address);
+		record_sql_function_dependencies(extensionName, versionName, updateVersions, address);
 
 		/* Record dependencies such that default version can be installed after a pg_dump */
 		if (pcontrol->default_version)
 		{
 			const char *defaultVersion = pcontrol->default_version;
 			updateVersions = find_versions_to_apply(pcontrol, &defaultVersion);
-			recordSqlFunctionDependencies(extensionName, defaultVersion, updateVersions, address);
+			record_sql_function_dependencies(extensionName, defaultVersion, updateVersions, address);
 		}
 	}
 
@@ -5020,7 +5020,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 		SET_TLEEXT;
 		updateVersions = find_versions_to_apply(control, &defaultVersion);
 		UNSET_TLEEXT;
-		recordSqlFunctionDependencies(extname, defaultVersion, updateVersions, extAddress);
+		record_sql_function_dependencies(extname, defaultVersion, updateVersions, extAddress);
 	}
 
 	/* flag that we are done manipulating pg_tle artifacts */
