@@ -67,8 +67,10 @@ $_pg_tle_$
                 bytes
             }
 
-            // This is copied from the implementation of uuid-rs crate
-            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L247-L266
+            // This function was copied from https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L247-L266
+            // The Uuid Project is copyright 2013-2014, The Rust Project Developers and
+            // copyright 2018, The Uuid Developers.
+            // (Apache-2.0 OR MIT)
             fn encode_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> (u32, u16, u16, [u8; 8]) {
                 let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
                 let millis_low = (millis & 0xFFFF) as u16;
@@ -90,8 +92,10 @@ $_pg_tle_$
                 (millis_high, millis_low, random_and_version, d4)
             }
             
-            // This is copied from the implementation of uuid-rs crate
-            // https://github.com/uuid-rs/uuid/blob/1.6.1/src/builder.rs#L122-L141
+            // This function was copied from https://github.com/uuid-rs/uuid/blob/1.6.1/src/builder.rs#L122-L141
+            // The Uuid Project is copyright 2013-2014, The Rust Project Developers and
+            // copyright 2018, The Uuid Developers.
+            // (Apache-2.0 OR MIT)
             fn generate_uuid_bytes_from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> UuidBytes {
                 [
                     (d1 >> 24) as u8,
@@ -179,6 +183,10 @@ $_pg_tle_$
                 bytes
             }
 
+            // This function was copied from https://github.com/uuid-rs/uuid/blob/1.6.1/src/timestamp.rs#L247-L266
+            // The Uuid Project is copyright 2013-2014, The Rust Project Developers and
+            // copyright 2018, The Uuid Developers.
+            // (Apache-2.0 OR MIT)
             fn encode_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> (u32, u16, u16, [u8; 8]) {
                 let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
                 let millis_low = (millis & 0xFFFF) as u16;
@@ -200,6 +208,10 @@ $_pg_tle_$
                 (millis_high, millis_low, random_and_version, d4)
             }
 
+            // This function was copied from https://github.com/uuid-rs/uuid/blob/1.6.1/src/builder.rs#L122-L141
+            // The Uuid Project is copyright 2013-2014, The Rust Project Developers and
+            // copyright 2018, The Uuid Developers.
+            // (Apache-2.0 OR MIT)
             fn generate_uuid_bytes_from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> UuidBytes {
                 [
                     (d1 >> 24) as u8,
