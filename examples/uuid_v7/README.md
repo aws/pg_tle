@@ -44,8 +44,9 @@ postgres=# SELECT generate_uuid_v7() > :'uuidv7';
 (1 row)
 ```
 
-To extract the timestamp from the v7 uuid. Note that since UUID v7 uses millisecond level of precision, the returns timestamp 
+To extract the timestamp from the v7 uuid, you can run the following command:
 ```sql
+-- Note that UUID v7 uses millisecond level of precision only.
 postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc');
    uuid_v7_to_timestamptz
 ----------------------------
