@@ -19,7 +19,7 @@ This extension supports 3 operations:
 
 ### Installation
 ---
-To install the extension, run the `uuid_v7.sql` file in the desired database
+To install the extension, run the [`uuid_v7.sql`](https://github.com/aws/pg_tle/blob/main/examples/uuid_v7/uuid_v7.sql) file in the desired database
 
 ```sh
 psql -d postgres -f uuid_v7.sql
@@ -27,7 +27,8 @@ psql -d postgres -f uuid_v7.sql
 
 To generate a UUID using UUID v7, you can run the following command:
 ```sql
-postgres=# SELECT generate_uuid_v7();
+SELECT generate_uuid_v7();
+
            generate_uuid_v7
 --------------------------------------
  018bbaec-db78-7d42-ab07-9b8055faa6cc
@@ -36,18 +37,20 @@ postgres=# SELECT generate_uuid_v7();
 
 You can verify that a more recently generated UUID v7 used a newer timestamp than a previously generated UUID v7:
 ```sql
-postgres=# \set uuidv7 '018bbaec-db78-7d42-ab07-9b8055faa6cc'
-postgres=# SELECT generate_uuid_v7() > :'uuidv7';
+\set uuidv7 '018bbaec-db78-7d42-ab07-9b8055faa6cc'
+SELECT generate_uuid_v7() > :'uuidv7';
+
  ?column?
 ----------
  t
 (1 row)
 ```
 
-To extract the timestamp from the v7 uuid, you can run the following command:
+To extract the timestamp from the UUID, you can run the following command:
 ```sql
 -- Note that UUID v7 uses millisecond level of precision only.
-postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc');
+SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc');
+
    uuid_v7_to_timestamptz
 ----------------------------
  2023-11-10 15:29:26.776-05
@@ -56,7 +59,8 @@ postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7d42-ab07-9b8055faa6cc')
 
 To generate a UUID using UUID v7, you can run the following command:
 ```sql
-postgres=# SELECT timestamptz_to_uuid_v7('2023-11-10 15:29:26.776-05');
+SELECT timestamptz_to_uuid_v7('2023-11-10 15:29:26.776-05');
+
         timestamptz_to_uuid_v7
 --------------------------------------
  018bbaec-db78-7afa-b2e6-c328ae861711
@@ -65,20 +69,16 @@ postgres=# SELECT timestamptz_to_uuid_v7('2023-11-10 15:29:26.776-05');
 
 You can verify that the timestamp that you used to generate the UUID v7 matches the one that you provided:
 ```sql
-postgres=# SELECT uuid_v7_to_timestamptz('018bbaec-db78-7afa-b2e6-c328ae861711');
+SELECT uuid_v7_to_timestamptz('018bbaec-db78-7afa-b2e6-c328ae861711');
+
    uuid_v7_to_timestamptz
 ----------------------------
  2023-11-10 15:29:26.776-05
 (1 row)
 ```
 
-To uninstall the extension
+You can uninstall the extension using the following commands:
 ```sql
-postgres=# DROP EXTENSION uuid_v7;
-DROP EXTENSION
-postgres=# SELECT pgtle.uninstall_extension('uuid_v7');
- uninstall_extension
----------------------
- t
-(1 row)
+DROP EXTENSION uuid_v7;
+SELECT pgtle.uninstall_extension('uuid_v7');
 ```
