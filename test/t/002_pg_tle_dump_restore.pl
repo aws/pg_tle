@@ -298,7 +298,7 @@ like  ($stderr, qr//, 'create_new_db');
 
 # Restore freshly created db with psql -d newdb -f olddb.sql
 $node->command_ok(
-    [ 'psql',  '-d', $restored_db, '-f', $dumpfilename ],
+    [ 'psql',  '-d', $restored_db, '-f', $dumpfilename, '-v', 'ON_ERROR_STOP=1' ],
     'restore new db from sql dump'
 );
 

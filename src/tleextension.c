@@ -4315,7 +4315,9 @@ _PU_HOOK
 			{
 				AlterOwnerStmt *stmt = (AlterOwnerStmt *) pu_parsetree;
 
-				if (!IsBinaryUpgrade && stmt->objectType == OBJECT_FUNCTION)
+				if (!IsBinaryUpgrade &&
+					!superuser() &&
+					stmt->objectType == OBJECT_FUNCTION)
 				{
 					ObjectAddress address;
 					Relation	relation;
