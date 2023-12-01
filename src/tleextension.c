@@ -1854,6 +1854,104 @@ find_install_path(List *evi_list, ExtensionVersionInfo *evi_target,
 }
 
 /*
+* Figures out which script(s) we need to run to install the desired
+* version of the extension.  If we do not have a script that directly
+* does what is needed, we try to find a sequence of update scripts that
+* will get us there.
+*/
+static List *
+find_versions_to_apply(ExtensionControlFile *pcontrol, const char **versionName)
+{
+	char	   *filename;
+	struct stat fst;
+	List	   *updateVersions;
+	List	   *evi_list;
+	ExtensionVersionInfo *evi_start;
+	ExtensionVersionInfo *evi_target;
+
+	filename = get_extension_script_filename(pcontrol, NULL, *versionName);
+	if (!tleext && stat(filename, &fst) == 0)
+		updateVersions = NIL;	/* Easy, no extra scripts */
+	else if (tleext && funcstat(filename))
+		updateVersions = NIL;	/* Also easy, no extra scripts */
+	else
+	{
+		/*
+		 * Look for best way to install this version
+		 *
+		 * Extract the version update graph from the script directory
+		 */
+		evi_list = get_ext_ver_list(pcontrol);
+
+		/* Identify the target version */
+		evi_target = get_ext_ver_info(*versionName, &evi_list);
+
+		/* Identify best path to reach target */
+		evi_start = find_install_path(evi_list, evi_target,
+									  &updateVersions);
+
+		/* Fail if no path ... */
+		if (evi_start == NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("extension \"%s\" has no installation script nor update path for version \"%s\"",
+							pcontrol->name, *versionName)));
+
+		/* Otherwise, install best starting point and then upgrade */
+		*versionName = evi_start->name;
+	}
+
+	return updateVersions;
+}
+
+static void
+record_sql_function_dependencies(char *extensionName,
+								 const char *versionName,
+								 List *updateVersions,
+								 ObjectAddress address)
+{
+	char	   *sqlname;
+	Oid			sqlfuncid;
+	ObjectAddress sqlfunc;
+
+	sqlname = psprintf("%s--%s.sql", extensionName, versionName);
+	sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+	/* If it exists, record dependencies on sql function for base version */
+	if (sqlfuncid != InvalidOid)
+	{
+		sqlfunc.classId = ProcedureRelationId;
+		sqlfunc.objectId = sqlfuncid;
+		sqlfunc.objectSubId = 0;
+		recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
+	}
+
+	/*
+	 * If necessary update scripts are found, record dependency on each script
+	 */
+	if (updateVersions != NULL)
+	{
+		const char *oldVersionName = versionName;
+		ListCell   *lcv;
+
+		foreach(lcv, updateVersions)
+		{
+			ObjectAddress upgradesqlfunc;
+
+			versionName = (char *) lfirst(lcv);
+			sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
+			sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
+
+			upgradesqlfunc.classId = ProcedureRelationId;
+			upgradesqlfunc.objectId = sqlfuncid;
+			upgradesqlfunc.objectSubId = 0;
+
+			recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
+		}
+	}
+}
+
+/*
  * CREATE EXTENSION worker
  *
  * When CASCADE is specified, CreateExtensionInternal() recurses if required
@@ -1875,7 +1973,6 @@ CreateExtensionInternal(char *extensionName,
 	ExtensionControlFile *pcontrol;
 	ExtensionControlFile *control;
 	char	   *filename;
-	struct stat fst;
 	List	   *updateVersions;
 	List	   *requiredExtensions;
 	List	   *requiredSchemas;
@@ -1885,13 +1982,7 @@ CreateExtensionInternal(char *extensionName,
 	bool		prevTLEState;
 	char	   *ctlname;
 	Oid			ctlfuncid;
-	char	   *sqlname;
-	Oid			sqlfuncid;
-	List	   *evi_list;
-	ExtensionVersionInfo *evi_start;
-	ExtensionVersionInfo *evi_target;
 	ObjectAddress ctlfunc;
-	ObjectAddress sqlfunc;
 
 	/*
 	 * We have to do some state checking here if we are cascading through a
@@ -1926,43 +2017,7 @@ CreateExtensionInternal(char *extensionName,
 	}
 	check_valid_version_name(versionName);
 
-	/*
-	 * Figure out which script(s) we need to run to install the desired
-	 * version of the extension.  If we do not have a script that directly
-	 * does what is needed, we try to find a sequence of update scripts that
-	 * will get us there.
-	 */
-	filename = get_extension_script_filename(pcontrol, NULL, versionName);
-	if (!tleext && stat(filename, &fst) == 0)
-		updateVersions = NIL;	/* Easy, no extra scripts */
-	else if (tleext && funcstat(filename))
-		updateVersions = NIL;	/* Also easy, no extra scripts */
-	else
-	{
-		/*
-		 * Look for best way to install this version
-		 *
-		 * Extract the version update graph from the script directory
-		 */
-		evi_list = get_ext_ver_list(pcontrol);
-
-		/* Identify the target version */
-		evi_target = get_ext_ver_info(versionName, &evi_list);
-
-		/* Identify best path to reach target */
-		evi_start = find_install_path(evi_list, evi_target,
-									  &updateVersions);
-
-		/* Fail if no path ... */
-		if (evi_start == NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("extension \"%s\" has no installation script nor update path for version \"%s\"",
-							pcontrol->name, versionName)));
-
-		/* Otherwise, install best starting point and then upgrade */
-		versionName = evi_start->name;
-	}
+	updateVersions = find_versions_to_apply(pcontrol, &versionName);
 
 	/*
 	 * Fetch control parameters for installation target version
@@ -2122,47 +2177,24 @@ CreateExtensionInternal(char *extensionName,
 		if (ctlfuncid == InvalidOid)
 			elog(ERROR, "could not find control function %s for extension %s in schema %s", quote_identifier(ctlname), quote_identifier(extensionName), quote_identifier(PG_TLE_NSPNAME));
 
-		sqlname = psprintf("%s--%s.sql", extensionName, versionName);
-		sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
 		/* Record dependencies on control function */
 		ctlfunc.classId = ProcedureRelationId;
 		ctlfunc.objectId = ctlfuncid;
 		ctlfunc.objectSubId = 0;
 		recordDependencyOn(&address, &ctlfunc, DEPENDENCY_NORMAL);
 
-		/* If it exists, record dependencies on sql function for base version */
-		if (sqlfuncid != InvalidOid)
-		{
-			sqlfunc.classId = ProcedureRelationId;
-			sqlfunc.objectId = sqlfuncid;
-			sqlfunc.objectSubId = 0;
-			recordDependencyOn(&address, &sqlfunc, DEPENDENCY_NORMAL);
-		}
+		record_sql_function_dependencies(extensionName, versionName, updateVersions, address);
 
 		/*
-		 * If necessary update scripts are found, record dependency on each
-		 * script
+		 * Record dependencies such that default version can be installed
+		 * after a pg_dump
 		 */
-		if (updateVersions != NULL)
+		if (pcontrol->default_version)
 		{
-			const char *oldVersionName = versionName;
-			ListCell   *lcv;
+			const char *defaultVersion = pcontrol->default_version;
 
-			foreach(lcv, updateVersions)
-			{
-				ObjectAddress upgradesqlfunc;
-
-				versionName = (char *) lfirst(lcv);
-				sqlname = psprintf("%s--%s--%s.sql", extensionName, oldVersionName, versionName);
-				sqlfuncid = get_tlefunc_oid_if_exists(sqlname);
-
-				upgradesqlfunc.classId = ProcedureRelationId;
-				upgradesqlfunc.objectId = sqlfuncid;
-				upgradesqlfunc.objectSubId = 0;
-
-				recordDependencyOn(&address, &upgradesqlfunc, DEPENDENCY_NORMAL);
-			}
+			updateVersions = find_versions_to_apply(pcontrol, &defaultVersion);
+			record_sql_function_dependencies(extensionName, defaultVersion, updateVersions, address);
 		}
 	}
 
@@ -4876,6 +4908,9 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	char	   *ctlsql;
 	ExtensionControlFile *control;
 	char	   *filename;
+	List	   *updateVersions;
+	Oid			extensionOid;
+	ObjectAddress extAddress;
 
 	if (PG_ARGISNULL(0))
 		ereport(ERROR,
@@ -4973,6 +5008,25 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");
+
+	/*
+	 * When default version is updated we update the dependencies so that
+	 * pg_dump can maintain the correct order.
+	 */
+	extensionOid = get_extension_oid(extname, true);
+	if (extensionOid != InvalidOid)
+	{
+		const char *defaultVersion = control->default_version;
+
+		extAddress.classId = ExtensionRelationId;
+		extAddress.objectId = extensionOid;
+		extAddress.objectSubId = 0;
+
+		SET_TLEEXT;
+		updateVersions = find_versions_to_apply(control, &defaultVersion);
+		UNSET_TLEEXT;
+		record_sql_function_dependencies(extname, defaultVersion, updateVersions, extAddress);
+	}
 
 	/* flag that we are done manipulating pg_tle artifacts */
 	UNSET_TLEART;
