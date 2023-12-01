@@ -1927,9 +1927,8 @@ record_sql_function_dependencies(char *extensionName,
 	}
 
 	/*
-		* If necessary update scripts are found, record dependency on each
-		* script
-		*/
+	 * If necessary update scripts are found, record dependency on each script
+	 */
 	if (updateVersions != NULL)
 	{
 		const char *oldVersionName = versionName;
@@ -2186,10 +2185,14 @@ CreateExtensionInternal(char *extensionName,
 
 		record_sql_function_dependencies(extensionName, versionName, updateVersions, address);
 
-		/* Record dependencies such that default version can be installed after a pg_dump */
+		/*
+		 * Record dependencies such that default version can be installed
+		 * after a pg_dump
+		 */
 		if (pcontrol->default_version)
 		{
 			const char *defaultVersion = pcontrol->default_version;
+
 			updateVersions = find_versions_to_apply(pcontrol, &defaultVersion);
 			record_sql_function_dependencies(extensionName, defaultVersion, updateVersions, address);
 		}
@@ -4906,7 +4909,7 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	ExtensionControlFile *control;
 	char	   *filename;
 	List	   *updateVersions;
-	Oid         extensionOid;
+	Oid			extensionOid;
 	ObjectAddress extAddress;
 
 	if (PG_ARGISNULL(0))
@@ -5006,9 +5009,9 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish failed");
 
-	/* 
-	 * When default version is updated we update the dependencies so that pg_dump
-	 * can maintain the correct order.
+	/*
+	 * When default version is updated we update the dependencies so that
+	 * pg_dump can maintain the correct order.
 	 */
 	extensionOid = get_extension_oid(extname, true);
 	if (extensionOid != InvalidOid)
