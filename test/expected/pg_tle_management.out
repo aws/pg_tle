@@ -815,6 +815,51 @@ SELECT pgtle.available_extension_versions();
 ------------------------------
 (0 rows)
 
+-- install extension with '@' symbol in name
+SELECT pgtle.install_extension
+(
+ 'foo@bar',
+ '1.0',
+ 'Test TLE Functions',
+$_pgtle_$
+  CREATE OR REPLACE FUNCTION at_func()
+  RETURNS INT AS $$
+  (
+    SELECT 42
+  )$$ LANGUAGE sql;
+$_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.available_extensions();
+        available_extensions        
+------------------------------------
+ (foo@bar,1.0,"Test TLE Functions")
+(1 row)
+
+CREATE EXTENSION "foo@bar";
+SELECT extname, extversion from pg_extension where extname='foo@bar';
+ extname | extversion 
+---------+------------
+ foo@bar | 1.0
+(1 row)
+
+SELECT at_func();
+ at_func 
+---------
+      42
+(1 row)
+
+DROP EXTENSION "foo@bar";
+SELECT pgtle.uninstall_extension('foo@bar');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
 -- Skip TransactionStmts
 BEGIN;
 SELECT pgtle.available_extension_versions();

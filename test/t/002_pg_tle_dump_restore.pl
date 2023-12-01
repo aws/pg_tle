@@ -17,8 +17,9 @@
 # 1. Install and create a regular TLE
 # 2. Install and create a TLE with an indirect version upgrade path
 # 3. Install and create a TLE that depends on another TLE with an indirect version
-# 4. Create a custom data type
-# 5. Create a custom operator
+# 4. Install two versions of a TLE and create the non-default version
+# 5. Create a custom data type
+# 6. Create a custom operator
 
 use strict;
 use warnings;
@@ -208,7 +209,56 @@ like  ($stdout, qr/1/, 'select_tle_function');
 $node->psql($testdb, 'SELECT test_cascade_dependency_func_2()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/-1/, 'select_tle_function');
 
-# 4. Create a custom data type
+# 4. Install two versions of a TLE and create the non-default version
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_extension
+    (
+      'test_non_default_version',
+      '1.0',
+      'Test TLE Functions',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_non_default_version()
+      RETURNS INT AS \$\$
+      (
+        SELECT 1
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle');
+
+$node->psql(
+    $testdb, qq[
+    SELECT pgtle.install_extension_version_sql
+    (
+      'test_non_default_version',
+      '1.1',
+    \$_pgtle_\$
+      CREATE OR REPLACE FUNCTION test_non_default_version()
+      RETURNS INT AS \$\$
+      (
+        SELECT 2
+      )\$\$ LANGUAGE sql;
+    \$_pgtle_\$
+    );
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'install_tle_update_path');
+
+$node->psql(
+    $testdb, qq[
+    SELECT default_version FROM pgtle.available_extensions() WHERE name = 'test_non_default_version';
+    ], stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1.0/, 'verify default version');
+
+$node->psql($testdb, "CREATE EXTENSION test_non_default_version VERSION '1.1'", stdout => \$stdout, stderr => \$stderr);
+like  ($stderr, qr//, 'create_tle');
+$node->psql($testdb, 'SELECT test_non_default_version()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/2/, 'select_tle_function');
+
+
+# 5. Create a custom data type
 
 $node->psql($testdb, 'SELECT pgtle.create_shell_type(\'public\', \'test_citext\')', stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'create_shell_type');
@@ -239,7 +289,7 @@ like  ($stderr, qr//, 'insert_custom_data_type');
 $node->psql($testdb, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/TEST/, 'select_custom_data_type');
 
-# 5. Create a custom data operator
+# 6. Create a custom data operator
 
 $node->psql($testdb, qq[CREATE FUNCTION public.test_citext_cmp(l bytea, r bytea) RETURNS int AS
     \$\$
@@ -298,7 +348,7 @@ like  ($stderr, qr//, 'create_new_db');
 
 # Restore freshly created db with psql -d newdb -f olddb.sql
 $node->command_ok(
-    [ 'psql',  '-d', $restored_db, '-f', $dumpfilename ],
+    [ 'psql',  '-d', $restored_db, '-f', $dumpfilename, '-v', 'ON_ERROR_STOP=1' ],
     'restore new db from sql dump'
 );
 
@@ -321,12 +371,25 @@ like  ($stdout, qr/1/, 'select_tle_function_from_restored_db_3');
 $node->psql($restored_db, 'SELECT test_cascade_dependency_func_2()', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/-1/, 'select_tle_function_from_restored_db_3');
 
-# 4. Verify custom data type
+# 4. Verify non-default version TLE installed (the default version should be restored)
+
+$node->psql($restored_db,
+    "SELECT count(*) FROM pgtle.available_extension_versions() WHERE name = 'test_non_default_version'",
+    stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/2/, 'number_of_available_extension_versions');
+$node->psql($restored_db,
+    "SELECT version FROM pgtle.available_extension_versions() WHERE name = 'test_non_default_version' ORDER BY version",
+    stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1\.0\n1\.1/, 'available_extension_versions');
+$node->psql($restored_db, 'SELECT test_non_default_version()', stdout => \$stdout, stderr => \$stderr);
+like  ($stdout, qr/1/, 'select_tle_function');
+
+# 5. Verify custom data type
 
 $node->psql($restored_db, 'SELECT * FROM test_dt;', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/TEST/, 'select_custom_data_type_from_restored_db');
 
-# 5. Verify custom data operator
+# 6. Verify custom data operator
 
 $node->psql($restored_db, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/t/, 'operator_from_restored_db');
