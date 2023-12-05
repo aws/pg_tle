@@ -141,7 +141,7 @@ $_pg_tle_$
 
             Ok(Some(pgrx::to_timestamp(epoch_in_seconds_with_precision)))
         $$ LANGUAGE plrust
-    STRICT IMMUTABLE;
+    STRICT VOLATILE;
 
     CREATE FUNCTION timestamptz_to_uuid_v7(tz timestamptz)
         RETURNS uuid
