@@ -1,0 +1,4 @@
+comment = 'extension for uuid v7'
+default_version = '1.0'
+relocatable = true
+requires = 'plrust'
