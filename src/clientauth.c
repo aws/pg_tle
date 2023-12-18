@@ -52,6 +52,7 @@
 #include "executor/spi.h"
 #include "libpq/auth.h"
 #include "nodes/pg_list.h"
+#include "postmaster/bgworker_internals.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -239,6 +240,8 @@ void
 clientauth_init(void)
 {
 	BackgroundWorker worker;
+	slist_iter	siter;
+	int			num_registered_workers = 0;
 
 	/* Define our GUC parameters */
 	DefineCustomEnumVariable(
@@ -334,6 +337,24 @@ clientauth_init(void)
 		snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
 		worker.bgw_main_arg = Int32GetDatum(i);
 		RegisterBackgroundWorker(&worker);
+	}
+
+	slist_foreach(siter, &BackgroundWorkerList)
+	{
+		RegisteredBgWorker *rw;
+
+		rw = slist_container(RegisteredBgWorker, rw_lnode, siter.cur);
+		if (strncmp(rw->rw_worker.bgw_type, "pg_tle_clientauth worker", BGW_MAXLEN) == 0)
+		{
+			num_registered_workers++;
+		}
+	}
+
+	if (num_registered_workers < clientauth_num_parallel_workers)
+	{
+		ereport(ERROR,
+				errmsg("\"%s.clientauth\" feature was not able to create background workers", PG_TLE_NSPNAME),
+				errhint("Consider increasing max_worker_processes or reducing other background workers."));
 	}
 }
 
