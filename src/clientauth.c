@@ -354,7 +354,7 @@ clientauth_init(void)
 	{
 		ereport(ERROR,
 				errmsg("\"%s.clientauth\" feature was not able to create background workers", PG_TLE_NSPNAME),
-				errhint("Consider increasing max_worker_processes or reducing other background workers."));
+				errhint("Consider increasing max_worker_processes or decreasing pgtle.clientauth_num_parallel_workers."));
 	}
 }
 
