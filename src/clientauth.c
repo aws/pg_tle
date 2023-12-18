@@ -339,6 +339,10 @@ clientauth_init(void)
 		RegisterBackgroundWorker(&worker);
 	}
 
+    /*
+     * Check the backgroud worker registered list.
+     * If any clientauth workers failed to register, then throw an error.
+     */
 	slist_foreach(siter, &BackgroundWorkerList)
 	{
 		RegisteredBgWorker *rw;
