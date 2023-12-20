@@ -25,6 +25,7 @@
 ### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
 ### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 ### 13. Rejects connections when no schema qualified function is found
+### 14. Database does not come up if clientauth workers fail to start
 
 use strict;
 use warnings;
@@ -206,7 +207,7 @@ $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
 
-$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth'))]);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')]);
 
 ### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 $node->psql('postgres', qq[DROP EXTENSION pg_tle CASCADE;]);
@@ -230,6 +231,16 @@ like($psql_err, qr/FATAL:  table, schema, and proname must be present in "pgtle.
 $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
+
+### 14. Database does not come up if clientauth workers fail to start
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 64));
+$node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
+$node->command_fails(
+    [ 'pg_ctl', '-D', $node->data_dir, '-l', $node->logfile, 'restart' ],
+    "postmaster does not start up if clientauth workers fail to start");
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 60));
+$node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
+$node->restart;
 
 $node->stop;
 done_testing();

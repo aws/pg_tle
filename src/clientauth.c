@@ -52,6 +52,7 @@
 #include "executor/spi.h"
 #include "libpq/auth.h"
 #include "nodes/pg_list.h"
+#include "postmaster/bgworker_internals.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -97,6 +98,7 @@
 
 static const char *clientauth_shmem_name = "pgtle_clientauth";
 static const char *clientauth_feature = "clientauth";
+static const char *clientauth_worker_name = "pg_tle_clientauth worker";
 
 /* Background worker main entry function */
 PGDLLEXPORT void clientauth_launcher_main(Datum arg);
@@ -239,6 +241,8 @@ void
 clientauth_init(void)
 {
 	BackgroundWorker worker;
+	slist_iter	siter;
+	int			num_registered_workers = 0;
 
 	/* Define our GUC parameters */
 	DefineCustomEnumVariable(
@@ -327,14 +331,32 @@ clientauth_init(void)
 	worker.bgw_notify_pid = 0;
 	sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
 	sprintf(worker.bgw_function_name, "clientauth_launcher_main");
-	snprintf(worker.bgw_type, BGW_MAXLEN, "pg_tle_clientauth worker");
+	snprintf(worker.bgw_type, BGW_MAXLEN, "%s", clientauth_worker_name);
 
 	for (int i = 0; i < clientauth_num_parallel_workers; i++)
 	{
-		snprintf(worker.bgw_name, BGW_MAXLEN, "pg_tle_clientauth worker %d", i);
+		snprintf(worker.bgw_name, BGW_MAXLEN, "%s worker %d", clientauth_worker_name, i);
 		worker.bgw_main_arg = Int32GetDatum(i);
 		RegisterBackgroundWorker(&worker);
 	}
+
+	/*
+	 * Check the backgroud worker registered list. If any clientauth workers
+	 * failed to register, then throw an error.
+	 */
+	slist_foreach(siter, &BackgroundWorkerList)
+	{
+		RegisteredBgWorker *rw;
+
+		rw = slist_container(RegisteredBgWorker, rw_lnode, siter.cur);
+		if (strncmp(rw->rw_worker.bgw_type, clientauth_worker_name, BGW_MAXLEN) == 0)
+			num_registered_workers++;
+	}
+
+	if (num_registered_workers < clientauth_num_parallel_workers)
+		ereport(ERROR,
+				errmsg("\"%s.clientauth\" feature was not able to create background workers", PG_TLE_NSPNAME),
+				errhint("Consider increasing max_worker_processes or decreasing pgtle.clientauth_num_parallel_workers."));
 }
 
 void
