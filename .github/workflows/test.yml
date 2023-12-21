@@ -51,7 +51,7 @@ jobs:
         run: |
           cd postgres
           make -C src/tools/pg_bsd_indent/ -j4 install
-          src/tools/pgindent/pgindent --indent=$GITHUB_WORKSPACE/postgres/src/tools/pg_bsd_indent/pg_bsd_indent --show-diff $GITHUB_WORKSPACE/pg_tle > pgindent.diffs
+          src/tools/pgindent/pgindent --indent=$GITHUB_WORKSPACE/postgres/src/tools/pg_bsd_indent/pg_bsd_indent --diff --check $GITHUB_WORKSPACE/pg_tle > pgindent.diffs
           test -s pgindent.diffs && cat pgindent.diffs && exit 1 || exit 0
 
       - name: Build pg_tle
