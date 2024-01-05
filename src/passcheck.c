@@ -343,6 +343,12 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 	snprintf(error_msg, PASSCHECK_ERROR_MSG_MAX_STRLEN, "%s", passcheck_ss->error_msg);
 	snprintf(error_hint, PASSCHECK_ERROR_MSG_MAX_STRLEN, "%s", passcheck_ss->error_hint);
 
+	/* Erase data about this request from shared memory now that we're done */
+	memset(&passcheck_ss->data, 0, sizeof(PasswordCheckHookData));
+	passcheck_ss->error = false;
+	memset(passcheck_ss->error_msg, 0, sizeof(char) * PASSCHECK_ERROR_MSG_MAX_STRLEN);
+	memset(passcheck_ss->error_hint, 0, sizeof(char) * PASSCHECK_ERROR_MSG_MAX_STRLEN);
+
 	passcheck_ss->available_entry = true;
 	LWLockRelease(passcheck_ss->lock);
 	ConditionVariableSignal(&passcheck_ss->available_cv);

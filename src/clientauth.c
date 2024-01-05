@@ -737,6 +737,13 @@ clientauth_hook(Port *port, int status)
 	/* Copy results of BGW processing from shared memory */
 	snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", clientauth_ss->requests[idx].error_msg);
 	error = clientauth_ss->requests[idx].error;
+
+	/* Erase data about this request from shared memory now that we're done */
+	memset(&clientauth_ss->requests[idx].port_info, 0, sizeof(PortSubset));
+	clientauth_ss->requests[idx].status = 0;
+	memset(clientauth_ss->requests[idx].error_msg, 0, sizeof(char) * CLIENT_AUTH_USER_ERROR_MAX_STRLEN);
+	clientauth_ss->requests[idx].error = false;
+
 	clientauth_ss->requests[idx].available_entry = true;
 	LWLockRelease(clientauth_ss->lock);
 	ConditionVariableSignal(clientauth_ss->requests[idx].available_entry_cv_ptr);
