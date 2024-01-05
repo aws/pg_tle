@@ -4,7 +4,7 @@ PG_CONFIG		= pg_config
 
 USE_PGTLE		= 1
 
-DATA			= $(EXTENSION)--$(EXTVERSION).sql
+DATA			= $(wildcard *--*.sql)
 
 ifeq (1,$(USE_PGTLE))
 	PGTLE = ../pgtle.mk
