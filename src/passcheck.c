@@ -342,6 +342,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 	error = passcheck_ss->error;
 	snprintf(error_msg, PASSCHECK_ERROR_MSG_MAX_STRLEN, "%s", passcheck_ss->error_msg);
 	snprintf(error_hint, PASSCHECK_ERROR_MSG_MAX_STRLEN, "%s", passcheck_ss->error_hint);
+
 	/* Erase data about this request from shared memory now that we're done */
 	memset(&passcheck_ss->data, 0, sizeof(PasswordCheckHookData));
 	passcheck_ss->error = false;
