@@ -15,10 +15,10 @@ install:
 		EXTVERSION='$(EXTVERSION)' \
 		EXTDEPS='$(EXTDEPS)' \
 		../create_pgtle_scripts.sh $(DATA))
-	$(PSQL) -f pgtle-$(EXTENSION).sql
+	$(PSQL) -f .pgtle-$(EXTENSION).sql
 
 uninstall:
 	$(PSQL) -c "SELECT pgtle.uninstall_extension('$(EXTENSION)')"
 
 clean:
-	rm -rf pgtle-$(EXTENSION).sql
+	rm -rf .pgtle-$(EXTENSION).sql

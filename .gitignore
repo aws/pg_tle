@@ -15,4 +15,5 @@ src/*.gcov.out
 lcov*.info
 coverage/
 coverage-html-stamp
-pgtle-*.sql
+.pgtle-*
+env.ini

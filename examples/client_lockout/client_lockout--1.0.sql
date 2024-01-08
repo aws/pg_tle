@@ -31,7 +31,7 @@ RETURNS void AS $$
         -- If password is wrong, increment counter
         IF status = -1 THEN
             INSERT INTO client_lockout.failed_attempts (user_name, num_failed_attempts)
-                VALUES (port.user_name, 0)
+                VALUES (port.user_name, 1)
                 ON CONFLICT (user_name) DO UPDATE SET num_failed_attempts = client_lockout.failed_attempts.num_failed_attempts + 1;
         END IF;
 

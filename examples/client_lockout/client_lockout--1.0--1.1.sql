@@ -3,4 +3,4 @@ RETURNS int AS $$
     SELECT num_failed_attempts
         FROM client_lockout.failed_attempts
         WHERE user_name = user_name
-$$ LANGUAGE sql;
+$$ LANGUAGE sql STABLE;

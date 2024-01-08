@@ -3,7 +3,7 @@
 # Usage: create_pgtle_scripts.sh INSTALL_SCRIPT.SQL...
 #
 # Converts the given SQL install scripts to pg_tle install commands and writes
-# them to pgtle-${EXTENSION}.sql.
+# them to .pgtle-${EXTENSION}.sql.
 #
 # Expects EXTENSION environment variable to be set.
 
@@ -16,7 +16,7 @@ EXTCOMMENT=$(grep comment ${EXTENSION}.control | \
 EXTDEPS=$(grep requires ${EXTENSION}.control | \
 		sed -e "s/requires[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
 
-filename=pgtle-${EXTENSION}.sql
+filename=.pgtle-${EXTENSION}.sql
 echo "CREATE EXTENSION IF NOT EXISTS pg_tle;" > $filename
 
 for f in $@; do
