@@ -19,11 +19,7 @@ This extension supports 3 operations:
 
 ### Installation
 ---
-To install the extension, run the [`uuid_v7.sql`](https://github.com/aws/pg_tle/blob/main/examples/uuid_v7/uuid_v7.sql) file in the desired database
-
-```sh
-psql -d postgres -f uuid_v7.sql
-```
+To install the extension, configure the Postgres database target in `../env.ini`, then run `make install`.
 
 To generate a UUID using UUID v7, you can run the following command:
 ```sql
