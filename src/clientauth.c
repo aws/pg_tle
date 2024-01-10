@@ -578,18 +578,22 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 		Datum		hookargs[SPI_NARGS_2];
 		char		hooknulls[SPI_NARGS_2];
 
+		/*
+		 * func_name is already using quote_identifier from when it was
+		 * assembled
+		 */
 		query = psprintf("SELECT * FROM %s($1::%s.clientauth_port_subset, $2::pg_catalog.int4)",
 						 func_name,
 						 quote_identifier(PG_TLE_NSPNAME));
 
-		port_subset_str = psprintf("(%d,\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")",
+		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
 								   port->noblock,
-								   port->remote_host,
-								   port->remote_hostname,
+								   quote_identifier(port->remote_host),
+								   quote_identifier(port->remote_hostname),
 								   port->remote_hostname_resolv,
 								   port->remote_hostname_errcode,
-								   port->database_name,
-								   port->user_name);
+								   quote_identifier(port->database_name),
+								   quote_identifier(port->user_name));
 
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
