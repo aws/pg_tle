@@ -249,7 +249,6 @@ $node->restart;
 $node->psql('postgres', q[
     CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
-            -- RAISE EXCEPTION '%', port.remote_hostname;
             IF port.user_name = 'testuser' THEN
                 RAISE EXCEPTION 'testuser is not allowed to connect';
             END IF;
@@ -260,6 +259,8 @@ $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'cli
 $node->psql('postgres', qq[CREATE ROLE """" LOGIN], on_error_die => 1);
 # Create role with name ""
 $node->psql('postgres', qq[CREATE ROLE """""" LOGIN], on_error_die => 1);
+# Create role with name ") /*
+$node->psql('postgres', qq[CREATE ROLE """) /*" LOGIN], on_error_die => 1);
 # Create database with name "
 $node->psql('postgres', qq[CREATE DATABASE """"], on_error_die => 1);
 # Create database with name ""
@@ -278,6 +279,9 @@ like($psql_out, qr/^"$/,
 $node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '""'], stdout => \$psql_out, on_error_die => 1);
 like($psql_out, qr/^""$/,
     "role with two double quotes in name can connect");
+$node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '") /*'], stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^"\) \/\*$/,
+    "role with injection payload in name can connect");
 
 $node->stop;
 done_testing();
