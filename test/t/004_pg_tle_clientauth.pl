@@ -26,6 +26,7 @@
 ### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 ### 13. Rejects connections when no schema qualified function is found
 ### 14. Database does not come up if clientauth workers fail to start
+### 15. Malformed strings cannot be used for SQL injection
 
 use strict;
 use warnings;
@@ -35,6 +36,7 @@ use PostgreSQL::Test::Utils;
 use Test::More;
 
 my $psql_err = '';
+my $psql_out = '';
 my $node = PostgreSQL::Test::Cluster->new('clientauth_test');
 
 $node->init;
@@ -231,6 +233,7 @@ like($psql_err, qr/FATAL:  table, schema, and proname must be present in "pgtle.
 $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
+$node->psql('postgres', qq[TRUNCATE pgtle.feature_info], on_error_die => 1);
 
 ### 14. Database does not come up if clientauth workers fail to start
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 64));
@@ -241,6 +244,44 @@ $node->command_fails(
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 60));
 $node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
 $node->restart;
+
+### 15. Malformed strings cannot be used for SQL injection
+$node->psql('postgres', q[
+    CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
+        BEGIN
+            IF port.user_name = 'testuser' THEN
+                RAISE EXCEPTION 'testuser is not allowed to connect';
+            END IF;
+        END
+    $$ LANGUAGE plpgsql], on_error_die => 1);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')], on_error_die => 1);
+# Create role with name "
+$node->psql('postgres', qq[CREATE ROLE """" LOGIN], on_error_die => 1);
+# Create role with name ""
+$node->psql('postgres', qq[CREATE ROLE """""" LOGIN], on_error_die => 1);
+# Create role with name ") /*
+$node->psql('postgres', qq[CREATE ROLE """) /*" LOGIN], on_error_die => 1);
+# Create database with name "
+$node->psql('postgres', qq[CREATE DATABASE """"], on_error_die => 1);
+# Create database with name ""
+$node->psql('postgres', qq[CREATE DATABASE """"""], on_error_die => 1);
+
+# Make sure we can connect to all of these
+$node->psql('"', 'SELECT current_database()', stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^"$/,
+    "database with double quote in name can connect");
+$node->psql('""', 'SELECT current_database()', stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^""$/,
+    "database with two double quotes in name can connect");
+$node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '"'], stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^"$/,
+    "role with double quote in name can connect");
+$node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '""'], stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^""$/,
+    "role with two double quotes in name can connect");
+$node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '") /*'], stdout => \$psql_out, on_error_die => 1);
+like($psql_out, qr/^"\) \/\*$/,
+    "role with injection payload in name can connect");
 
 $node->stop;
 done_testing();
