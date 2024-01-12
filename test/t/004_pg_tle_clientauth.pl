@@ -25,7 +25,7 @@
 ### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
 ### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 ### 13. Rejects connections when no schema qualified function is found
-### 14. Database does not come up if clientauth workers fail to start
+### 14. clientauth does not trigger if clientauth workers fail to start
 ### 15. Malformed strings cannot be used for SQL injection
 
 use strict;
@@ -233,17 +233,21 @@ like($psql_err, qr/FATAL:  table, schema, and proname must be present in "pgtle.
 $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
-$node->psql('postgres', qq[TRUNCATE pgtle.feature_info], on_error_die => 1);
 
-### 14. Database does not come up if clientauth workers fail to start
+### 14. clientauth does not trigger if clientauth workers fail to start
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 64));
 $node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
-$node->command_fails(
-    [ 'pg_ctl', '-D', $node->data_dir, '-l', $node->logfile, 'restart' ],
-    "postmaster does not start up if clientauth workers fail to start");
+$node->restart;
+$node->psql('not_excluded', 'select', on_error_die => 1);
+# after fixing the parameter and restarting, clientauth should work again
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 60));
 $node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
 $node->restart;
+$psql_err = '';
+$node->psql('not_excluded', 'select', stderr => \$psql_err);
+like($psql_err, qr/FATAL:  table, schema, and proname must be present in "pgtle.feature_info"/,
+    "clientauth rejects connections when no schema qualified function is found");
+$node->psql('postgres', qq[TRUNCATE pgtle.feature_info], on_error_die => 1);
 
 ### 15. Malformed strings cannot be used for SQL injection
 $node->psql('postgres', q[

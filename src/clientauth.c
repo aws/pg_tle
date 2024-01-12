@@ -140,6 +140,7 @@ static char *clientauth_databases_to_skip = "";
 
 /* Global flags */
 static bool clientauth_reload_config = false;
+static bool clientauth_init_error = false;
 
 /*
  * Fixed-length subset of Port, passed to user function. A corresponding SQL
@@ -342,7 +343,7 @@ clientauth_init(void)
 
 	/*
 	 * Check the backgroud worker registered list. If any clientauth workers
-	 * failed to register, then throw an error.
+	 * failed to register, emit a warning and flip the init error flag.
 	 */
 	slist_foreach(siter, &BackgroundWorkerList)
 	{
@@ -354,9 +355,12 @@ clientauth_init(void)
 	}
 
 	if (num_registered_workers < clientauth_num_parallel_workers)
-		ereport(ERROR,
+	{
+		clientauth_init_error = true;
+		ereport(WARNING,
 				errmsg("\"%s.clientauth\" feature was not able to create background workers", PG_TLE_NSPNAME),
 				errhint("Consider increasing max_worker_processes or decreasing pgtle.clientauth_num_parallel_workers."));
+	}
 }
 
 void
@@ -662,6 +666,14 @@ clientauth_hook(Port *port, int status)
 	/* Skip if this database is on the skip list */
 	if (check_string_in_guc_list(port->database_name, clientauth_databases_to_skip, "pgtle.clientauth_databases_to_skip"))
 		return;
+	/* Emit a warning and skip if clientauth failed to init */
+	if (clientauth_init_error)
+	{
+		ereport(WARNING,
+				errmsg("\"%s.clientauth\" feature encountered an error and failed to start", PG_TLE_NSPNAME),
+				errhint("Check the database logs for \"%s.clientauth\" errors.", PG_TLE_NSPNAME));
+		return;
+	}
 
 	/*
 	 * If the queue entry is not available, wait until another client using it
