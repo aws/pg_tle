@@ -286,7 +286,7 @@ passcheck_check_password_hook(const char *username, const char *shadow_pass, Pas
 	 * 2. Spin up background worker.
 	 */
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
+	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 	worker.bgw_restart_time = 1;
 	worker.bgw_notify_pid = MyProcPid;
 	sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);

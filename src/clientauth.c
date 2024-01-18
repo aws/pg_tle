@@ -326,7 +326,7 @@ clientauth_init(void)
 	shmem_startup_hook = clientauth_shmem_startup;
 
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
-	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
+	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 	worker.bgw_restart_time = 1;
 	worker.bgw_notify_pid = 0;
 	sprintf(worker.bgw_library_name, PG_TLE_EXTNAME);
