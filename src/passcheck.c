@@ -164,7 +164,7 @@ static void
 passcheck_check_password_hook(const char *username, const char *shadow_pass, PasswordType password_type, Datum validuntil_time, bool validuntil_null)
 {
 	BackgroundWorker worker;
-	BackgroundWorkerHandle *worker_handle;
+	BackgroundWorkerHandle *worker_handle = NULL;
 	bool		error;
 	char		error_msg[PASSCHECK_ERROR_MSG_MAX_STRLEN];
 	char		error_hint[PASSCHECK_ERROR_MSG_MAX_STRLEN];

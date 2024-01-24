@@ -21,6 +21,7 @@
 ###    the function in test 5 does not take effect
 ### 7. If cluster-wide passcheck is enabled and passcheck_db_name is the same as the database in test 5,
 ###    the function in test 5 takes effect
+### 8. If passcheck worker fails to start, error gracefully
 
 ### Basic passcheck funtionality is tested in pg_tle_api.sql.
 
@@ -139,6 +140,26 @@ $node->psql('passcheck_db', q[
     ALTER ROLE testrole PASSWORD 'password'], stderr => \$psql_err);
 like($psql_err, qr/ERROR:  block all set password attempts 2/,
     "enabling clusterwide passcheck in the same database as an existing registered function 2");
+
+### 8. If passcheck worker fails to start, error gracefully
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 1));
+$node->append_conf('postgresql.conf', qq(max_worker_processes = 2));
+$node->restart;
+
+$node->psql('postgres', q[
+    ALTER ROLE testrole PASSWORD 'password'], stderr => \$psql_err);
+like($psql_err, qr/ERROR:  pg_tle passcheck feature failed to spawn background worker/,
+    "passcheck errors gracefully when max_worker_processes is reached");
+
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 1));
+$node->append_conf('postgresql.conf', qq(max_worker_processes = 3));
+$node->restart;
+
+$node->psql('postgres', q[
+    ALTER ROLE testrole PASSWORD 'password'], stderr => \$psql_err);
+like($psql_err, qr/ERROR:  block all set password attempts 2/,
+    "passcheck works after increasing max_worker_processes");
 
 $node->stop;
 done_testing();
