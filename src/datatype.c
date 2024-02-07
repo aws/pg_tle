@@ -170,11 +170,15 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	Oid			inputFuncParamType;
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
+	char		alignment = TYPALIGN_INT;	/* default alignment */
+	char		storage = TYPSTORAGE_PLAIN; /* default TOAST storage method */	
 	Oid			typeNamespace = PG_GETARG_OID(0);
 	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
 	Oid			inputFuncId = PG_GETARG_OID(2);
 	Oid			outputFuncId = PG_GETARG_OID(3);
 	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *alignmentStr = text_to_cstring(PG_GETARG_TEXT_P(5));
+	char	   *storageStr = text_to_cstring(PG_GETARG_TEXT_P(6));
 	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
 
 	/*
@@ -200,6 +204,32 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	 */
 	if (internalLength > 0)
 		internalLength += VARHDRSZ;
+
+	if (pg_strcasecmp(alignmentStr, "double") == 0)
+		alignment = TYPALIGN_DOUBLE;
+	else if (pg_strcasecmp(alignmentStr, "int4") == 0)
+		alignment = TYPALIGN_INT;
+	else if (pg_strcasecmp(alignmentStr, "int2") == 0)
+		alignment = TYPALIGN_SHORT;
+	else if (pg_strcasecmp(alignmentStr, "char") == 0)
+		alignment = TYPALIGN_CHAR;
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("alignment \"%s\" not recognized", alignmentStr)));
+
+	if (pg_strcasecmp(storageStr, "plain") == 0)
+		storage = TYPSTORAGE_PLAIN;
+	else if (pg_strcasecmp(storageStr, "external") == 0)
+		storage = TYPSTORAGE_EXTERNAL;
+	else if (pg_strcasecmp(storageStr, "extended") == 0)
+		storage = TYPSTORAGE_EXTENDED;
+	else if (pg_strcasecmp(storageStr, "main") == 0)
+		storage = TYPSTORAGE_MAIN;
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("storage \"%s\" not recognized", storageStr)));
 
 	/* Check we have creation rights in target namespace */
 	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
@@ -323,8 +353,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 					NULL,		/* default type value */
 					NULL,		/* no binary form available */
 					false,		/* passed by value */
-					TYPALIGN_INT,	/* required alignment */
-					TYPSTORAGE_PLAIN,	/* TOAST strategy */
+					alignment,	/* required alignment */
+					storage,	/* TOAST strategy */
 					-1,			/* typMod (Domains only) */
 					0,			/* Array Dimensions of typbasetype */
 					false,		/* Type NOT NULL */
@@ -336,6 +366,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	 */
 	array_type = makeArrayTypeName(typeName, typeNamespace);
 
+	/* alignment must be TYPALIGN_INT or TYPALIGN_DOUBLE for arrays */
+	alignment = (alignment == TYPALIGN_DOUBLE) ? TYPALIGN_DOUBLE : TYPALIGN_INT;
 
 	TYPE_CREATE(true,			/* array type */
 				array_oid,		/* force assignment of this type OID */
@@ -363,7 +395,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 				NULL,			/* never a default type value */
 				NULL,			/* binary default isn't sent either */
 				false,			/* never passed by value */
-				TYPALIGN_INT,	/* see above */
+				alignment,		/* see above */
 				TYPSTORAGE_EXTENDED,	/* ARRAY is always toastable */
 				-1,				/* typMod (Domains only) */
 				0,				/* Array dimensions of typbasetype */

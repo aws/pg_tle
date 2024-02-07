@@ -686,6 +686,126 @@ DROP FUNCTION test_int2_in(text) CASCADE;
 DROP FUNCTION test_int2_out(bytea) CASCADE;
 DROP TABLE test_dt;
 
+SET SESSION AUTHORIZATION dbadmin;
+CREATE FUNCTION public.test_toast_in(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE SQL;
+
+CREATE FUNCTION public.test_toast_out(input bytea) RETURNS text AS
+$$
+  SELECT pg_catalog.convert_from(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE SQL;
+
+-- Fixed length types only allow plain storage.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'invalid');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'invalid');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'external');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'extended');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'main');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'plain');
+DROP TYPE test_toast CASCADE;
+
+-- Fixed length types allow any alignment.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int8');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'char');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int2');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int4');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'double');
+DROP TYPE test_toast CASCADE;
+
+-- Variable length types allow any storage.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'external');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'extended');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'main');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'plain');
+DROP TYPE test_toast CASCADE;
+
+-- Variable length types only allow int4 and double alignment.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'char');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int2');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4');
+DROP TYPE test_toast CASCADE;
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double');
+DROP TYPE test_toast CASCADE;
+
+RESET SESSION AUTHORIZATION;
+GRANT pg_read_server_files TO dbadmin;
+SET SESSION AUTHORIZATION dbadmin;
+
+-- Testing TOASTable types
+
+-- Default plain storage fails if the row is too big
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1);
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+DROP TYPE test_toast CASCADE;
+DROP TABLE test_dt;
+
+-- Test that the value stored by different TOAST strategies can be retrieved successfully (comparing md5 with builtin text type).
+-- External storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'external');
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+DROP TYPE test_toast CASCADE;
+DROP TABLE test_dt;
+
+-- Extended storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'extended');
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+DROP TYPE test_toast CASCADE;
+DROP TABLE test_dt;
+
+-- Main storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double', storage => 'main');
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+DROP TYPE test_toast CASCADE;
+DROP TABLE test_dt;
+
+-- Text type
+CREATE TABLE test_dt(c1 text);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT repeat('0123456789', 1000);
+SELECT md5(c1) FROM test_dt;
+DROP TYPE test_toast CASCADE;
+DROP TABLE test_dt;
+
+RESET SESSION AUTHORIZATION;
+REVOKE pg_read_server_files FROM dbadmin;
+SET SESSION AUTHORIZATION dbadmin;
+
+DROP FUNCTION test_toast_in(text) CASCADE;
+DROP FUNCTION test_toast_out(bytea) CASCADE;
+
 -- clean up
 RESET SESSION AUTHORIZATION;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbadmin;

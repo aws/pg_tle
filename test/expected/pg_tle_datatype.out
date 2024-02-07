@@ -838,6 +838,361 @@ drop cascades to cast from test_int2 to bytea
 drop cascades to column c1 of table test_dt
 DROP FUNCTION test_int2_out(bytea) CASCADE;
 DROP TABLE test_dt;
+SET SESSION AUTHORIZATION dbadmin;
+CREATE FUNCTION public.test_toast_in(input text) RETURNS bytea AS
+$$
+  SELECT pg_catalog.convert_to(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE SQL;
+CREATE FUNCTION public.test_toast_out(input bytea) RETURNS text AS
+$$
+  SELECT pg_catalog.convert_from(input, 'UTF8');
+$$ IMMUTABLE STRICT LANGUAGE SQL;
+-- Fixed length types only allow plain storage.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'invalid');
+ERROR:  storage "invalid" not recognized
+CONTEXT:  SQL statement "SELECT pgtle.create_base_type(typenamespace, typename, infunc, outfunc, internallength, alignment, storage)"
+PL/pgSQL function create_base_type_if_not_exists(regnamespace,name,regprocedure,regprocedure,integer,text,text) line 3 at PERFORM
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'invalid');
+ERROR:  storage "invalid" not recognized
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'external');
+ERROR:  fixed-size types must have storage PLAIN
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'extended');
+ERROR:  fixed-size types must have storage PLAIN
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'main');
+ERROR:  fixed-size types must have storage PLAIN
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, storage => 'plain');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+-- Fixed length types allow any alignment.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int8');
+ERROR:  alignment "int8" not recognized
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'char');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int2');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'int4');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, 1, alignment => 'double');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+-- Variable length types allow any storage.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'external');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'extended');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'main');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'plain');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+-- Variable length types only allow int4 and double alignment.
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'char');
+ERROR:  alignment "c" is invalid for variable-length type
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int2');
+ERROR:  alignment "s" is invalid for variable-length type
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+RESET SESSION AUTHORIZATION;
+GRANT pg_read_server_files TO dbadmin;
+SET SESSION AUTHORIZATION dbadmin;
+-- Testing TOASTable types
+-- Default plain storage fails if the row is too big
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1);
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+ERROR:  row is too big: size 10032, maximum size 8160
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+drop cascades to column c1 of table test_dt
+DROP TABLE test_dt;
+-- Test that the value stored by different TOAST strategies can be retrieved successfully (comparing md5 with builtin text type).
+-- External storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'external');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+               md5                
+----------------------------------
+ 781e5e245d69b566979b86e28d23f2c7
+ 2bb571599a4180e1d542f76904adc3df
+(2 rows)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+drop cascades to column c1 of table test_dt
+DROP TABLE test_dt;
+-- Extended storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'extended');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+               md5                
+----------------------------------
+ 781e5e245d69b566979b86e28d23f2c7
+ 2bb571599a4180e1d542f76904adc3df
+(2 rows)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+drop cascades to column c1 of table test_dt
+DROP TABLE test_dt;
+-- Main storage
+SELECT pgtle.create_shell_type('public', 'test_toast');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double', storage => 'main');
+ create_base_type 
+------------------
+ 
+(1 row)
+
+CREATE TABLE test_dt(c1 test_toast);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+               md5                
+----------------------------------
+ 781e5e245d69b566979b86e28d23f2c7
+ 2bb571599a4180e1d542f76904adc3df
+(2 rows)
+
+DROP TYPE test_toast CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to function test_toast_in(cstring)
+drop cascades to function test_toast_out(test_toast)
+drop cascades to cast from test_toast to bytea
+drop cascades to column c1 of table test_dt
+DROP TABLE test_dt;
+-- Text type
+CREATE TABLE test_dt(c1 text);
+INSERT INTO test_dt VALUES('0123456789');
+INSERT INTO test_dt SELECT repeat('0123456789', 1000);
+SELECT md5(c1) FROM test_dt;
+               md5                
+----------------------------------
+ 781e5e245d69b566979b86e28d23f2c7
+ 2bb571599a4180e1d542f76904adc3df
+(2 rows)
+
+DROP TYPE test_toast CASCADE;
+ERROR:  type "test_toast" does not exist
+DROP TABLE test_dt;
+RESET SESSION AUTHORIZATION;
+REVOKE pg_read_server_files FROM dbadmin;
+SET SESSION AUTHORIZATION dbadmin;
+DROP FUNCTION test_toast_in(text) CASCADE;
+DROP FUNCTION test_toast_out(bytea) CASCADE;
 -- clean up
 RESET SESSION AUTHORIZATION;
 REVOKE CREATE, USAGE ON SCHEMA PUBLIC FROM dbadmin;

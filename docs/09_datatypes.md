@@ -63,6 +63,8 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 * `infunc`: The name of a previously defined function to convert the type's external textual representation to the internal representation (`bytea`). The function must take one argument of type `text` and return `bytea`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `outfunc`: The name of a previously defined function to convert the type's internal binary representation (`bytea`) to the external textual representation. The function must take one argument of type `bytea` and return `text`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `internallength`: Total length of the base data type as bytes. Base data types can be fixed-length, in which case internallength is a positive integer, or variable-length, in which case internallength is -1.
+* `alignment`: The optional alignment parameter specifies the storage alignment requirement of the data type. Allowed values are 'char', 'int2', 'int4', 'double'. The allowed values equate to alignment on 1, 2, 4, or 8 byte boundaries. The default is 'int4', alignment on 4 byte boundaries. Note that variable-length types must have an alignment of at least 4, since they necessarily contain an int4 as their first component.
+* `storage`: The optional storage parameter allows selection of storage strategies for variable-length data types. Allowed values are 'plain', 'external', 'extended', 'main'. Only 'plain' is allowed for fixed-length types. The default is 'plain'. See PostgreSQL doc on [CREATE TYPE](https://www.postgresql.org/docs/current/sql-createtype.html) and [TOAST](https://www.postgresql.org/docs/current/storage-toast.html) for more details.
 
 #### Example
 
@@ -71,6 +73,8 @@ SELECT pgtle.create_shell_type_if_not_exists('public', 'test_citext');
 SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 -- Create a fixed-length (2 bytes) data type
 SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
+-- Create a TOASTable variable-length data type 
+SELECT pgtle.create_base_type('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1, storage => 'extended');
 ```
 
 ### `pgtle.create_base_type_if_not_exists(typenamespace regnamespace, typename name, infunc regprocedure, outfunc regprocedure, internallength int4)`
@@ -88,6 +92,8 @@ SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regpr
 * `infunc`: The name of a previously defined function to convert the type's external textual representation to the internal representation (`bytea`). The function must take one argument of type `text` and return `bytea`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `outfunc`: The name of a previously defined function to convert the type's internal binary representation (`bytea`) to the external textual representation. The function must take one argument of type `bytea` and return `text`. The function must also be declared as `IMMUTABLE` and `STRICT`. It will not be called with a NULL parameter.
 * `internallength`: Total length of the base data type as bytes. Base data types can be fixed-length, in which case internallength is a positive integer, or variable-length, in which case internallength is -1.
+* `alignment`: The optional alignment parameter specifies the storage alignment requirement of the data type. Allowed values are 'char', 'int2', 'int4', 'double'. The allowed values equate to alignment on 1, 2, 4, or 8 byte boundaries. The default is 'int4', alignment on 4 byte boundaries. Note that variable-length types must have an alignment of at least 4, since they necessarily contain an int4 as their first component.
+* `storage`: The optional storage parameter allows selection of storage strategies for variable-length data types. Allowed values are 'plain', 'external', 'extended', 'main'. Only 'plain' is allowed for fixed-length types. The default is 'plain'. See PostgreSQL doc on [CREATE TYPE](https://www.postgresql.org/docs/current/sql-createtype.html) and [TOAST](https://www.postgresql.org/docs/current/storage-toast.html) for more details.
 
 #### Example
 
@@ -96,6 +102,8 @@ SELECT pgtle.create_base_type('public', 'test_int2', 'test_int2_in(text)'::regpr
 SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1);
 -- Create a fixed-length (2 bytes) data type
 SELECT pgtle.create_base_type_if_not_exists('public', 'test_int2', 'test_int2_in(text)'::regprocedure, 'test_int2_out(bytea)'::regprocedure, 2);
+-- Create a TOASTable variable-length data type 
+SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citext_in(text)'::regprocedure, 'test_citext_out(bytea)'::regprocedure, -1, storage => 'extended');
 ```
 
 ### `pgtle.create_operator_func(typenamespace regnamespace, typename name, opfunc regprocedure)`
