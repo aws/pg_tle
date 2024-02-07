@@ -171,7 +171,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
 	char		alignment = TYPALIGN_INT;	/* default alignment */
-	char		storage = TYPSTORAGE_PLAIN;	/* default TOAST storage method */
+	char		storage = TYPSTORAGE_PLAIN; /* default TOAST storage method */
 	Oid			typeNamespace = PG_GETARG_OID(0);
 	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
 	Oid			inputFuncId = PG_GETARG_OID(2);
@@ -216,7 +216,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("alignment \"%s\" not recognized", alignmentStr)));
+				 errmsg("alignment \"%s\" not recognized", alignmentStr)));
 
 	if (pg_strcasecmp(storageStr, "plain") == 0)
 		storage = TYPSTORAGE_PLAIN;
@@ -229,7 +229,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				errmsg("storage \"%s\" not recognized", storageStr)));
+				 errmsg("storage \"%s\" not recognized", storageStr)));
 
 	/* Check we have creation rights in target namespace */
 	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
