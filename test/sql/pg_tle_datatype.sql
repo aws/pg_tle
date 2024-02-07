@@ -746,10 +746,6 @@ SELECT pgtle.create_shell_type('public', 'test_toast');
 SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double');
 DROP TYPE test_toast CASCADE;
 
-RESET SESSION AUTHORIZATION;
-GRANT pg_read_server_files TO dbadmin;
-SET SESSION AUTHORIZATION dbadmin;
-
 -- Testing TOASTable types
 
 -- Default plain storage fails if the row is too big
@@ -798,10 +794,6 @@ INSERT INTO test_dt SELECT repeat('0123456789', 1000);
 SELECT md5(c1) FROM test_dt;
 DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
-
-RESET SESSION AUTHORIZATION;
-REVOKE pg_read_server_files FROM dbadmin;
-SET SESSION AUTHORIZATION dbadmin;
 
 DROP FUNCTION test_toast_in(text) CASCADE;
 DROP FUNCTION test_toast_out(bytea) CASCADE;

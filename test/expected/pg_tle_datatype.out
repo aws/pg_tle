@@ -1056,9 +1056,6 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
-RESET SESSION AUTHORIZATION;
-GRANT pg_read_server_files TO dbadmin;
-SET SESSION AUTHORIZATION dbadmin;
 -- Testing TOASTable types
 -- Default plain storage fails if the row is too big
 SELECT pgtle.create_shell_type('public', 'test_toast');
@@ -1188,9 +1185,6 @@ SELECT md5(c1) FROM test_dt;
 DROP TYPE test_toast CASCADE;
 ERROR:  type "test_toast" does not exist
 DROP TABLE test_dt;
-RESET SESSION AUTHORIZATION;
-REVOKE pg_read_server_files FROM dbadmin;
-SET SESSION AUTHORIZATION dbadmin;
 DROP FUNCTION test_toast_in(text) CASCADE;
 DROP FUNCTION test_toast_out(bytea) CASCADE;
 -- clean up
