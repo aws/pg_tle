@@ -787,8 +787,8 @@ SELECT pgtle.create_shell_type('public', 'test_toast');
 SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'plain');
 CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
 INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
-DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
+DROP TYPE test_toast CASCADE;
 
 -- Test that the value stored by different TOAST strategies can be retrieved successfully.
 -- External storage
@@ -797,8 +797,8 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
 CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
 INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
 SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
-DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
+DROP TYPE test_toast CASCADE;
 
 -- Extended storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
@@ -806,8 +806,8 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
 CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
 INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
 SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
-DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
+DROP TYPE test_toast CASCADE;
 
 -- Main storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
@@ -815,8 +815,8 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
 CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
 INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
 SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
-DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
+DROP TYPE test_toast CASCADE;
 
 DROP FUNCTION test_toast_in(text) CASCADE;
 DROP FUNCTION test_toast_out(bytea) CASCADE;
