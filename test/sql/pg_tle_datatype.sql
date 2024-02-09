@@ -748,50 +748,73 @@ DROP TYPE test_toast CASCADE;
 
 -- Testing TOASTable types
 
+-- Create a testing type that takes each character of a string containing only integers,
+-- and stores it in a byte followed by '0';
+CREATE OR REPLACE FUNCTION public.test_toast_in(input text) RETURNS bytea AS
+$$
+DECLARE
+  pos integer := 1;
+  result bytea := ''::bytea;
+  temp bytea := '0'::bytea;
+BEGIN
+  LOOP
+    result := result || set_byte(temp, 0, CAST(substring(input, pos, 1) AS INTEGER));
+    result := result || set_byte(temp, 0, 0);
+    pos := pos + 1;
+    EXIT WHEN pos > length(input);
+  END LOOP;
+  RETURN result;
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.test_toast_out(input bytea) RETURNS text AS
+$$
+DECLARE
+  pos integer := 0;
+  result text := '';
+BEGIN
+  LOOP
+    result := concat(result, get_byte(input, pos));
+    pos := pos + 2;
+    EXIT WHEN pos >= length(input);
+  END LOOP;  
+  RETURN result;
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+
 -- Default plain storage fails if the row is too big
 SELECT pgtle.create_shell_type('public', 'test_toast');
-SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1);
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'plain');
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
 DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
 
--- Test that the value stored by different TOAST strategies can be retrieved successfully (comparing md5 with builtin text type).
+-- Test that the value stored by different TOAST strategies can be retrieved successfully.
 -- External storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
 SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'external');
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
 DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
 
 -- Extended storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
 SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'int4', storage => 'extended');
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
 DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
 
 -- Main storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
 SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, alignment => 'double', storage => 'main');
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
-DROP TYPE test_toast CASCADE;
-DROP TABLE test_dt;
-
--- Text type
-CREATE TABLE test_dt(c1 text);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT repeat('0123456789', 1000);
-SELECT md5(c1) FROM test_dt;
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
 DROP TYPE test_toast CASCADE;
 DROP TABLE test_dt;
 

@@ -1057,6 +1057,38 @@ DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
 -- Testing TOASTable types
+-- Create a testing type that takes each character of a string containing only integers,
+-- and stores it in a byte followed by '0';
+CREATE OR REPLACE FUNCTION public.test_toast_in(input text) RETURNS bytea AS
+$$
+DECLARE
+  pos integer := 1;
+  result bytea := ''::bytea;
+  temp bytea := '0'::bytea;
+BEGIN
+  LOOP
+    result := result || set_byte(temp, 0, CAST(substring(input, pos, 1) AS INTEGER));
+    result := result || set_byte(temp, 0, 0);
+    pos := pos + 1;
+    EXIT WHEN pos > length(input);
+  END LOOP;
+  RETURN result;
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION public.test_toast_out(input bytea) RETURNS text AS
+$$
+DECLARE
+  pos integer := 0;
+  result text := '';
+BEGIN
+  LOOP
+    result := concat(result, get_byte(input, pos));
+    pos := pos + 2;
+    EXIT WHEN pos >= length(input);
+  END LOOP;  
+  RETURN result;
+END
+$$ IMMUTABLE STRICT LANGUAGE plpgsql;
 -- Default plain storage fails if the row is too big
 SELECT pgtle.create_shell_type('public', 'test_toast');
  create_shell_type 
@@ -1064,23 +1096,24 @@ SELECT pgtle.create_shell_type('public', 'test_toast');
  
 (1 row)
 
-SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1);
+SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::regprocedure, 'test_toast_out(bytea)'::regprocedure, -1, storage => 'plain');
  create_base_type 
 ------------------
  
 (1 row)
 
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-ERROR:  row is too big: size 10032, maximum size 8160
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+ERROR:  row is too big: size 10056, maximum size 8160
 DROP TYPE test_toast CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
+drop cascades to column c2 of table test_dt
 drop cascades to column c1 of table test_dt
 DROP TABLE test_dt;
--- Test that the value stored by different TOAST strategies can be retrieved successfully (comparing md5 with builtin text type).
+-- Test that the value stored by different TOAST strategies can be retrieved successfully.
 -- External storage
 SELECT pgtle.create_shell_type('public', 'test_toast');
  create_shell_type 
@@ -1094,21 +1127,20 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
  
 (1 row)
 
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
-               md5                
-----------------------------------
- 781e5e245d69b566979b86e28d23f2c7
- 2bb571599a4180e1d542f76904adc3df
-(2 rows)
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
+     c1     |               md5                |               md5                
+------------+----------------------------------+----------------------------------
+ 0123456789 | 7408ca0788d91a8434b95ec0186f1b21 | 7408ca0788d91a8434b95ec0186f1b21
+(1 row)
 
 DROP TYPE test_toast CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
+drop cascades to column c2 of table test_dt
 drop cascades to column c1 of table test_dt
 DROP TABLE test_dt;
 -- Extended storage
@@ -1124,21 +1156,20 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
  
 (1 row)
 
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
-               md5                
-----------------------------------
- 781e5e245d69b566979b86e28d23f2c7
- 2bb571599a4180e1d542f76904adc3df
-(2 rows)
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
+     c1     |               md5                |               md5                
+------------+----------------------------------+----------------------------------
+ 0123456789 | 7408ca0788d91a8434b95ec0186f1b21 | 7408ca0788d91a8434b95ec0186f1b21
+(1 row)
 
 DROP TYPE test_toast CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
+drop cascades to column c2 of table test_dt
 drop cascades to column c1 of table test_dt
 DROP TABLE test_dt;
 -- Main storage
@@ -1154,36 +1185,21 @@ SELECT pgtle.create_base_type('public', 'test_toast', 'test_toast_in(text)'::reg
  
 (1 row)
 
-CREATE TABLE test_dt(c1 test_toast);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT CAST(repeat('0123456789', 1000) AS test_toast);
-SELECT md5(CAST(c1 AS TEXT)) FROM test_dt;
-               md5                
-----------------------------------
- 781e5e245d69b566979b86e28d23f2c7
- 2bb571599a4180e1d542f76904adc3df
-(2 rows)
+CREATE TABLE test_dt(c1 test_toast, c2 test_toast);
+INSERT INTO test_dt VALUES ('0123456789', CAST(repeat('0123456789', 500) AS test_toast));
+SELECT c1, md5(CAST(c2 AS TEXT)), md5(repeat('0123456789', 500)) from test_dt;
+     c1     |               md5                |               md5                
+------------+----------------------------------+----------------------------------
+ 0123456789 | 7408ca0788d91a8434b95ec0186f1b21 | 7408ca0788d91a8434b95ec0186f1b21
+(1 row)
 
 DROP TYPE test_toast CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function test_toast_in(cstring)
 drop cascades to function test_toast_out(test_toast)
 drop cascades to cast from test_toast to bytea
+drop cascades to column c2 of table test_dt
 drop cascades to column c1 of table test_dt
-DROP TABLE test_dt;
--- Text type
-CREATE TABLE test_dt(c1 text);
-INSERT INTO test_dt VALUES('0123456789');
-INSERT INTO test_dt SELECT repeat('0123456789', 1000);
-SELECT md5(c1) FROM test_dt;
-               md5                
-----------------------------------
- 781e5e245d69b566979b86e28d23f2c7
- 2bb571599a4180e1d542f76904adc3df
-(2 rows)
-
-DROP TYPE test_toast CASCADE;
-ERROR:  type "test_toast" does not exist
 DROP TABLE test_dt;
 DROP FUNCTION test_toast_in(text) CASCADE;
 DROP FUNCTION test_toast_out(bytea) CASCADE;
