@@ -33,7 +33,7 @@ CREATE FUNCTION pgtle.create_base_type
 RETURNS void
 SET search_path TO 'pgtle'
 STRICT
-AS 'MODULE_PATHNAME', 'pg_tle_create_base_type'
+AS 'MODULE_PATHNAME', 'pg_tle_create_base_type_7args'
 LANGUAGE C;
 
 CREATE FUNCTION pgtle.create_base_type_if_not_exists

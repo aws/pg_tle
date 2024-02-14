@@ -55,6 +55,15 @@ static void check_pgtle_base_type(Oid typeOid);
 static bool is_pgtle_io_func(Oid funcid, bool typeInput);
 static Oid	get_type_func_argtype(bool typeInput);
 static Oid	get_type_func_rettype(bool typeInput);
+static Datum
+			pg_tle_create_base_type_internal(Oid typeNamespace,
+											 char *typeName,
+											 Oid inputFuncId,
+											 Oid outputFuncId,
+											 int16 internalLength,
+											 char *alignmentStr,
+											 char *storageStr,
+											 char *funcProbin);
 
 static void
 check_is_pgtle_admin(void)
@@ -160,6 +169,57 @@ PG_FUNCTION_INFO_V1(pg_tle_create_base_type);
 Datum
 pg_tle_create_base_type(PG_FUNCTION_ARGS)
 {
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			inputFuncId = PG_GETARG_OID(2);
+	Oid			outputFuncId = PG_GETARG_OID(3);
+	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *alignment = 'int4'; /* default alignment */
+	char	   *storage = 'plain';	/* default TOAST storage method */
+	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
+
+	return pg_tle_create_base_type_internal(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, alignment, storage, funcProbin);
+}
+
+/*
+ * pg_tle_create_base_type_7args
+ *
+ * Similar to pg_tle_create_base_type, but 7 args are expected.
+ * Two additional args are alignment and storage.
+ *
+ */
+PG_FUNCTION_INFO_V1(pg_tle_create_base_type_7args);
+Datum
+pg_tle_create_base_type_7args(PG_FUNCTION_ARGS)
+{
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			inputFuncId = PG_GETARG_OID(2);
+	Oid			outputFuncId = PG_GETARG_OID(3);
+	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *alignmentStr = text_to_cstring(PG_GETARG_TEXT_P(5));
+	char	   *storageStr = text_to_cstring(PG_GETARG_TEXT_P(6));
+	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
+
+	return pg_tle_create_base_type_internal(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, alignment, storage, funcProbin);
+}
+
+/*
+ * pg_tle_create_base_type_internal
+ *
+ * Internal function to create a new base type.
+ *
+ */
+static Datum
+pg_tle_create_base_type_internal(Oid typeNamespace,
+								 char *typeName,
+								 Oid inputFuncId,
+								 Oid outputFuncId,
+								 int16 internalLength,
+								 char *alignmentStr,
+								 char *storageStr,
+								 char *funcProbin)
+{
 	AclResult	aclresult;
 	Oid			inputOid;
 	Oid			outputOid;
@@ -172,14 +232,6 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	char	   *namespaceName;
 	char		alignment = TYPALIGN_INT;	/* default alignment */
 	char		storage = TYPSTORAGE_PLAIN; /* default TOAST storage method */
-	Oid			typeNamespace = PG_GETARG_OID(0);
-	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
-	Oid			inputFuncId = PG_GETARG_OID(2);
-	Oid			outputFuncId = PG_GETARG_OID(3);
-	int16		internalLength = PG_GETARG_INT16(4);
-	char	   *alignmentStr = text_to_cstring(PG_GETARG_TEXT_P(5));
-	char	   *storageStr = text_to_cstring(PG_GETARG_TEXT_P(6));
-	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
 
 	/*
 	 * Even though the SQL function is locked down so only a member of
