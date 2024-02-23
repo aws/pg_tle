@@ -17,8 +17,8 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_tle" to load this file. \quit
 
-DROP FUNCTION pgtle.create_base_type;
-DROP FUNCTION pgtle.create_base_type_if_not_exists;
+DROP FUNCTION pgtle.create_base_type CASCADE;
+DROP FUNCTION pgtle.create_base_type_if_not_exists CASCADE;
 
 CREATE FUNCTION pgtle.create_base_type
 (
@@ -33,7 +33,7 @@ CREATE FUNCTION pgtle.create_base_type
 RETURNS void
 SET search_path TO 'pgtle'
 STRICT
-AS 'MODULE_PATHNAME', 'pg_tle_create_base_type_7args'
+AS 'MODULE_PATHNAME', 'pg_tle_create_base_type_with_storage'
 LANGUAGE C;
 
 CREATE FUNCTION pgtle.create_base_type_if_not_exists
@@ -44,7 +44,7 @@ CREATE FUNCTION pgtle.create_base_type_if_not_exists
   outfunc regprocedure,
   internallength int4,
   alignment text default 'int4',
-  storage text default 'plain'  
+  storage text default 'plain'
 )
 RETURNS boolean
 SET search_path TO 'pgtle'

@@ -55,6 +55,8 @@ static void check_pgtle_base_type(Oid typeOid);
 static bool is_pgtle_io_func(Oid funcid, bool typeInput);
 static Oid	get_type_func_argtype(bool typeInput);
 static Oid	get_type_func_rettype(bool typeInput);
+static char get_type_alignment(char *alignmentStr);
+static char get_type_storage(char *storageStr);
 static Datum
 			pg_tle_create_base_type_internal(Oid typeNamespace,
 											 char *typeName,
@@ -182,15 +184,15 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 }
 
 /*
- * pg_tle_create_base_type_7args
+ * pg_tle_create_base_type_with_storage
  *
  * Similar to pg_tle_create_base_type, but 7 args are expected.
  * Two additional args are alignment and storage.
  *
  */
-PG_FUNCTION_INFO_V1(pg_tle_create_base_type_7args);
+PG_FUNCTION_INFO_V1(pg_tle_create_base_type_with_storage);
 Datum
-pg_tle_create_base_type_7args(PG_FUNCTION_ARGS)
+pg_tle_create_base_type_with_storage(PG_FUNCTION_ARGS)
 {
 	Oid			typeNamespace = PG_GETARG_OID(0);
 	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
@@ -257,31 +259,8 @@ pg_tle_create_base_type_internal(Oid typeNamespace,
 	if (internalLength > 0)
 		internalLength += VARHDRSZ;
 
-	if (pg_strcasecmp(alignmentStr, "double") == 0)
-		alignment = TYPALIGN_DOUBLE;
-	else if (pg_strcasecmp(alignmentStr, "int4") == 0)
-		alignment = TYPALIGN_INT;
-	else if (pg_strcasecmp(alignmentStr, "int2") == 0)
-		alignment = TYPALIGN_SHORT;
-	else if (pg_strcasecmp(alignmentStr, "char") == 0)
-		alignment = TYPALIGN_CHAR;
-	else
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("alignment \"%s\" not recognized", alignmentStr)));
-
-	if (pg_strcasecmp(storageStr, "plain") == 0)
-		storage = TYPSTORAGE_PLAIN;
-	else if (pg_strcasecmp(storageStr, "external") == 0)
-		storage = TYPSTORAGE_EXTERNAL;
-	else if (pg_strcasecmp(storageStr, "extended") == 0)
-		storage = TYPSTORAGE_EXTENDED;
-	else if (pg_strcasecmp(storageStr, "main") == 0)
-		storage = TYPSTORAGE_MAIN;
-	else
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("storage \"%s\" not recognized", storageStr)));
+	alignment = get_type_alignment(alignmentStr);
+	storage = get_type_storage(storageStr);
 
 	/* Check we have creation rights in target namespace */
 	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
@@ -1133,4 +1112,51 @@ pg_tle_operator_func(PG_FUNCTION_ARGS)
 		return OidFunctionCall1Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0));
 
 	return OidFunctionCall2Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1));
+}
+
+/*
+ * get_type_alignment
+ *
+ * Get the type alignment from input string, valid options are 'double', 'int4', 'int2' and 'char'.
+ * Report an error if intput is not valid.
+ */
+static char
+get_type_alignment(char *alignmentStr)
+{
+	if (pg_strcasecmp(alignmentStr, "double") == 0)
+		return TYPALIGN_DOUBLE;
+	if (pg_strcasecmp(alignmentStr, "int4") == 0)
+		return TYPALIGN_INT;
+	if (pg_strcasecmp(alignmentStr, "int2") == 0)
+		return TYPALIGN_SHORT;
+	if (pg_strcasecmp(alignmentStr, "char") == 0)
+		return TYPALIGN_CHAR;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("alignment \"%s\" not recognized", alignmentStr)));
+
+}
+
+/*
+ * get_type_storage
+ *
+ * Get the type storage from input string, valid options are 'plain', 'external', 'extended' and 'main'.
+ * Report an error if intput is not valid.
+ */
+static char
+get_type_storage(char *storageStr)
+{
+	if (pg_strcasecmp(storageStr, "plain") == 0)
+		return TYPSTORAGE_PLAIN;
+	if (pg_strcasecmp(storageStr, "external") == 0)
+		return TYPSTORAGE_EXTERNAL;
+	if (pg_strcasecmp(storageStr, "extended") == 0)
+		return TYPSTORAGE_EXTENDED;
+	if (pg_strcasecmp(storageStr, "main") == 0)
+		return TYPSTORAGE_MAIN;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("storage \"%s\" not recognized", storageStr)));
 }
