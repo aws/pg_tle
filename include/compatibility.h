@@ -183,14 +183,26 @@
 #ifndef TYPALIGN_CHAR
 #define  TYPALIGN_CHAR			'c' /* char alignment (i.e. unaligned) */
 #endif
+#ifndef TYPALIGN_SHORT
+#define TYPALIGN_SHORT			's' /* short alignment (typically 2 bytes) */
+#endif
 #ifndef TYPALIGN_INT
 #define  TYPALIGN_INT			'i' /* int alignment (typically 4 bytes) */
+#endif
+#ifndef TYPALIGN_DOUBLE
+#define TYPALIGN_DOUBLE		'd' /* double alignment (often 8 bytes) */
 #endif
 #ifndef TYPSTORAGE_PLAIN
 #define  TYPSTORAGE_PLAIN		'p' /* type not prepared for toasting */
 #endif
+#ifndef TYPSTORAGE_EXTERNAL
+#define TYPSTORAGE_EXTERNAL	'e' /* toastable, don't try to compress */
+#endif
 #ifndef TYPSTORAGE_EXTENDED
 #define  TYPSTORAGE_EXTENDED	'x' /* fully toastable */
+#endif
+#ifndef TYPSTORAGE_MAIN
+#define TYPSTORAGE_MAIN		'm' /* like 'x' but try to store inline */
 #endif
 
 /*

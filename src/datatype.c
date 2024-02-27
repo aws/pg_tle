@@ -55,6 +55,17 @@ static void check_pgtle_base_type(Oid typeOid);
 static bool is_pgtle_io_func(Oid funcid, bool typeInput);
 static Oid	get_type_func_argtype(bool typeInput);
 static Oid	get_type_func_rettype(bool typeInput);
+static char get_type_alignment(char *alignmentStr);
+static char get_type_storage(char *storageStr);
+static Datum
+			pg_tle_create_base_type_internal(Oid typeNamespace,
+											 char *typeName,
+											 Oid inputFuncId,
+											 Oid outputFuncId,
+											 int16 internalLength,
+											 char *alignmentStr,
+											 char *storageStr,
+											 char *funcProbin);
 
 static void
 check_is_pgtle_admin(void)
@@ -160,6 +171,57 @@ PG_FUNCTION_INFO_V1(pg_tle_create_base_type);
 Datum
 pg_tle_create_base_type(PG_FUNCTION_ARGS)
 {
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			inputFuncId = PG_GETARG_OID(2);
+	Oid			outputFuncId = PG_GETARG_OID(3);
+	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *alignment = "int4"; /* default alignment */
+	char	   *storage = "plain";	/* default TOAST storage method */
+	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
+
+	return pg_tle_create_base_type_internal(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, alignment, storage, funcProbin);
+}
+
+/*
+ * pg_tle_create_base_type_with_storage
+ *
+ * Similar to pg_tle_create_base_type, but expects additional arguments
+ * for alignment and storage.
+ *
+ */
+PG_FUNCTION_INFO_V1(pg_tle_create_base_type_with_storage);
+Datum
+pg_tle_create_base_type_with_storage(PG_FUNCTION_ARGS)
+{
+	Oid			typeNamespace = PG_GETARG_OID(0);
+	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
+	Oid			inputFuncId = PG_GETARG_OID(2);
+	Oid			outputFuncId = PG_GETARG_OID(3);
+	int16		internalLength = PG_GETARG_INT16(4);
+	char	   *alignment = text_to_cstring(PG_GETARG_TEXT_P(5));
+	char	   *storage = text_to_cstring(PG_GETARG_TEXT_P(6));
+	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
+
+	return pg_tle_create_base_type_internal(typeNamespace, typeName, inputFuncId, outputFuncId, internalLength, alignment, storage, funcProbin);
+}
+
+/*
+ * pg_tle_create_base_type_internal
+ *
+ * Internal function to create a new base type.
+ *
+ */
+static Datum
+pg_tle_create_base_type_internal(Oid typeNamespace,
+								 char *typeName,
+								 Oid inputFuncId,
+								 Oid outputFuncId,
+								 int16 internalLength,
+								 char *alignmentStr,
+								 char *storageStr,
+								 char *funcProbin)
+{
 	AclResult	aclresult;
 	Oid			inputOid;
 	Oid			outputOid;
@@ -170,12 +232,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	Oid			inputFuncParamType;
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
-	Oid			typeNamespace = PG_GETARG_OID(0);
-	char	   *typeName = NameStr(*PG_GETARG_NAME(1));
-	Oid			inputFuncId = PG_GETARG_OID(2);
-	Oid			outputFuncId = PG_GETARG_OID(3);
-	int16		internalLength = PG_GETARG_INT16(4);
-	char	   *funcProbin = get_probin(fcinfo->flinfo->fn_oid);
+	char		alignment = TYPALIGN_INT;	/* default alignment */
+	char		storage = TYPSTORAGE_PLAIN; /* default TOAST storage method */
 
 	/*
 	 * Even though the SQL function is locked down so only a member of
@@ -200,6 +258,9 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	 */
 	if (internalLength > 0)
 		internalLength += VARHDRSZ;
+
+	alignment = get_type_alignment(alignmentStr);
+	storage = get_type_storage(storageStr);
 
 	/* Check we have creation rights in target namespace */
 	aclresult = PG_NAMESPACE_ACLCHECK(typeNamespace, GetUserId(), ACL_CREATE);
@@ -323,8 +384,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 					NULL,		/* default type value */
 					NULL,		/* no binary form available */
 					false,		/* passed by value */
-					TYPALIGN_INT,	/* required alignment */
-					TYPSTORAGE_PLAIN,	/* TOAST strategy */
+					alignment,	/* required alignment */
+					storage,	/* TOAST strategy */
 					-1,			/* typMod (Domains only) */
 					0,			/* Array Dimensions of typbasetype */
 					false,		/* Type NOT NULL */
@@ -336,6 +397,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 	 */
 	array_type = makeArrayTypeName(typeName, typeNamespace);
 
+	/* alignment must be TYPALIGN_INT or TYPALIGN_DOUBLE for arrays */
+	alignment = (alignment == TYPALIGN_DOUBLE) ? TYPALIGN_DOUBLE : TYPALIGN_INT;
 
 	TYPE_CREATE(true,			/* array type */
 				array_oid,		/* force assignment of this type OID */
@@ -363,7 +426,7 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 				NULL,			/* never a default type value */
 				NULL,			/* binary default isn't sent either */
 				false,			/* never passed by value */
-				TYPALIGN_INT,	/* see above */
+				alignment,		/* see above */
 				TYPSTORAGE_EXTENDED,	/* ARRAY is always toastable */
 				-1,				/* typMod (Domains only) */
 				0,				/* Array dimensions of typbasetype */
@@ -1049,4 +1112,51 @@ pg_tle_operator_func(PG_FUNCTION_ARGS)
 		return OidFunctionCall1Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0));
 
 	return OidFunctionCall2Coll(userFunc, InvalidOid, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1));
+}
+
+/*
+ * get_type_alignment
+ *
+ * Get the type alignment from input string, valid options are 'double', 'int4', 'int2' and 'char'.
+ * Report an error if intput is not valid.
+ */
+static char
+get_type_alignment(char *alignmentStr)
+{
+	if (pg_strcasecmp(alignmentStr, "double") == 0)
+		return TYPALIGN_DOUBLE;
+	if (pg_strcasecmp(alignmentStr, "int4") == 0)
+		return TYPALIGN_INT;
+	if (pg_strcasecmp(alignmentStr, "int2") == 0)
+		return TYPALIGN_SHORT;
+	if (pg_strcasecmp(alignmentStr, "char") == 0)
+		return TYPALIGN_CHAR;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("alignment \"%s\" not recognized", alignmentStr)));
+
+}
+
+/*
+ * get_type_storage
+ *
+ * Get the type storage from input string, valid options are 'plain', 'external', 'extended' and 'main'.
+ * Report an error if intput is not valid.
+ */
+static char
+get_type_storage(char *storageStr)
+{
+	if (pg_strcasecmp(storageStr, "plain") == 0)
+		return TYPSTORAGE_PLAIN;
+	if (pg_strcasecmp(storageStr, "external") == 0)
+		return TYPSTORAGE_EXTERNAL;
+	if (pg_strcasecmp(storageStr, "extended") == 0)
+		return TYPSTORAGE_EXTENDED;
+	if (pg_strcasecmp(storageStr, "main") == 0)
+		return TYPSTORAGE_MAIN;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("storage \"%s\" not recognized", storageStr)));
 }
