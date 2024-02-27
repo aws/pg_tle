@@ -186,8 +186,8 @@ pg_tle_create_base_type(PG_FUNCTION_ARGS)
 /*
  * pg_tle_create_base_type_with_storage
  *
- * Similar to pg_tle_create_base_type, but 7 args are expected.
- * Two additional args are alignment and storage.
+ * Similar to pg_tle_create_base_type, but expects additional arguments
+ * for alignment and storage.
  *
  */
 PG_FUNCTION_INFO_V1(pg_tle_create_base_type_with_storage);
