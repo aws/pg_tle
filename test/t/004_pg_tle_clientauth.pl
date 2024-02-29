@@ -258,6 +258,47 @@ $node->psql('postgres', q[
             END IF;
         END
     $$ LANGUAGE plpgsql], on_error_die => 1);
+### 16. Allow mixedCase in pgtle.clientauth_users_to_skip
+$node->psql('postgres', 'CREATE ROLE testUser3 LOGIN', stderr => \$psql_err);
+$node->psql('postgres', q[
+    CREATE FUNCTION reject_testUser3(port pgtle.clientauth_port_subset, status integer) RETURNS text AS $$
+        BEGIN
+            IF port.user_name = 'testUser3' THEN
+                RETURN 'testUser3 is not allowed to connect';
+            ELSE
+                RETURN '';
+            END IF;
+        END
+    $$ LANGUAGE plpgsql;]);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testUser3', 'clientauth')]);
+$node->psql('postgres', 'select', extra_params => ['-U', 'testUser3'], stderr => \$psql_err);
+like($psql_err, qr/FATAL:  testUser3 is not allowed to connect/,
+    "clientauth function rejects testUser3");
+
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testUser3'));
+$node->restart;
+
+$node->command_ok(
+    ['psql', '-U', 'testUser3', '-c', 'select;'],
+    "clientauth function does not reject testUser3 when testUser3 is in pgtle.clientauth_users_to_skip");
+### 17. Allow mixedCase in pgtle.clientauth_databases_to_skip
+$node->psql('postgres', 'CREATE DATABASE mixedCaseDb');
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = ''));
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+
+$node->psql('mixedCaseDb', 'select', extra_params => ['-U', 'testUser3'], stderr => \$psql_err);
+like($psql_err, qr/FATAL:  testUser3 is not allowed to connect/,
+    "clientauth function rejects testUser3");
+
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'mixedCaseDb'));
+$node->psql('postgres', 'SELECT pg_reload_conf();');
+
+$node->command_ok(
+    ['psql', '-U', 'testUser3', '-c', 'select;'],
+    "clientauth function does not reject testUser3 when database is in pgtle.clientauth_databases_to_skip");
+
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')], on_error_die => 1);
 # Create role with name "
 $node->psql('postgres', qq[CREATE ROLE """" LOGIN], on_error_die => 1);
