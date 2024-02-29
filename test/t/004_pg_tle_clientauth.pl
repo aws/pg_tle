@@ -166,8 +166,9 @@ $node->command_ok(
     "clientauth function does not reject testuser2 when clientauth is enabled without restart");
 
 ### 9. Functions do not take effect when user is on pgtle.clientauth_users_to_skip
+$node->psql('postgres', 'CREATE ROLE testUser3 LOGIN', stderr => \$psql_err);
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
-$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testuser,testuser2'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testuser,testuser2,testUser3'));
 $node->restart;
 
 $node->command_ok(
@@ -176,6 +177,9 @@ $node->command_ok(
 $node->command_ok(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when testuser2 is in pgtle.clientauth_users_to_skip");
+$node->command_ok(
+    ['psql', '-U', 'testUser3', '-c', 'select;'],
+    "clientauth function does not reject testUser3 when testUser3 is in pgtle.clientauth_users_to_skip");
 
 ### 10. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
 $node->psql('postgres', 'CREATE DATABASE not_excluded');
