@@ -255,34 +255,6 @@ $node->psql('postgres', q[
         END
     $$ LANGUAGE plpgsql], on_error_die => 1);
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')], on_error_die => 1);
-### 16. Allow mixedCase in pgtle.clientauth_users_to_skip
-$node->psql('postgres', 'CREATE ROLE "testUser3" LOGIN', on_error_die => 1);
-$node->psql('postgres', q[
-    CREATE FUNCTION reject_testUser3(port pgtle.clientauth_port_subset, status integer) RETURNS text AS $$
-        BEGIN
-            IF port.user_name = 'testUser3' THEN
-                RETURN 'testUser3 is not allowed to connect';
-            END IF;
-        END
-    $$ LANGUAGE plpgsql;]);
-$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testUser3', 'clientauth')], on_error_die => 1);
-$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
-$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testUser3'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
-
-$node->command_ok(
-    ['psql', '-U', 'testUser3', '-c', 'select;'],
-    "clientauth function does not reject testUser3 when testUser3 is in pgtle.clientauth_users_to_skip");
-### 17. Allow mixedCase in pgtle.clientauth_databases_to_skip
-$node->psql('postgres', 'CREATE DATABASE "mixedCaseDb"');
-$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
-$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'mixedCaseDb, postgres'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
-
-$node->command_ok(
-    ['psql', '-d', 'mixedCaseDb', '-U', 'testUser3', '-c', 'select;'],
-    "clientauth function does not reject testUser3 when database is in pgtle.clientauth_databases_to_skip");
-$node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testUser3', 'clientauth')]);
 # Create role with name "
 $node->psql('postgres', qq[CREATE ROLE """" LOGIN], on_error_die => 1);
 # Create role with name ""

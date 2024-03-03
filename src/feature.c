@@ -137,7 +137,7 @@ check_string_in_guc_list(const char *str, const char *guc_var, const char *guc_n
 	ListCell   *lc;
 
 	guc_copy = pstrdup(guc_var);
-	if (!SplitGUCList(guc_copy, ',', &guc_list))
+	if (!SplitGUCListgu(guc_copy, ',', &guc_list))
 		elog(ERROR, "could not parse %s", guc_name);
 
 	foreach(lc, guc_list)
