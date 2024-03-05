@@ -31,10 +31,10 @@ $node->append_conf('postgresql.conf', qq(shared_preload_libraries = 'pg_tle'));
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
 $node->start;
 
-$node->psql('postgres', 'CREATE EXTENSION pg_tle');
+$node->psql('postgres', 'CREATE EXTENSION pg_tle', on_error_die => 1);
 
 ### 1. Allow mixedCase in pgtle.clientauth_users_to_skip
-$node->psql('postgres', 'CREATE ROLE "testUser" LOGIN;', stderr => \$psql_err);
+$node->psql('postgres', 'CREATE ROLE "testUser" LOGIN', on_error_die => 1);
 $node->psql('postgres', q[
     CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
@@ -42,32 +42,32 @@ $node->psql('postgres', q[
                 RAISE EXCEPTION 'testUser is not allowed to connect';
             END IF;
         END
-    $$ LANGUAGE plpgsql;]);
-$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')]);
+    $$ LANGUAGE plpgsql;], on_error_die => 1);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')], on_error_die => 1);
 $node->psql('postgres', 'select', extra_params => ['-U', 'testUser'], stderr => \$psql_err);
 like($psql_err, qr/FATAL:  testUser is not allowed to connect/,
     "clientauth function rejects testUser");
 
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testUser'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->psql('postgres', 'SELECT pg_reload_conf();', on_error_die => 1);
 
 $node->command_ok(
     ['psql', '-U', "testUser", '-c', 'select;'],
     "clientauth function does not reject testUser when testUser is in pgtle.clientauth_users_to_skip");
 ### 2. Allow mixedCase in pgtle.clientauth_databases_to_skip
-$node->psql('postgres', 'CREATE DATABASE "mixedCaseDb"');
+$node->psql('postgres', 'CREATE DATABASE "mixedCaseDb"', on_error_die => 1);
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->psql('postgres', 'SELECT pg_reload_conf()', on_error_die => 1);
 $node->psql("mixedCaseDb", 'select', extra_params => ['-U', 'testUser'], stderr => \$psql_err);
 like($psql_err, qr/FATAL:  testUser is not allowed to connect/,
     "clientauth function rejects testUser");
 
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'mixedCaseDb'));
-$node->psql('postgres', 'SELECT pg_reload_conf();');
+$node->psql('postgres', 'SELECT pg_reload_conf()', on_error_die => 1);
 $node->command_ok(
     ['psql', '-d', "mixedCaseDb", '-U', "testUser", '-c', 'select;'],
     "clientauth function does not reject testUser when database is in pgtle.clientauth_databases_to_skip");
-$node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')]);
+$node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')], on_error_die => 1);
 
 $node->stop;
 done_testing();
