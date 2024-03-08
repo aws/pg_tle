@@ -21,12 +21,14 @@
 ### 7.  Functions do not take effect when pgtle.enable_clientauth = 'off'
 ### 8.  Enabling clientauth without restart does not have any effect
 ### 9.  Functions do not take effect when user is on pgtle.clientauth_users_to_skip
-### 10. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
-### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
-### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
-### 13. Rejects connections when no schema qualified function is found
-### 14. Database does not come up if clientauth workers fail to start
-### 15. Malformed strings cannot be used for SQL injection
+### 10. Allow mixedCase in pgtle.clientauth_users_to_skip
+### 11. Allow mixedCase in pgtle.clientauth_databases_to_skip
+### 12. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 13. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 14. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 15. Rejects connections when no schema qualified function is found
+### 16. Database does not come up if clientauth workers fail to start
+### 17. Malformed strings cannot be used for SQL injection
 
 use strict;
 use warnings;
@@ -177,7 +179,44 @@ $node->command_ok(
     ['psql', '-U', 'testuser2', '-c', 'select;'],
     "clientauth function does not reject testuser2 when testuser2 is in pgtle.clientauth_users_to_skip");
 
-### 10. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 10. Allow mixedCase in pgtle.clientauth_users_to_skip
+$node->psql('postgres', 'CREATE ROLE "testUser" LOGIN', on_error_die => 1);
+$node->psql('postgres', q[
+    CREATE FUNCTION reject_mixeduser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
+        BEGIN
+            IF port.user_name = 'testUser' THEN
+                RAISE EXCEPTION 'testUser is not allowed to connect';
+            END IF;
+        END
+    $$ LANGUAGE plpgsql;], on_error_die => 1);
+$node->psql('postgres', qq[SELECT pgtle.register_feature('reject_mixeduser', 'clientauth')], on_error_die => 1);
+$node->psql('postgres', 'select', extra_params => ['-U', 'testUser'], stderr => \$psql_err);
+like($psql_err, qr/FATAL:  testUser is not allowed to connect/,
+    "clientauth function rejects testUser");
+
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = 'testUser'));
+$node->psql('postgres', 'SELECT pg_reload_conf();', on_error_die => 1);
+
+$node->command_ok(
+    ['psql', '-U', "testUser", '-c', 'select;'],
+    "clientauth function does not reject testUser when testUser is in pgtle.clientauth_users_to_skip");
+
+### 11. Allow mixedCase in pgtle.clientauth_databases_to_skip
+$node->psql('postgres', 'CREATE DATABASE "mixedCaseDb"', on_error_die => 1);
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
+$node->psql('postgres', 'SELECT pg_reload_conf()', on_error_die => 1);
+$node->psql("mixedCaseDb", 'select', extra_params => ['-U', 'testUser'], stderr => \$psql_err);
+like($psql_err, qr/FATAL:  testUser is not allowed to connect/,
+    "clientauth function rejects testUser");
+
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'mixedCaseDb'));
+$node->psql('postgres', 'SELECT pg_reload_conf()', on_error_die => 1);
+$node->command_ok(
+    ['psql', '-d', "mixedCaseDb", '-U', "testUser", '-c', 'select;'],
+    "clientauth function does not reject testUser when database is in pgtle.clientauth_databases_to_skip");
+$node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_mixeduser', 'clientauth')], on_error_die => 1);
+
+### 12. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
 $node->psql('postgres', 'CREATE DATABASE not_excluded');
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = 'postgres'));
@@ -196,7 +235,7 @@ $node->psql('not_excluded', 'select', extra_params => ['-U', 'testuser2'], stder
 like($psql_err, qr/FATAL:  clientauth function error/,
     "clientauth function rejects testuser2 when database is not on pgtle.clientauth_databases_to_skip");
 
-### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 13. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('reject_testuser', 'clientauth')]);
 $node->psql('postgres', qq[SELECT pgtle.unregister_feature('error', 'clientauth')]);
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'require'));
@@ -211,7 +250,7 @@ $node->command_ok(
 
 $node->psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser', 'clientauth')]);
 
-### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 14. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
 $node->psql('postgres', qq[DROP EXTENSION pg_tle CASCADE;]);
 
 $node->psql('not_excluded', 'select', stderr => \$psql_err);
@@ -221,7 +260,7 @@ $node->command_ok(
     ['psql', '-c', 'select;'],
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
 
-### 13. Rejects connections when no schema qualified function is found
+### 15. Rejects connections when no schema qualified function is found
 $node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
 $node->psql('postgres', 'SELECT pg_reload_conf();');
 $node->psql('postgres', qq[CREATE EXTENSION pg_tle CASCADE;]);
@@ -235,7 +274,7 @@ $node->command_ok(
     "can still connect if database is in pgtle.clientauth_databases_to_skip");
 $node->psql('postgres', qq[TRUNCATE pgtle.feature_info], on_error_die => 1);
 
-### 14. Database does not come up if clientauth workers fail to start
+### 16. Database does not come up if clientauth workers fail to start
 $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers = 64));
 $node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
 $node->command_fails(
@@ -245,7 +284,7 @@ $node->append_conf('postgresql.conf', qq(pgtle.clientauth_num_parallel_workers =
 $node->append_conf('postgresql.conf', qq(max_worker_processes = 63));
 $node->restart;
 
-### 15. Malformed strings cannot be used for SQL injection
+### 17. Malformed strings cannot be used for SQL injection
 $node->psql('postgres', q[
     CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
