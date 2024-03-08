@@ -21,12 +21,14 @@
 ### 7.  Functions do not take effect when pgtle.enable_clientauth = 'off'
 ### 8.  Enabling clientauth without restart does not have any effect
 ### 9.  Functions do not take effect when user is on pgtle.clientauth_users_to_skip
-### 10. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
-### 11. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
-### 12. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
-### 13. Rejects connections when no schema qualified function is found
-### 14. Database does not come up if clientauth workers fail to start
-### 15. Malformed strings cannot be used for SQL injection
+### 10. Allow mixedCase in pgtle.clientauth_users_to_skip
+### 11. Allow mixedCase in pgtle.clientauth_databases_to_skip
+### 12. Functions do not take effect when database is on pgtle.clientauth_databases_to_skip
+### 13. Users cannot log in when pgtle.enable_clientauth = 'require' and no functions are registered to clientauth
+### 14. Users cannot log in when pgtle.enable_clientauth = 'require' and pg_tle is not installed on pgtle.clientauth_database_name
+### 15. Rejects connections when no schema qualified function is found
+### 16. Database does not come up if clientauth workers fail to start
+### 17. Malformed strings cannot be used for SQL injection
 
 use strict;
 use warnings;
