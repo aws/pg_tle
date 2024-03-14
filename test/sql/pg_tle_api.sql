@@ -231,7 +231,7 @@ SELECT EXISTS(
 
 SELECT pgtle.uninstall_extension('test_unregister_feature');
 -- create this function one more time to test warning messages
-CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz,validuntil_null boolean) RETURNS void AS
+CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
     $$
     BEGIN
         if length(shadow_pass) < 8 THEN

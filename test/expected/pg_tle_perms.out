@@ -159,7 +159,6 @@ GRANT pgtle_admin TO tle_person;
 -- become tle_person again. create the featureful extension.
 SET SESSION AUTHORIZATION tle_person;
 CREATE EXTENSION yes_features;
-WARNING:  Required parameter pgtle.enable_password_check is "off". To enable passcheck, set pgtle.enable_password_check = "on"
 -- insert directly into pgtle.feature_info
 INSERT INTO pgtle.feature_info VALUES ('passcheck', 'public', 'other_passcheck_hook', '');
 -- become the privileged user. revoke pgtle_admin from tle_person
