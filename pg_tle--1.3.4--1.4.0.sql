@@ -19,7 +19,6 @@
 
 DROP FUNCTION pgtle.create_base_type CASCADE;
 DROP FUNCTION pgtle.create_base_type_if_not_exists CASCADE;
--- DROP FUNCTION pgtle.register_feature CASCADE;
 
 CREATE FUNCTION pgtle.create_base_type
 (
@@ -81,31 +80,31 @@ passcheck_db text;
 clientauth_db text;
 
 BEGIN
-    SELECT setting FROM pg_settings WHERE name = 'pgtle.enable_password_check' INTO passcheck_enabled;
-    SELECT setting FROM pg_settings WHERE name = 'pgtle.enable_clientauth' INTO clientauth_enabled;
-    SELECT CURRENT_DATABASE() INTO current_db;
-    SELECT setting FROM pg_settings WHERE name = 'pgtle.passcheck_db_name' INTO passcheck_db;
-    SELECT setting FROM pg_settings WHERE name = 'pgtle.clientauth_db_name' INTO clientauth_db;
+    SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.enable_password_check' INTO passcheck_enabled;
+    SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.enable_clientauth' INTO clientauth_enabled;
+    SELECT pg_catalog.CURRENT_DATABASE() INTO current_db;
+    SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.passcheck_db_name' INTO passcheck_db;
+    SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.clientauth_db_name' INTO clientauth_db;
 
     IF feature = 'passcheck' THEN
         IF passcheck_enabled = 'off' THEN
-           RAISE WARNING 'Required parameter pgtle.enable_password_check is off. To enable passcheck, run ALTER SYSTEM SET pgtle.enable_password_check = "on"';
+           RAISE WARNING 'Required parameter pgtle.enable_password_check is "off". To enable passcheck, set pgtle.enable_password_check = "on"';
         ELSE
         -- passcheck_db_name is an optional param, we only emit a warning if it's non-empty and is not the current database
             IF passcheck_db != '' AND current_db != passcheck_db THEN
-                RAISE WARNING 'pgtle.passcheck_db_name is currently %. Register passcheck function in that db instead.', passcheck_db;
-                RAISE WARNING 'Alternatively, to use current database for passcheck, run ALTER SYSTEM SET pgtle.passcheck_db_name = "%" and reload the PostgreSQL configuration.',current_db;
+                RAISE WARNING 'pgtle.passcheck_db_name is currently %. To trigger this passcheck function, register the function in that database.', passcheck_db
+                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for passcheck, set pgtle.passcheck_db_name = "%s" and reload the PostgreSQL configuration.', current_db);
             END IF;
         END IF;
     END IF;
 
     IF feature = 'clientauth' THEN
         IF clientauth_enabled = 'off' THEN
-            RAISE WARNING 'Required parameter pgtle.enable_clientauth is off. To enable clientauth, run ALTER SYSTEM SET pgtle.enable_clientauth = "on"';
+            RAISE WARNING 'Required parameter pgtle.enable_clientauth is "off". To enable clientauth, set pgtle.enable_clientauth = "on"';
         ELSE
             IF current_db != clientauth_db THEN
-                RAISE WARNING 'pgtle.clientauth_db_name is currently %. Register clientauth function in that db instead.', clientauth_db;
-                RAISE WARNING 'Alternatively, to use current database for clientauth, run ALTER SYSTEM SET pgtle.clientauth_db_name = "%" and reload the PostgreSQL configuration.', current_db;
+                RAISE WARNING 'pgtle.clientauth_db_name is currently %. To trigger this clientauth function, register the function in that database.', clientauth_db
+                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for clientauth, set pgtle.clientauth_db_name = "%s" and reload the PostgreSQL configuration.', current_db);
             END IF;
         END IF;
     END IF;

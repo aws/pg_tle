@@ -275,7 +275,7 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
-WARNING:  Required parameter pgtle.enable_password_check is off. To enable passcheck, run ALTER SYSTEM SET pgtle.enable_password_check = "on"
+WARNING:  Required parameter pgtle.enable_password_check is "off". To enable passcheck, set pgtle.enable_password_check = "on"
  register_feature 
 ------------------
  
@@ -333,7 +333,7 @@ $_pgtle_$
 (1 row)
 
 CREATE EXTENSION test_unregister_feature;
-WARNING:  Required parameter pgtle.enable_password_check is off. To enable passcheck, run ALTER SYSTEM SET pgtle.enable_password_check = "on"
+WARNING:  Required parameter pgtle.enable_password_check is "off". To enable passcheck, set pgtle.enable_password_check = "on"
 -- the feature should be in the table
 SELECT EXISTS(
   SELECT 1 FROM pgtle.feature_info
