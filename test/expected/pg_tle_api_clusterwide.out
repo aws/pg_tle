@@ -275,7 +275,7 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
-NOTICE:  Required parameter pgtle.enable_password_check is "off". To enable passcheck, set pgtle.enable_password_check = "on"
+NOTICE:  pgtle.enable_password_check is set to "off". To enable passcheck, set pgtle.enable_password_check = "on"
  register_feature 
 ------------------
  
