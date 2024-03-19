@@ -78,6 +78,7 @@ clientauth_enabled text;
 current_db text;
 passcheck_db text;
 clientauth_db text;
+notice_message text;
 
 BEGIN
     SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.enable_password_check' INTO passcheck_enabled;
@@ -88,23 +89,23 @@ BEGIN
 
     IF feature = 'passcheck' THEN
         IF passcheck_enabled = 'off' THEN
-           RAISE NOTICE 'pgtle.enable_password_check is set to "off". To enable passcheck, set pgtle.enable_password_check = "on"';
+           RAISE NOTICE 'pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on';
         ELSE
         -- passcheck_db_name is an optional param, we only emit a warning if it's non-empty and is not the current database
             IF passcheck_db != '' AND current_db != passcheck_db THEN
-                RAISE NOTICE 'pgtle.passcheck_db_name is currently "%". To trigger this passcheck function, register the function in that database.', passcheck_db
-                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for passcheck, set pgtle.passcheck_db_name = "%s" and reload the PostgreSQL configuration.', current_db);
+                RAISE NOTICE '%', pg_catalog.FORMAT('pgtle.passcheck_db_name is currently %I. To trigger this passcheck function, register the function in that database.', passcheck_db)
+                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for passcheck, set pgtle.passcheck_db_name = %I and reload the PostgreSQL configuration.', current_db);
             END IF;
         END IF;
     END IF;
 
     IF feature = 'clientauth' THEN
         IF clientauth_enabled = 'off' THEN
-            RAISE NOTICE 'pgtle.enable_clientauth is set to "off". To enable clientauth, set pgtle.enable_clientauth = "on"';
+            RAISE NOTICE 'pgtle.enable_clientauth is set to off. To enable clientauth, set pgtle.enable_clientauth = on';
         ELSE
             IF current_db != clientauth_db THEN
-                RAISE NOTICE 'pgtle.clientauth_db_name is currently "%". To trigger this clientauth function, register the function in that database.', clientauth_db
-                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for clientauth, set pgtle.clientauth_db_name = "%s" and reload the PostgreSQL configuration.', current_db);
+                RAISE NOTICE '%', pg_catalog.FORMAT('pgtle.clientauth_db_name is currently %I. To trigger this clientauth function, register the function in that database.', clientauth_db)
+                USING HINT = pg_catalog.FORMAT('Alternatively, to use the current database for clientauth, set pgtle.clientauth_db_name = %I and reload the PostgreSQL configuration.', current_db);
             END IF;
         END IF;
     END IF;
