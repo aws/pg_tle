@@ -193,7 +193,7 @@ SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck
 ERROR:  duplicate key value violates unique constraint "feature_info_pkey"
 DETAIL:  Key (feature, schema_name, proname)=(passcheck, public, password_check_length_greater_than_8) already exists.
 CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
-PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 59 at SQL statement
+PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 58 at SQL statement
 -- unregister hooks
 SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
  unregister_feature 
