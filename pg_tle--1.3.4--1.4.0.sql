@@ -78,7 +78,6 @@ clientauth_enabled text;
 current_db text;
 passcheck_db text;
 clientauth_db text;
-notice_message text;
 
 BEGIN
     SELECT setting FROM pg_catalog.pg_settings WHERE name = 'pgtle.enable_password_check' INTO passcheck_enabled;
