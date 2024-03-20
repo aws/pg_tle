@@ -230,6 +230,43 @@ SELECT EXISTS(
 );
 
 SELECT pgtle.uninstall_extension('test_unregister_feature');
+-- create this function one more time to test warning messages
+CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
+    $$
+    BEGIN
+        if length(shadow_pass) < 8 THEN
+            RAISE EXCEPTION 'Passwords needs to be longer than 8';
+        END IF;
+    END;
+    $$
+LANGUAGE PLPGSQL;
+-- Show warning if passcheck parameter is off when registering a passcheck function
+ALTER SYSTEM SET pgtle.enable_password_check = 'off';
+SELECT pg_reload_conf();
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+-- Show warning if required param is on and db_name is non-empty and not current db
+ALTER SYSTEM SET pgtle.enable_password_check = 'on';
+ALTER SYSTEM SET pgtle.passcheck_db_name = 'test';
+SELECT pg_reload_conf();
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+-- Show warning if clientauth parameter is off when registering a clientauth function
+ALTER SYSTEM SET pgtle.enable_clientauth = 'off';
+SELECT pg_reload_conf();
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'clientauth');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clientauth');
+-- Show warning if required param is on and db_name is not current db
+ALTER SYSTEM SET pgtle.enable_clientauth = 'on';
+ALTER SYSTEM SET pgtle.clientauth_db_name = 'test';
+SELECT pg_reload_conf();
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'clientauth');
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clientauth');
 -- now drop everything
+DROP FUNCTION password_check_length_greater_than_8;
 DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;

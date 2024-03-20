@@ -193,7 +193,7 @@ SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck
 ERROR:  duplicate key value violates unique constraint "feature_info_pkey"
 DETAIL:  Key (feature, schema_name, proname)=(passcheck, public, password_check_length_greater_than_8) already exists.
 CONTEXT:  SQL statement "INSERT INTO pgtle.feature_info VALUES (feature, proc_schema_name, proname, ident)"
-PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 24 at SQL statement
+PL/pgSQL function pgtle.register_feature(regproc,pgtle.pg_tle_features) line 58 at SQL statement
 -- unregister hooks
 SELECT pgtle.unregister_feature('password_check_only_nums', 'passcheck');
  unregister_feature 
@@ -270,6 +270,7 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
+NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
  register_feature 
 ------------------
  
@@ -360,7 +361,110 @@ SELECT pgtle.uninstall_extension('test_unregister_feature');
  t
 (1 row)
 
+-- create this function one more time to test warning messages
+CREATE FUNCTION password_check_length_greater_than_8(username text, shadow_pass text, password_types pgtle.password_types, validuntil_time TimestampTz, validuntil_null boolean) RETURNS void AS
+    $$
+    BEGIN
+        if length(shadow_pass) < 8 THEN
+            RAISE EXCEPTION 'Passwords needs to be longer than 8';
+        END IF;
+    END;
+    $$
+LANGUAGE PLPGSQL;
+-- Show warning if passcheck parameter is off when registering a passcheck function
+ALTER SYSTEM SET pgtle.enable_password_check = 'off';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+ register_feature 
+------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+-- Show warning if required param is on and db_name is non-empty and not current db
+ALTER SYSTEM SET pgtle.enable_password_check = 'on';
+ALTER SYSTEM SET pgtle.passcheck_db_name = 'test';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'passcheck');
+NOTICE:  pgtle.passcheck_db_name is currently test. To trigger this passcheck function, register the function in that database.
+HINT:  Alternatively, to use the current database for passcheck, set pgtle.passcheck_db_name = contrib_regression and reload the PostgreSQL configuration.
+ register_feature 
+------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+-- Show warning if clientauth parameter is off when registering a clientauth function
+ALTER SYSTEM SET pgtle.enable_clientauth = 'off';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'clientauth');
+NOTICE:  pgtle.enable_clientauth is set to off. To enable clientauth, set pgtle.enable_clientauth = on
+ register_feature 
+------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clientauth');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+-- Show warning if required param is on and db_name is not current db
+ALTER SYSTEM SET pgtle.enable_clientauth = 'on';
+ALTER SYSTEM SET pgtle.clientauth_db_name = 'test';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+\c -
+SELECT pgtle.register_feature('password_check_length_greater_than_8', 'clientauth');
+NOTICE:  pgtle.clientauth_db_name is currently postgres. To trigger this clientauth function, register the function in that database.
+HINT:  Alternatively, to use the current database for clientauth, set pgtle.clientauth_db_name = contrib_regression and reload the PostgreSQL configuration.
+ register_feature 
+------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clientauth');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
 -- now drop everything
+DROP FUNCTION password_check_length_greater_than_8;
 DROP SCHEMA pass CASCADE;
 NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
 DROP EXTENSION pg_tle;
