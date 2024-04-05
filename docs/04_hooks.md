@@ -345,7 +345,8 @@ $_pgtle_$
 To enable the `clientauth` hook, you will need to set `pgtle.enable_clientauth` to `on` or `require` and restart the database. For example:
 
 ```sql
-ALTER SYSTEM SET pgtle.enable_password_check TO 'on';
+ALTER SYSTEM SET pgtle.enable_clientauth TO 'on';
+SELECT pg_catalog.pg_reload_conf();
 ```
 
 Then restart the database (e.g. `pg_ctl restart`).
