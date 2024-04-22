@@ -342,7 +342,7 @@ $_pgtle_$
 );
 ```
 
-> **Note**: If the database client has set the `sslmode` parameter to `allow` or `prefer`, the client will automatically attempt to re-connect if the first connection fails. This will trigger the `clientauth` function twice, adding 2 to their failed connection attempts. See the [PostgreSQL documentation](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE) for more information.
+> **Note**: If the database client has set the `sslmode` parameter to `allow` or `prefer`, the client will automatically attempt to re-connect if the first connection fails. This will trigger the `clientauth` function twice and may cause users to be locked out sooner than expected. See the [PostgreSQL documentation](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE) for more information.
 
 To enable the `clientauth` hook, you will need to set `pgtle.enable_clientauth` to `on` or `require` and restart the database. For example:
 
