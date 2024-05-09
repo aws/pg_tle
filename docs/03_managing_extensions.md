@@ -46,7 +46,7 @@ None.
 
 * `name`: The name of the extension.
 * `default_version`: The version of the extension to use when `CREATE EXTENSION` is called without a version.
-* `description`: A more detailed description about the extension.
+* `comment`: A more detailed description about the extension.
 
 #### Example
 
@@ -77,7 +77,7 @@ None.
 * `relocatable`: This is always `false` for a pg_tle-compatible extension.
 * `schema`: This is set if the extension must be installed into a specific schema.
 * `requires`: An array of extension names that this extension depends on.
-* `description`: A more detailed description about the extension.
+* `comment`: A more detailed description about the extension.
 
 #### Example
 
