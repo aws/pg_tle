@@ -2808,7 +2808,7 @@ PG_FUNCTION_INFO_V1(pg_tle_extension_update_paths);
 Datum
 pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 {
-	Name		extname = PG_GETARG_NAME(0);
+	char*		extname = text_to_cstring(PG_GETARG_TEXT_P(0));
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	List	   *evi_list;
 	ExtensionControlFile *control;
@@ -2818,13 +2818,13 @@ pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 	SET_TLEEXT;
 
 	/* Check extension name validity before any filesystem access */
-	check_valid_extension_name(NameStr(*extname));
+	check_valid_extension_name(extname);
 
 	/* Build tuplestore to hold the result rows */
 	InitMaterializedSRF(fcinfo, 0);
 
 	/* Read the extension's control file */
-	control = read_extension_control_file(NameStr(*extname));
+	control = read_extension_control_file(extname);
 
 	/* Extract the version update graph from the script directory */
 	evi_list = get_ext_ver_list(control);
