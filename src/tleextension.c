@@ -2808,7 +2808,7 @@ PG_FUNCTION_INFO_V1(pg_tle_extension_update_paths);
 Datum
 pg_tle_extension_update_paths(PG_FUNCTION_ARGS)
 {
-	char*		extname = text_to_cstring(PG_GETARG_TEXT_P(0));
+	char	   *extname = text_to_cstring(PG_GETARG_TEXT_P(0));
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	List	   *evi_list;
 	ExtensionControlFile *control;
