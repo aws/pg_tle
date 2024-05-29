@@ -85,7 +85,7 @@ None.
 SELECT * FROM pgtle.available_extension_versions();
 ```
 
-### `pgtle.extension_update_paths(name name)`
+### `pgtle.extension_update_paths(name text)`
 
 `extension_update_paths` is a set-returning functions that returns a list of all the possible update paths for a Trusted Language Extension. Each row shows the path for how to upgrade/downgrade an extension.
 
