@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout pg_tle
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: pg_tle
 
@@ -58,7 +58,7 @@ jobs:
   
       - name: Upload test artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-artifact-${{ matrix.os }}-${{ matrix.version }}
           path: |
@@ -86,7 +86,7 @@ jobs:
           # rm -f src/*.gcda src/*.gcno src/lcov*.info src/*.gcov src/.*.gcov src/*.gcov.out lcov_base.info lcov_test.info
 
       - name: Upload code coverage artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: code-coverage-artifact-${{ matrix.os }}-${{ matrix.version }}
           path: |
