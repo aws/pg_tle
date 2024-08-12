@@ -578,4 +578,19 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #define WAIT_EVENT_MESSAGE_QUEUE_RECEIVE WAIT_EVENT_MQ_RECEIVE
 #endif
 
+/*
+ * PostgreSQL version 18+
+ *
+ * b43100f changes BackgroundWorkerList from an slist to a dlist
+ */
+#if (PG_VERSION_NUM >= 180000)
+#define BGW_LIST_ITER dlist_iter
+#define BGW_LIST_FOREACH dlist_foreach
+#define BGW_LIST_CONTAINER dlist_container
+#else
+#define BGW_LIST_ITER slist_iter
+#define BGW_LIST_FOREACH slist_foreach
+#define BGW_LIST_CONTAINER slist_container
+#endif
+
 #endif							/* SET_USER_COMPAT_H */

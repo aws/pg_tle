@@ -241,7 +241,7 @@ void
 clientauth_init(void)
 {
 	BackgroundWorker worker;
-	slist_iter	siter;
+	BGW_LIST_ITER bgw_iter;
 	int			num_registered_workers = 0;
 
 	/* Define our GUC parameters */
@@ -344,11 +344,12 @@ clientauth_init(void)
 	 * Check the backgroud worker registered list. If any clientauth workers
 	 * failed to register, then throw an error.
 	 */
-	slist_foreach(siter, &BackgroundWorkerList)
+	BGW_LIST_FOREACH(bgw_iter, &BackgroundWorkerList)
 	{
 		RegisteredBgWorker *rw;
 
-		rw = slist_container(RegisteredBgWorker, rw_lnode, siter.cur);
+		rw = BGW_LIST_CONTAINER(RegisteredBgWorker, rw_lnode, bgw_iter.cur);
+
 		if (strncmp(rw->rw_worker.bgw_type, clientauth_worker_name, BGW_MAXLEN) == 0)
 			num_registered_workers++;
 	}
