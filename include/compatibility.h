@@ -593,4 +593,16 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #define BGW_LIST_CONTAINER slist_container
 #endif
 
+/*
+ * Postgres version changes for ExecutorRun parameters
+ * Master branch commit 3eea7a0c97e removes the execute_once parameter
+ */
+#if (PG_VERSION_NUM >= 180000)
+#define EXECUTOR_RUN(queryDesc, direction, count, execute_once) \
+    ExecutorRun((queryDesc), (direction), (count))
+#else
+#define EXECUTOR_RUN(queryDesc, direction, count, execute_once) \
+    ExecutorRun((queryDesc), (direction), (count), (execute_once))
+#endif
+
 #endif							/* SET_USER_COMPAT_H */
