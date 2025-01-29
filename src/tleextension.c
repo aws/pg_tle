@@ -999,6 +999,12 @@ build_extension_control_file_string(ExtensionControlFile *control)
 						 quote_literal_cstr(reqstr->data));
 	}
 
+	if (control->schema != NULL)
+	{
+		appendStringInfo(ctlstr, "schema = %s\n",
+						quote_literal_cstr(control->schema));
+	}
+
 	return ctlstr;
 }
 
@@ -4398,6 +4404,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	char	   *extdesc;
 	char	   *sql_str;
 	ArrayType  *extrequires;
+	char       *extschema;
 	char	   *ctlname;
 	StringInfo	ctlstr;
 	char	   *sqlname;
@@ -4465,6 +4472,11 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		check_requires_list(reqlist);
 	}
 
+	if (!PG_ARGISNULL(5))
+	{
+		extschema = text_to_cstring(PG_GETARG_TEXT_PP(5));
+	}
+
 	/*
 	 * Build appropriate function names based on extension name and version.
 	 */
@@ -4504,6 +4516,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
 	control->requires = reqlist;
+	control->schema = pstrdup(extschema);
 
 	ctlstr = build_extension_control_file_string(control);
 
