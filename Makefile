@@ -1,5 +1,5 @@
 EXTENSION = pg_tle
-EXTVERSION = 1.4.1
+EXTVERSION = 1.5.0
 
 SCHEMA = pgtle
 MODULE_big = $(EXTENSION)
