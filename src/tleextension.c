@@ -2524,8 +2524,8 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 		{
 			ExtensionControlFile *control;
 			char	   *extname;
-			Datum		values[3];
-			bool		nulls[3];
+			Datum		values[4];
+			bool		nulls[4];
 			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
 											 SPI_tuptable->tupdesc, 1);
 
@@ -2558,6 +2558,11 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 				nulls[2] = true;
 			else
 				values[2] = CStringGetTextDatum(control->comment);
+			/* schema */
+			if (control->schema == NULL)
+				nulls[3] = true;
+			else
+				values[3] = CStringGetTextDatum(control->schema);
 
 			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
 								 values, nulls);
