@@ -24,7 +24,7 @@ jobs:
 
       - name: Checkout Postgres
         run: |
-          sudo apt-get -y -q install libperl-dev libipc-run-perl lcov
+          sudo apt-get -y -q install libperl-dev libipc-run-perl lcov libreadline-dev
           git clone --branch ${{ matrix.version }} https://github.com/postgres/postgres.git
 
       - name: Build Postgres
