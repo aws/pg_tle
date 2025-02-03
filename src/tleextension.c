@@ -914,7 +914,6 @@ parse_extension_control_file(ExtensionControlFile *control,
 		control->directory = NULL;
 		control->module_pathname = NULL;
 		control->relocatable = false;
-		control->schema = NULL;
 		control->superuser = false;
 		control->trusted = false;
 		control->encoding = -1; /* encoding is that of the server_side
