@@ -2562,7 +2562,8 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 			if (control->schema == NULL)
 				nulls[3] = true;
 			else
-				values[3] = CStringGetTextDatum(control->schema);
+				values[3] = DirectFunctionCall1(namein,
+											    CStringGetDatum(control->schema));
 
 			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
 								 values, nulls);
