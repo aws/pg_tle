@@ -4472,9 +4472,11 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		check_requires_list(reqlist);
 	}
 
-	if (!PG_ARGISNULL(5))
+	if (PG_ARGISNULL(5))
+		extschema = NULL;
+	else
 	{
-		extschema = text_to_cstring(PG_GETARG_TEXT_PP(5));
+		extschema = pstrdup(text_to_cstring(PG_GETARG_TEXT_PP(5)));
 	}
 
 	/*
@@ -4516,7 +4518,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
 	control->requires = reqlist;
-	control->schema = pstrdup(extschema);
+	control->schema = extschema;
 
 	ctlstr = build_extension_control_file_string(control);
 
