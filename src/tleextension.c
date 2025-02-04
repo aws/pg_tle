@@ -1001,7 +1001,7 @@ build_extension_control_file_string(ExtensionControlFile *control)
 	if (control->schema != NULL)
 	{
 		appendStringInfo(ctlstr, "schema = %s\n",
-						quote_literal_cstr(control->schema));
+						 quote_literal_cstr(control->schema));
 	}
 
 	return ctlstr;
@@ -2563,7 +2563,7 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 				nulls[3] = true;
 			else
 				values[3] = DirectFunctionCall1(namein,
-											    CStringGetDatum(control->schema));
+												CStringGetDatum(control->schema));
 
 			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
 								 values, nulls);
@@ -4409,7 +4409,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	char	   *extdesc;
 	char	   *sql_str;
 	ArrayType  *extrequires;
-	char       *extschema;
+	char	   *extschema;
 	char	   *ctlname;
 	StringInfo	ctlstr;
 	char	   *sqlname;
