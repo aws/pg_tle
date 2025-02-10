@@ -20,6 +20,7 @@
 # 4. Install two versions of a TLE and create the non-default version
 # 5. Create a custom data type
 # 6. Create a custom operator
+# 7. Install a TLE with a specified schema
 
 use strict;
 use warnings;
@@ -326,6 +327,14 @@ like  ($stderr, qr//, 'create_operator');
 $node->psql($testdb, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/t/, 'operator');
 
+# 7. Install a TLE with a specified schema
+$node->safe_psql($testdb, q[
+    SELECT pgtle.install_extension('my_tle_with_schema', '1.0', 'My TLE with schema',
+        $_pgtle_$
+            CREATE FUNCTION my_tle_with_schema_func() RETURNS INT LANGUAGE SQL AS 'SELECT 1';
+        $_pgtle_$, '{}', 'my_tle_schema')]);
+$node->safe_psql($testdb, q[CREATE EXTENSION my_tle_with_schema]);
+
 # pg_dump the database to sql
 $node->command_ok(
     [ 'pg_dump',  $testdb ],
@@ -393,6 +402,16 @@ like  ($stdout, qr/TEST/, 'select_custom_data_type_from_restored_db');
 
 $node->psql($restored_db, 'SELECT (c1 = c1) as c2 from test_dt', stdout => \$stdout, stderr => \$stderr);
 like  ($stdout, qr/t/, 'operator_from_restored_db');
+
+# 7. Verify TLE in custom schema
+
+$stdout = $node->safe_psql($restored_db, q[SELECT * FROM pgtle.available_extensions() WHERE name = 'my_tle_with_schema']);
+is($stdout, q[my_tle_with_schema|1.0|My TLE with schema]);
+$stdout = $node->safe_psql($restored_db, q[
+    SELECT nspname FROM pg_namespace AS pgn INNER JOIN pg_extension AS pge
+    ON pge.extnamespace = pgn.oid
+    AND pge.extname = 'my_tle_with_schema']);
+is($stdout, q[my_tle_schema]);
 
 # Test complete
 $node->stop('fast');
