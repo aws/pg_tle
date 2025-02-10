@@ -408,9 +408,9 @@ like  ($stdout, qr/t/, 'operator_from_restored_db');
 $stdout = $node->safe_psql($restored_db, q[SELECT * FROM pgtle.available_extensions() WHERE name = 'my_tle_with_schema']);
 is($stdout, q[my_tle_with_schema|1.0|My TLE with schema]);
 $stdout = $node->safe_psql($restored_db, q[
-    SELECT nspname FROM pg_namespace AS pgn INNER JOIN pg_extension AS pge
-    ON pge.extnamespace = pgn.oid
-    AND pge.extname = 'my_tle_with_schema']);
+    SELECT nspname FROM pg_namespace AS n INNER JOIN pg_extension AS e
+    ON e.extnamespace = n.oid
+    AND e.extname = 'my_tle_with_schema']);
 is($stdout, q[my_tle_schema]);
 
 # Test complete

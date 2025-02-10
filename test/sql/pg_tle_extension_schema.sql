@@ -6,12 +6,14 @@
 /*
  * 1. If an extension is created on pg_tle 1.4.1 and pg_tle is upgraded to
  *    1.5.0, the extension behaves like a regular schema-less extension.
+ *    pgtle.available_extensions() works on both 1.4.1 and 1.5.0.
  *
  * 2. If an extension is installed with a specified schema, it cannot be created
- *    in a different schema.
+ *    in a different schema. The extension objects are automatically created in
+ *    the specified schema.
  *
- * 3. If an extension is installed with a specified schema, it cannot be created
- *    if the schema does not exist.
+ * 3. If an extension is installed with a specified schema, the schema is
+ *    automatically created when the extension is created.
  *
  * 4. pgtle.available_extensions() and pgtle.available_extension_versions()
  *    print the correct output for a variety of extensions.
@@ -22,6 +24,7 @@
 /*
  * 1. If an extension is installed on pg_tle 1.4.1 and pg_tle is upgraded to
  *    1.5.0, the extension behaves like a regular schema-less extension.
+ *    pgtle.available_extensions() works on both 1.4.1 and 1.5.0.
  */
 
 CREATE SCHEMA my_tle_schema_1;
@@ -43,9 +46,14 @@ DROP EXTENSION my_tle CASCADE;
 
 -- Upgrade pg_tle to 1.5.0 and repeat the test.
 ALTER EXTENSION pg_tle UPDATE TO '1.5.0';
+SELECT * FROM pgtle.available_extensions();
 CREATE EXTENSION my_tle SCHEMA my_tle_schema_1;
 ALTER EXTENSION my_tle SET SCHEMA my_tle_schema_2;
 SELECT my_tle_schema_1.my_tle_func();
+
+-- By specifying the columns explicitly, we can get the same output from
+-- pgtle.available_extensions() in 1.5.0 as in 1.4.1.
+SELECT name, default_version, comment FROM pgtle.available_extensions();
 
 -- Clean up.
 DROP EXTENSION my_tle CASCADE;
