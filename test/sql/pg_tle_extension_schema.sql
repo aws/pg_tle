@@ -154,7 +154,16 @@ SELECT * from pgtle.available_extensions();
 SELECT * from pgtle.available_extension_versions();
 \dx
 
--- Clean up.
+-- Clean up. Drop the SQL and control functions explicitly to make sure the
+-- drops happen in the expected order and avoid random errors.
+DROP FUNCTION pgtle."my_tle_4--1.0.sql" CASCADE;
+DROP FUNCTION pgtle."my_tle_4.control" CASCADE;
+DROP FUNCTION pgtle."my_tle_3--1.0.sql" CASCADE;
+DROP FUNCTION pgtle."my_tle_3.control" CASCADE;
+DROP FUNCTION pgtle."my_tle_2--1.0.sql" CASCADE;
+DROP FUNCTION pgtle."my_tle_2.control" CASCADE;
+DROP FUNCTION pgtle."my_tle_1--1.0.sql" CASCADE;
+DROP FUNCTION pgtle."my_tle_1.control" CASCADE;
 DROP EXTENSION pg_tle CASCADE;
 DROP SCHEMA pgtle;
 DROP SCHEMA my_tle_schema_1;
