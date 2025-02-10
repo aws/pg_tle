@@ -48,9 +48,9 @@ SELECT pgtle.available_extension_versions();
 (1 row)
 
 SELECT pgtle.available_extensions();
- available_extensions 
-----------------------
- (test_ext,1.0,"")
+       available_extensions        
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
 (1 row)
 
 SELECT pgtle.extension_update_paths('test_ext');
@@ -115,9 +115,9 @@ SELECT pgtle.available_extension_versions();
 (1 row)
 
 SELECT pgtle.available_extensions();
- available_extensions 
-----------------------
- (test_ext,1.0,"")
+       available_extensions        
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
 (1 row)
 
 SELECT pgtle.extension_update_paths('test_ext');

@@ -59,3 +59,25 @@ GRANT EXECUTE ON FUNCTION pgtle.install_extension
   requires text[],
   schema text
 ) TO pgtle_admin;
+
+DROP FUNCTION pgtle.available_extensions
+(
+  OUT name name,
+  OUT default_version text,
+  OUT comment text
+);
+
+CREATE FUNCTION pgtle.available_extensions
+(
+  OUT name name,
+  OUT default_version text,
+  OUT superuser boolean,
+  OUT trusted boolean,
+  OUT relocatable boolean,
+  OUT schema name,
+  OUT requires name[],
+  OUT comment text
+)
+RETURNS SETOF RECORD
+AS 'MODULE_PATHNAME', 'pg_tle_available_extensions'
+LANGUAGE C STABLE STRICT;

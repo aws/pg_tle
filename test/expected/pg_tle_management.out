@@ -198,10 +198,10 @@ SELECT * FROM pgtle.extension_update_paths('test123');
 (2 rows)
 
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-                   name                   | default_version |      comment       
-------------------------------------------+-----------------+--------------------
- test123                                  | 1.0             | Test TLE Functions
- test_no_switch_to_superuser_when_trusted | 1.0             | Test TLE Functions
+                   name                   | default_version | superuser | trusted | relocatable | schema | requires |      comment       
+------------------------------------------+-----------------+-----------+---------+-------------+--------+----------+--------------------
+ test123                                  | 1.0             | f         | f       | f           |        | {pg_tle} | Test TLE Functions
+ test_no_switch_to_superuser_when_trusted | 1.0             | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (2 rows)
 
 SELECT * FROM pgtle.available_extension_versions() ORDER BY name;
@@ -513,9 +513,9 @@ $_pgtle_$
 
 -- test the default version, should be 1.0
 SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
-  name   | default_version |      comment       
----------+-----------------+--------------------
- new_ext | 1.0             | Test TLE Functions
+  name   | default_version | superuser | trusted | relocatable | schema | requires |      comment       
+---------+-----------------+-----------+---------+-------------+--------+----------+--------------------
+ new_ext | 1.0             | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
 
 -- set the new default
@@ -527,9 +527,9 @@ SELECT pgtle.set_default_version('new_ext', '1.1');
 
 -- test the default version, should be 1.1
 SELECT * FROM pgtle.available_extensions() x WHERE x.name = 'new_ext';
-  name   | default_version |      comment       
----------+-----------------+--------------------
- new_ext | 1.1             | Test TLE Functions
+  name   | default_version | superuser | trusted | relocatable | schema | requires |      comment       
+---------+-----------------+-----------+---------+-------------+--------+----------+--------------------
+ new_ext | 1.1             | f         | f       | f           |        | {pg_tle} | Test TLE Functions
 (1 row)
 
 -- try setting a default version that does not exist
@@ -835,9 +835,9 @@ $_pgtle_$
 (1 row)
 
 SELECT pgtle.available_extensions();
-        available_extensions        
-------------------------------------
- (foo@bar,1.0,"Test TLE Functions")
+                available_extensions                
+----------------------------------------------------
+ (foo@bar,1.0,f,f,f,,{pg_tle},"Test TLE Functions")
 (1 row)
 
 CREATE EXTENSION "foo@bar";

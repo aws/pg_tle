@@ -209,6 +209,10 @@ static void check_requires_list(List *requires);
 static bool is_pgtle_defined_c_func(Oid funcid, bool *is_operator_func);
 static bool is_pgtle_used_user_func(Oid funcid, bool *is_operator_func);
 static void check_pgtle_used_func(Oid funcid);
+static void available_extensions_before_1_5_0(ReturnSetInfo *rsinfo,
+											  char *fname);
+static void available_extensions_on_or_after_1_5_0(ReturnSetInfo *rsinfo,
+												   char *fname);
 
 #if PG_VERSION_NUM < 150001
 /* flag bits for InitMaterializedSRF() */
@@ -2520,47 +2524,41 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 			elog(ERROR, "search for %%.control in schema %u failed", schemaOid);
 
 		oldcontext = MemoryContextSwitchTo(ctx);
-		for (i = 0; i < SPI_processed; i++)
+
+		/*
+		 * In pg_tle 1.5.0, the return signature of
+		 * pgtle.available_extensions() was changed.  Check which return
+		 * signature is expected in rsinfo and call the corresponding helper
+		 * function to populate the return set.
+		 */
+		if (rsinfo->setDesc->natts == 3)
 		{
-			ExtensionControlFile *control;
-			char	   *extname;
-			Datum		values[3];
-			bool		nulls[3];
-			char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
-											 SPI_tuptable->tupdesc, 1);
+			for (i = 0; i < SPI_processed; i++)
+			{
+				char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
+												 SPI_tuptable->tupdesc, 1);
 
-			if (!pg_tle_is_extension_control_filename(fname))
-				continue;
+				available_extensions_before_1_5_0(rsinfo, fname);
+			}
+		}
+		else if (rsinfo->setDesc->natts == 8)
+		{
+			for (i = 0; i < SPI_processed; i++)
+			{
+				char	   *fname = SPI_getvalue(SPI_tuptable->vals[i],
+												 SPI_tuptable->tupdesc, 1);
 
-			/* extract extension name from 'name.control' filename */
-			extname = pstrdup(fname);
-			*strrchr(extname, '.') = '\0';
-
-			/* ignore it if it's an auxiliary control file */
-			if (strstr(extname, "--"))
-				continue;
-
-			control = read_extension_control_file(extname);
-
-			memset(values, 0, sizeof(values));
-			memset(nulls, 0, sizeof(nulls));
-
-			/* name */
-			values[0] = DirectFunctionCall1(namein,
-											CStringGetDatum(control->name));
-			/* default_version */
-			if (control->default_version == NULL)
-				nulls[1] = true;
-			else
-				values[1] = CStringGetTextDatum(control->default_version);
-			/* comment */
-			if (control->comment == NULL)
-				nulls[2] = true;
-			else
-				values[2] = CStringGetTextDatum(control->comment);
-
-			tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
-								 values, nulls);
+				available_extensions_on_or_after_1_5_0(rsinfo, fname);
+			}
+		}
+		else
+		{
+			/* this should be unreachable */
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("pgtle.available_extensions returns an unexpected number of fields: %d",
+							rsinfo->setDesc->natts),
+					 errdetail("Expected to return 3 or 8 fields.")));
 		}
 		MemoryContextSwitchTo(oldcontext);
 
@@ -2573,6 +2571,130 @@ pg_tle_available_extensions(PG_FUNCTION_ARGS)
 	UNSET_TLEEXT;
 
 	return (Datum) 0;
+}
+
+/*
+ * Helper function to populate the return set for pgtle.available_extensions()
+ * on pg_tle versions before 1.5.0.  On these versions, the function returns 3
+ * fields:
+ *
+ * name name
+ * default_version text
+ * comment text
+ */
+static void
+available_extensions_before_1_5_0(ReturnSetInfo *rsinfo, char *fname)
+{
+	ExtensionControlFile *control;
+	char	   *extname;
+	Datum		values[3];
+	bool		nulls[3];
+
+	if (!pg_tle_is_extension_control_filename(fname))
+		return;
+
+	/* extract extension name from 'name.control' filename */
+	extname = pstrdup(fname);
+	*strrchr(extname, '.') = '\0';
+
+	/* ignore it if it's an auxiliary control file */
+	if (strstr(extname, "--"))
+		return;
+
+	control = read_extension_control_file(extname);
+
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+
+	/* name */
+	values[0] = DirectFunctionCall1(namein,
+									CStringGetDatum(control->name));
+	/* default_version */
+	if (control->default_version == NULL)
+		nulls[1] = true;
+	else
+		values[1] = CStringGetTextDatum(control->default_version);
+	/* comment */
+	if (control->comment == NULL)
+		nulls[2] = true;
+	else
+		values[2] = CStringGetTextDatum(control->comment);
+
+	tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
+						 values, nulls);
+}
+
+/*
+ * Helper function to populate the return set for pgtle.available_extensions()
+ * on pg_tle versions on or after 1.5.0.  On these versions, the function
+ * returns 8 fields:
+ *
+ * name name
+ * default_version text
+ * superuser boolean
+ * trusted boolean
+ * relocatable boolean
+ * schema name
+ * requires name[]
+ * comment text
+ */
+static void
+available_extensions_on_or_after_1_5_0(ReturnSetInfo *rsinfo, char *fname)
+{
+	ExtensionControlFile *control;
+	char	   *extname;
+	Datum		values[8];
+	bool		nulls[8];
+
+	if (!pg_tle_is_extension_control_filename(fname))
+		return;
+
+	/* extract extension name from 'name.control' filename */
+	extname = pstrdup(fname);
+	*strrchr(extname, '.') = '\0';
+
+	/* ignore it if it's an auxiliary control file */
+	if (strstr(extname, "--"))
+		return;
+
+	control = read_extension_control_file(extname);
+
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+
+	/* name */
+	values[0] = DirectFunctionCall1(namein,
+									CStringGetDatum(control->name));
+	/* default_version */
+	if (control->default_version == NULL)
+		nulls[1] = true;
+	else
+		values[1] = CStringGetTextDatum(control->default_version);
+	/* superuser */
+	values[2] = BoolGetDatum(control->superuser);
+	/* trusted */
+	values[3] = BoolGetDatum(control->trusted);
+	/* relocatable */
+	values[4] = BoolGetDatum(control->relocatable);
+	/* schema */
+	if (control->schema == NULL)
+		nulls[5] = true;
+	else
+		values[5] = DirectFunctionCall1(namein,
+										CStringGetDatum(control->schema));
+	/* requires */
+	if (control->requires == NIL)
+		nulls[6] = true;
+	else
+		values[6] = convert_requires_to_datum(control->requires);
+	/* comment */
+	if (control->comment == NULL)
+		nulls[7] = true;
+	else
+		values[7] = CStringGetTextDatum(control->comment);
+
+	tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
+						 values, nulls);
 }
 
 /*
