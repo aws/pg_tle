@@ -70,14 +70,6 @@ SELECT my_tle_schema_1.my_tle_func();
            1
 (1 row)
 
--- By specifying the columns explicitly, we can get the same output from
--- pgtle.available_extensions() in 1.5.0 as in 1.4.1.
-SELECT name, default_version, comment FROM pgtle.available_extensions();
-  name  | default_version | comment 
---------+-----------------+---------
- my_tle | 1.0             | My TLE
-(1 row)
-
 -- Clean up.
 DROP EXTENSION my_tle CASCADE;
 SELECT pgtle.uninstall_extension('my_tle');
