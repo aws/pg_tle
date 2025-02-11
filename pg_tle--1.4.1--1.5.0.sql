@@ -25,6 +25,7 @@ DROP FUNCTION pgtle.install_extension
   ext text,
   requires text[]
 );
+
 CREATE FUNCTION pgtle.install_extension
 (
   name text,
@@ -38,3 +39,23 @@ RETURNS boolean
 SET search_path TO 'pgtle'
 AS 'MODULE_PATHNAME', 'pg_tle_install_extension'
 LANGUAGE C;
+
+REVOKE EXECUTE ON FUNCTION pgtle.install_extension
+(
+  name text,
+  version text,
+  description text,
+  ext text,
+  requires text[],
+  schema text
+) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION pgtle.install_extension
+(
+  name text,
+  version text,
+  description text,
+  ext text,
+  requires text[],
+  schema text
+) TO pgtle_admin;
