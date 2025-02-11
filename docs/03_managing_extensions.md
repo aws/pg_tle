@@ -32,7 +32,7 @@ If a schema is not specified in a `pg_tle`-compatible extension, all objects (e.
 
 ### `pgtle.available_extensions()`
 
-`available_extensions` is a set-returning functions that returns a list of all available Trusted Language Extensions in a database. Each row contains information about a single extension.
+`available_extensions` is a set-returning function that returns a list of all available Trusted Language Extensions in a database. Each row contains information about a single extension.
 
 #### Role
 
@@ -61,7 +61,7 @@ SELECT * FROM pgtle.available_extensions();
 
 ### `pgtle.available_extension_versions()`
 
-`available_extension_versions` is a set-returning functions that returns a list of all available Trusted Language Extensions and their versions. Each row contains information about an individual version of an extension, including if it requires additional privileges for installation.
+`available_extension_versions` is a set-returning function that returns a list of all available Trusted Language Extensions and their versions. Each row contains information about an individual version of an extension, including if it requires additional privileges for installation.
 
 For more information on the output values, please read the [extension files](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11) section in the PostgreSQL documentation.
 
@@ -92,7 +92,7 @@ SELECT * FROM pgtle.available_extension_versions();
 
 ### `pgtle.extension_update_paths(name text)`
 
-`extension_update_paths` is a set-returning functions that returns a list of all the possible update paths for a Trusted Language Extension. Each row shows the path for how to upgrade/downgrade an extension.
+`extension_update_paths` is a set-returning function that returns a list of all the possible update paths for a Trusted Language Extension. Each row shows the path for how to upgrade/downgrade an extension.
 
 #### Role
 
