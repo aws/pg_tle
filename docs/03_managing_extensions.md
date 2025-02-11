@@ -46,6 +46,11 @@ None.
 
 * `name`: The name of the extension.
 * `default_version`: The version of the extension to use when `CREATE EXTENSION` is called without a version.
+* `superuser`: This is always `false` for a pg_tle-compatible extension.
+* `trusted`: This is always `false` for a pg_tle-compatible extension.
+* `relocatable`: This is always `false` for a pg_tle-compatible extension.
+* `schema`: This is set if the extension must be installed into a specific schema.
+* `requires`: An array of extension names that this extension depends on.
 * `comment`: A more detailed description about the extension.
 
 #### Example
@@ -109,7 +114,7 @@ None.
 SELECT * FROM pgtle.extension_update_paths('pg_tle_test');
 ```
 
-### `pgtle.install_extension(name text, version text, description text, ext text, requires text[] DEFAULT NULL::text[])`
+### `pgtle.install_extension(name text, version text, description text, ext text, requires text[] DEFAULT NULL::text[], schema text DEFAULT NULL)`
 
 `install_extension` lets users install a `pg_tle`-compatible extensions and make them available within a database.
 
@@ -126,6 +131,7 @@ This functions returns `'OK'` on success and an error otherwise..
 * `description`: A detailed description about the extension. This is displayed in the `comment` field in `pgtle.available_extensions()`.
 * `ext`: The contents of the extension. This contains objects such as functions.
 * `requires`: An optional parameter that specifies dependencies for this extension. `pg_tle` is automatically added as a dependency.
+* `schema`: An optional parameter that specifies the schema that the extension must be installed in.
 
 Many of the above values are part of the [extension control file](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11) used to provide information about how to install a PostgreSQL extension. For more information about how each of these values work, please see the PostgreSQL documentation on [extension control files](https://www.postgresql.org/docs/current/extend-extensions.html#id-1.8.3.20.11).
 
