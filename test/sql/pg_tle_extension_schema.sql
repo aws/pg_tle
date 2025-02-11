@@ -36,7 +36,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
             'SELECT 1';
     $_pgtle_$);
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
 
 -- Extension is relocatable during CREATE, but not after.
 CREATE EXTENSION my_tle SCHEMA my_tle_schema_1;
@@ -46,7 +46,7 @@ DROP EXTENSION my_tle CASCADE;
 
 -- Upgrade pg_tle to 1.5.0 and repeat the test.
 ALTER EXTENSION pg_tle UPDATE TO '1.5.0';
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
 CREATE EXTENSION my_tle SCHEMA my_tle_schema_1;
 ALTER EXTENSION my_tle SET SCHEMA my_tle_schema_2;
 SELECT my_tle_schema_1.my_tle_func();
@@ -72,7 +72,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
     $_pgtle_$,
     '{}', 'my_tle_schema_1');
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
 
 -- my_tle cannot be installed in my_tle_schema_2.
 CREATE EXTENSION my_tle SCHEMA my_tle_schema_2;
@@ -98,7 +98,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
     $_pgtle_$,
     '{}', 'my_tle_schema_1');
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
 
 CREATE EXTENSION my_tle;
 SELECT my_tle_schema_1.my_tle_func();
@@ -150,8 +150,8 @@ CREATE EXTENSION my_tle_3;
 CREATE EXTENSION my_tle_4;
 
 -- Validate the output of these functions.
-SELECT * from pgtle.available_extensions();
-SELECT * from pgtle.available_extension_versions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
+SELECT * from pgtle.available_extension_versions() ORDER BY name;
 \dx
 
 -- Clean up. Drop the SQL and control functions explicitly to make sure the

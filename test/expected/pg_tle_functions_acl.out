@@ -16,6 +16,12 @@
  */
 -- Set up.
 CREATE EXTENSION pg_tle;
+SELECT pgtle.install_extension('test_ext', '1.0', '', '');
+ install_extension 
+-------------------
+ t
+(1 row)
+
 CREATE USER acl_user;
 GRANT CREATE ON SCHEMA public TO acl_user;
 SET SESSION AUTHORIZATION acl_user;
@@ -36,19 +42,22 @@ $$;
  */
 -- Unprivileged user can execute these functions.
 SELECT pgtle.available_extension_versions();
- available_extension_versions 
-------------------------------
-(0 rows)
+   available_extension_versions    
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
+(1 row)
 
 SELECT pgtle.available_extensions();
  available_extensions 
 ----------------------
+ (test_ext,1.0,"")
+(1 row)
+
+SELECT pgtle.extension_update_paths('test_ext');
+ extension_update_paths 
+------------------------
 (0 rows)
 
-SELECT pgtle.extension_update_paths('imaginary_extension');
-ERROR:  extension "imaginary_extension" is not available
-DETAIL:  Could not find extension control function "imaginary_extension.control": No such file or directory.
-HINT:  The extension must first be installed in the current database.
 -- Unprivileged user cannot execute these functions.
 SELECT pgtle.create_base_type('public', 'imaginary_type',
     'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
@@ -100,19 +109,22 @@ GRANT pgtle_admin TO acl_user;
 SET SESSION AUTHORIZATION acl_user;
 -- pgtle_admin can execute all functions.
 SELECT pgtle.available_extension_versions();
- available_extension_versions 
-------------------------------
-(0 rows)
+   available_extension_versions    
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
+(1 row)
 
 SELECT pgtle.available_extensions();
  available_extensions 
 ----------------------
+ (test_ext,1.0,"")
+(1 row)
+
+SELECT pgtle.extension_update_paths('test_ext');
+ extension_update_paths 
+------------------------
 (0 rows)
 
-SELECT pgtle.extension_update_paths('imaginary_extension');
-ERROR:  extension "imaginary_extension" is not available
-DETAIL:  Could not find extension control function "imaginary_extension.control": Resource temporarily unavailable.
-HINT:  The extension must first be installed in the current database.
 SELECT pgtle.create_base_type('public', 'imaginary_type',
     'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
 ERROR:  type "imaginary_type" does not exist
@@ -169,17 +181,18 @@ SELECT pgtle.set_default_version('', '');
 ERROR:  invalid extension name: ""
 DETAIL:  Extension names must not be empty.
 SELECT pgtle.uninstall_extension('');
-ERROR:  Extension  does not exist
-CONTEXT:  PL/pgSQL function uninstall_extension(text) line 18 at RAISE
+ERROR:  must be owner of function test_ext.control
+CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
+PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
 SELECT pgtle.uninstall_extension('', '');
 ERROR:  Version  of extension  is not installed and therefore can not be uninstalled
 CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 50 at RAISE
 SELECT pgtle.uninstall_extension_if_exists('');
- uninstall_extension_if_exists 
--------------------------------
- f
-(1 row)
-
+ERROR:  must be owner of function test_ext.control
+CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
+PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
+SQL statement "SELECT pgtle.uninstall_extension(extname)"
+PL/pgSQL function uninstall_extension_if_exists(text) line 3 at PERFORM
 SELECT pgtle.uninstall_update_path('', '', '');
 ERROR:  Extension  does not exist
 CONTEXT:  PL/pgSQL function uninstall_update_path(text,text,text) line 16 at RAISE
@@ -209,6 +222,12 @@ DROP FUNCTION op;
 DROP TYPE imaginary_type;
 RESET SESSION AUTHORIZATION;
 REVOKE CREATE ON SCHEMA public FROM acl_user;
+SELECT pgtle.uninstall_extension('test_ext');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
 DROP EXTENSION pg_tle CASCADE;
 DROP SCHEMA pgtle;
 DROP USER acl_user;

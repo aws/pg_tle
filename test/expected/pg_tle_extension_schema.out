@@ -36,7 +36,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
  t
 (1 row)
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
   name  | default_version | comment 
 --------+-----------------+---------
  my_tle | 1.0             | My TLE
@@ -55,7 +55,7 @@ SELECT my_tle_schema_1.my_tle_func();
 DROP EXTENSION my_tle CASCADE;
 -- Upgrade pg_tle to 1.5.0 and repeat the test.
 ALTER EXTENSION pg_tle UPDATE TO '1.5.0';
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
   name  | default_version | comment 
 --------+-----------------+---------
  my_tle | 1.0             | My TLE
@@ -98,7 +98,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
  t
 (1 row)
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
   name  | default_version | comment 
 --------+-----------------+---------
  my_tle | 1.0             | My TLE
@@ -140,7 +140,7 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
  t
 (1 row)
 
-SELECT * FROM pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
   name  | default_version | comment 
 --------+-----------------+---------
  my_tle | 1.0             | My TLE
@@ -225,7 +225,7 @@ CREATE EXTENSION my_tle_2;
 CREATE EXTENSION my_tle_3;
 CREATE EXTENSION my_tle_4;
 -- Validate the output of these functions.
-SELECT * from pgtle.available_extensions();
+SELECT * FROM pgtle.available_extensions() ORDER BY name;
    name   | default_version | comment 
 ----------+-----------------+---------
  my_tle_1 | 1.0             | My TLE
@@ -234,7 +234,7 @@ SELECT * from pgtle.available_extensions();
  my_tle_4 | 1.0             | My TLE
 (4 rows)
 
-SELECT * from pgtle.available_extension_versions();
+SELECT * from pgtle.available_extension_versions() ORDER BY name;
    name   | version | superuser | trusted | relocatable |     schema      |     requires      | comment 
 ----------+---------+-----------+---------+-------------+-----------------+-------------------+---------
  my_tle_1 | 1.0     | f         | f       | f           |                 | {pg_tle}          | My TLE

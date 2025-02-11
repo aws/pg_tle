@@ -18,6 +18,8 @@
 
 -- Set up.
 CREATE EXTENSION pg_tle;
+SELECT pgtle.install_extension('test_ext', '1.0', '', '');
+
 CREATE USER acl_user;
 GRANT CREATE ON SCHEMA public TO acl_user;
 SET SESSION AUTHORIZATION acl_user;
@@ -42,7 +44,7 @@ $$;
 -- Unprivileged user can execute these functions.
 SELECT pgtle.available_extension_versions();
 SELECT pgtle.available_extensions();
-SELECT pgtle.extension_update_paths('imaginary_extension');
+SELECT pgtle.extension_update_paths('test_ext');
 
 -- Unprivileged user cannot execute these functions.
 SELECT pgtle.create_base_type('public', 'imaginary_type',
@@ -81,7 +83,7 @@ SET SESSION AUTHORIZATION acl_user;
 -- pgtle_admin can execute all functions.
 SELECT pgtle.available_extension_versions();
 SELECT pgtle.available_extensions();
-SELECT pgtle.extension_update_paths('imaginary_extension');
+SELECT pgtle.extension_update_paths('test_ext');
 SELECT pgtle.create_base_type('public', 'imaginary_type',
     'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
 SELECT pgtle.create_base_type_if_not_exists('public', 'imaginary_type',
@@ -114,6 +116,7 @@ DROP FUNCTION op;
 DROP TYPE imaginary_type;
 RESET SESSION AUTHORIZATION;
 REVOKE CREATE ON SCHEMA public FROM acl_user;
+SELECT pgtle.uninstall_extension('test_ext');
 DROP EXTENSION pg_tle CASCADE;
 DROP SCHEMA pgtle;
 DROP USER acl_user;
