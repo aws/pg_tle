@@ -1,0 +1,233 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * 1) Verify that an unprivileged user has the expected EXECUTE permissions on
+ * each pg_tle function.  All new SQL functions should be added to this test.
+ *
+ * If the function is not executable by the unprivileged user, we expect the
+ * exact error "permission denied for function <function_name>".  If a different
+ * error is thrown (except for syntax errors), that means the unprivileged user
+ * has EXECUTE permission.
+ * 
+ * 2) Verify that a pgtle_admin user has EXECUTE permission on each pg_tle
+ * function.
+ */
+-- Set up.
+CREATE EXTENSION pg_tle;
+SELECT pgtle.install_extension('test_ext', '1.0', '', '');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+CREATE USER acl_user;
+GRANT CREATE ON SCHEMA public TO acl_user;
+SET SESSION AUTHORIZATION acl_user;
+CREATE FUNCTION datin(t text) RETURNS bytea LANGUAGE SQL IMMUTABLE AS
+$$
+    SELECT pg_catalog.convert_to(t, 'UTF8');
+$$;
+CREATE FUNCTION datout(b bytea) RETURNS text LANGUAGE SQL IMMUTABLE AS
+$$
+    SELECT pg_catalog.convert_from(b, 'UTF8');
+$$;
+CREATE FUNCTION op(b bytea) RETURNS boolean LANGUAGE SQL IMMUTABLE AS
+$$
+    SELECT false;
+$$;
+/*
+ * 1. Test unprivileged user permissions.
+ */
+-- Unprivileged user can execute these functions.
+SELECT pgtle.available_extension_versions();
+   available_extension_versions    
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
+(1 row)
+
+SELECT pgtle.available_extensions();
+ available_extensions 
+----------------------
+ (test_ext,1.0,"")
+(1 row)
+
+SELECT pgtle.extension_update_paths('test_ext');
+ extension_update_paths 
+------------------------
+(0 rows)
+
+-- Unprivileged user cannot execute these functions.
+SELECT pgtle.create_base_type('public', 'imaginary_type',
+    'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
+ERROR:  permission denied for function create_base_type
+SELECT pgtle.create_base_type_if_not_exists('public', 'imaginary_type',
+    'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
+ERROR:  permission denied for function create_base_type_if_not_exists
+SELECT pgtle.create_operator_func('public', 'imaginary_type',
+    'op(bytea)'::regprocedure);
+ERROR:  permission denied for function create_operator_func
+SELECT pgtle.create_operator_func_if_not_exists('public', 'imaginary_type',
+    'op(bytea)'::regprocedure);
+ERROR:  permission denied for function create_operator_func_if_not_exists
+SELECT pgtle.create_shell_type('public', 'imaginary_type');
+ERROR:  permission denied for function create_shell_type
+SELECT pgtle.create_shell_type_if_not_exists('public', 'imaginary_type');
+ERROR:  permission denied for function create_shell_type_if_not_exists
+SELECT pgtle.install_extension('', '', '', '');
+ERROR:  permission denied for function install_extension
+SELECT pgtle.install_extension_version_sql('', '', '');
+ERROR:  permission denied for function install_extension_version_sql
+SELECT pgtle.register_feature('op(bytea)'::regprocedure, 'passcheck');
+ERROR:  permission denied for function register_feature
+SELECT pgtle.register_feature_if_not_exists('op(bytea)'::regprocedure,
+    'passcheck');
+ERROR:  permission denied for function register_feature_if_not_exists
+SELECT pgtle.set_default_version('', '');
+ERROR:  permission denied for function set_default_version
+SELECT pgtle.uninstall_extension('');
+ERROR:  permission denied for function uninstall_extension
+SELECT pgtle.uninstall_extension('', '');
+ERROR:  permission denied for function uninstall_extension
+SELECT pgtle.uninstall_extension_if_exists('');
+ERROR:  permission denied for function uninstall_extension_if_exists
+SELECT pgtle.uninstall_update_path('', '', '');
+ERROR:  permission denied for function uninstall_update_path
+SELECT pgtle.uninstall_update_path_if_exists('', '', '');
+ERROR:  permission denied for function uninstall_update_path_if_exists
+SELECT pgtle.unregister_feature('op(bytea)'::regprocedure, 'passcheck');
+ERROR:  permission denied for function unregister_feature
+SELECT pgtle.unregister_feature_if_exists('op(bytea)'::regprocedure,
+    'passcheck');
+ERROR:  permission denied for function unregister_feature_if_exists
+/*
+ * 2. Test pgtle_admin user permissions.
+ */
+RESET SESSION AUTHORIZATION;
+GRANT pgtle_admin TO acl_user;
+SET SESSION AUTHORIZATION acl_user;
+-- pgtle_admin can execute all functions.
+SELECT pgtle.available_extension_versions();
+   available_extension_versions    
+-----------------------------------
+ (test_ext,1.0,f,f,f,,{pg_tle},"")
+(1 row)
+
+SELECT pgtle.available_extensions();
+ available_extensions 
+----------------------
+ (test_ext,1.0,"")
+(1 row)
+
+SELECT pgtle.extension_update_paths('test_ext');
+ extension_update_paths 
+------------------------
+(0 rows)
+
+SELECT pgtle.create_base_type('public', 'imaginary_type',
+    'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
+ERROR:  type "imaginary_type" does not exist
+HINT:  Create the type as a shell type, then create its I/O functions, then do a full CREATE TYPE.
+SELECT pgtle.create_base_type_if_not_exists('public', 'imaginary_type',
+    'datin(text)'::regprocedure, 'datout(bytea)'::regprocedure, -1);
+ERROR:  type "imaginary_type" does not exist
+HINT:  Create the type as a shell type, then create its I/O functions, then do a full CREATE TYPE.
+CONTEXT:  SQL statement "SELECT pgtle.create_base_type(typenamespace, typename, infunc, outfunc, internallength, alignment, storage)"
+PL/pgSQL function create_base_type_if_not_exists(regnamespace,name,regprocedure,regprocedure,integer,text,text) line 3 at PERFORM
+SELECT pgtle.create_operator_func('public', 'imaginary_type',
+    'op(bytea)'::regprocedure);
+ERROR:  type "imaginary_type" does not exist
+SELECT pgtle.create_operator_func_if_not_exists('public', 'imaginary_type',
+    'op(bytea)'::regprocedure);
+ERROR:  type "imaginary_type" does not exist
+CONTEXT:  SQL statement "SELECT pgtle.create_operator_func(typenamespace, typename, opfunc)"
+PL/pgSQL function create_operator_func_if_not_exists(regnamespace,name,regprocedure) line 3 at PERFORM
+SELECT pgtle.create_shell_type('public', 'imaginary_type');
+ create_shell_type 
+-------------------
+ 
+(1 row)
+
+SELECT pgtle.create_shell_type_if_not_exists('public', 'imaginary_type');
+NOTICE:  type "imaginary_type" already exists, skipping
+ create_shell_type_if_not_exists 
+---------------------------------
+ f
+(1 row)
+
+SELECT pgtle.install_extension('', '', '', '');
+ERROR:  invalid extension name: ""
+DETAIL:  Extension names must not be empty.
+SELECT pgtle.install_extension_version_sql('', '', '');
+ERROR:  invalid extension name: ""
+DETAIL:  Extension names must not be empty.
+SELECT pgtle.register_feature('op(bytea)'::regprocedure, 'passcheck');
+NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+ register_feature 
+------------------
+ 
+(1 row)
+
+SELECT pgtle.register_feature_if_not_exists('op(bytea)'::regprocedure,
+    'passcheck');
+NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+ register_feature_if_not_exists 
+--------------------------------
+ f
+(1 row)
+
+SELECT pgtle.set_default_version('', '');
+ERROR:  invalid extension name: ""
+DETAIL:  Extension names must not be empty.
+SELECT pgtle.uninstall_extension('');
+ERROR:  must be owner of function test_ext.control
+CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
+PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
+SELECT pgtle.uninstall_extension('', '');
+ERROR:  Version  of extension  is not installed and therefore can not be uninstalled
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 50 at RAISE
+SELECT pgtle.uninstall_extension_if_exists('');
+ERROR:  must be owner of function test_ext.control
+CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
+PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
+SQL statement "SELECT pgtle.uninstall_extension(extname)"
+PL/pgSQL function uninstall_extension_if_exists(text) line 3 at PERFORM
+SELECT pgtle.uninstall_update_path('', '', '');
+ERROR:  Extension  does not exist
+CONTEXT:  PL/pgSQL function uninstall_update_path(text,text,text) line 16 at RAISE
+SELECT pgtle.uninstall_update_path_if_exists('', '', '');
+ uninstall_update_path_if_exists 
+---------------------------------
+ f
+(1 row)
+
+SELECT pgtle.unregister_feature('op(bytea)'::regprocedure, 'passcheck');
+ unregister_feature 
+--------------------
+ 
+(1 row)
+
+SELECT pgtle.unregister_feature_if_exists('op(bytea)'::regprocedure,
+    'passcheck');
+ unregister_feature_if_exists 
+------------------------------
+ f
+(1 row)
+
+-- Clean up.
+DROP FUNCTION datin;
+DROP FUNCTION datout;
+DROP FUNCTION op;
+DROP TYPE imaginary_type;
+RESET SESSION AUTHORIZATION;
+REVOKE CREATE ON SCHEMA public FROM acl_user;
+SELECT pgtle.uninstall_extension('test_ext');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+DROP EXTENSION pg_tle CASCADE;
+DROP SCHEMA pgtle;
+DROP USER acl_user;

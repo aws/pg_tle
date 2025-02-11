@@ -370,3 +370,12 @@ SELECT pgtle.uninstall_extension('test_unregister_feature');
 DROP SCHEMA pass CASCADE;
 NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)
 DROP EXTENSION pg_tle;
+ALTER SYSTEM SET pgtle.passcheck_db_name = '';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+-- reconnect to ensure reload settings are propagated immediately
+\c -

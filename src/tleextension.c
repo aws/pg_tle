@@ -914,7 +914,6 @@ parse_extension_control_file(ExtensionControlFile *control,
 		control->directory = NULL;
 		control->module_pathname = NULL;
 		control->relocatable = false;
-		control->schema = NULL;
 		control->superuser = false;
 		control->trusted = false;
 		control->encoding = -1; /* encoding is that of the server_side
@@ -997,6 +996,12 @@ build_extension_control_file_string(ExtensionControlFile *control)
 
 		appendStringInfo(ctlstr, "requires = %s\n",
 						 quote_literal_cstr(reqstr->data));
+	}
+
+	if (control->schema != NULL)
+	{
+		appendStringInfo(ctlstr, "schema = %s\n",
+						 quote_literal_cstr(control->schema));
 	}
 
 	return ctlstr;
@@ -4398,6 +4403,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	char	   *extdesc;
 	char	   *sql_str;
 	ArrayType  *extrequires;
+	char	   *extschema;
 	char	   *ctlname;
 	StringInfo	ctlstr;
 	char	   *sqlname;
@@ -4415,7 +4421,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	Oid			ctlfuncid;
 	Oid			sqlfuncid;
 
-	if (PG_ARGISNULL(0))
+	if (PG_ARGISNULL(0) || !PG_GETARG_DATUM(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("\"name\" is a required argument")));
@@ -4434,7 +4440,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 				 errmsg("control file already exists for the %s extension",
 						extname)));
 
-	if (PG_ARGISNULL(1))
+	if (PG_ARGISNULL(1) || !PG_GETARG_DATUM(1))
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("\"version\" is a required argument")));
@@ -4442,27 +4448,34 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	extvers = text_to_cstring(PG_GETARG_TEXT_PP(1));
 	check_valid_version_name(extvers);
 
-	if (PG_ARGISNULL(2))
+	if (PG_ARGISNULL(2) || !PG_GETARG_DATUM(2))
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("\"description\" is a required argument")));
 
 	extdesc = text_to_cstring(PG_GETARG_TEXT_PP(2));
 
-	if (PG_ARGISNULL(3))
+	if (PG_ARGISNULL(3) || !PG_GETARG_DATUM(3))
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("\"ext\" is a required argument")));
 
 	sql_str = text_to_cstring(PG_GETARG_TEXT_PP(3));
 
-	if (PG_ARGISNULL(4))
+	if (PG_ARGISNULL(4) || !PG_GETARG_DATUM(4))
 		reqlist = NIL;
 	else
 	{
 		extrequires = PG_GETARG_ARRAYTYPE_P(4);
 		reqlist = textarray_to_stringlist(extrequires);
 		check_requires_list(reqlist);
+	}
+
+	if (PG_ARGISNULL(5) || !PG_GETARG_DATUM(5))
+		extschema = NULL;
+	else
+	{
+		extschema = pstrdup(text_to_cstring(PG_GETARG_TEXT_PP(5)));
 	}
 
 	/*
@@ -4504,6 +4517,7 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	control->default_version = pstrdup(extvers);
 	control->comment = pstrdup(extdesc);
 	control->requires = reqlist;
+	control->schema = extschema;
 
 	ctlstr = build_extension_control_file_string(control);
 

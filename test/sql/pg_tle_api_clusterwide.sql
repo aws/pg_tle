@@ -243,3 +243,7 @@ SELECT pgtle.uninstall_extension('test_unregister_feature');
 -- now drop everything
 DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;
+ALTER SYSTEM SET pgtle.passcheck_db_name = '';
+SELECT pg_reload_conf();
+-- reconnect to ensure reload settings are propagated immediately
+\c -
