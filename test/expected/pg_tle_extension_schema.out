@@ -56,9 +56,9 @@ DROP EXTENSION my_tle CASCADE;
 -- Upgrade pg_tle to 1.5.0 and repeat the test.
 ALTER EXTENSION pg_tle UPDATE TO '1.5.0';
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-  name  | default_version | comment 
---------+-----------------+---------
- my_tle | 1.0             | My TLE
+  name  | default_version | superuser | trusted | relocatable | schema | requires | comment 
+--------+-----------------+-----------+---------+-------------+--------+----------+---------
+ my_tle | 1.0             | f         | f       | f           |        | {pg_tle} | My TLE
 (1 row)
 
 CREATE EXTENSION my_tle SCHEMA my_tle_schema_1;
@@ -68,6 +68,14 @@ SELECT my_tle_schema_1.my_tle_func();
  my_tle_func 
 -------------
            1
+(1 row)
+
+-- By specifying the columns explicitly, we can get the same output from
+-- pgtle.available_extensions() in 1.5.0 as in 1.4.1.
+SELECT name, default_version, comment FROM pgtle.available_extensions();
+  name  | default_version | comment 
+--------+-----------------+---------
+ my_tle | 1.0             | My TLE
 (1 row)
 
 -- Clean up.
@@ -99,9 +107,9 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
 (1 row)
 
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-  name  | default_version | comment 
---------+-----------------+---------
- my_tle | 1.0             | My TLE
+  name  | default_version | superuser | trusted | relocatable |     schema      | requires | comment 
+--------+-----------------+-----------+---------+-------------+-----------------+----------+---------
+ my_tle | 1.0             | f         | f       | f           | my_tle_schema_1 | {pg_tle} | My TLE
 (1 row)
 
 -- my_tle cannot be installed in my_tle_schema_2.
@@ -141,9 +149,9 @@ SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
 (1 row)
 
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-  name  | default_version | comment 
---------+-----------------+---------
- my_tle | 1.0             | My TLE
+  name  | default_version | superuser | trusted | relocatable |     schema      | requires | comment 
+--------+-----------------+-----------+---------+-------------+-----------------+----------+---------
+ my_tle | 1.0             | f         | f       | f           | my_tle_schema_1 | {pg_tle} | My TLE
 (1 row)
 
 CREATE EXTENSION my_tle;
@@ -226,12 +234,12 @@ CREATE EXTENSION my_tle_3;
 CREATE EXTENSION my_tle_4;
 -- Validate the output of these functions.
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
-   name   | default_version | comment 
-----------+-----------------+---------
- my_tle_1 | 1.0             | My TLE
- my_tle_2 | 1.0             | My TLE
- my_tle_3 | 1.0             | My TLE
- my_tle_4 | 1.0             | My TLE
+   name   | default_version | superuser | trusted | relocatable |     schema      |     requires      | comment 
+----------+-----------------+-----------+---------+-------------+-----------------+-------------------+---------
+ my_tle_1 | 1.0             | f         | f       | f           |                 | {pg_tle}          | My TLE
+ my_tle_2 | 1.0             | f         | f       | f           |                 | {my_tle_1,pg_tle} | My TLE
+ my_tle_3 | 1.0             | f         | f       | f           | my_tle_schema_1 | {pg_tle}          | My TLE
+ my_tle_4 | 1.0             | f         | f       | f           | my_tle_schema_2 | {my_tle_3,pg_tle} | My TLE
 (4 rows)
 
 SELECT * from pgtle.available_extension_versions() ORDER BY name;

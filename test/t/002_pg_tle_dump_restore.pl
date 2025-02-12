@@ -406,7 +406,7 @@ like  ($stdout, qr/t/, 'operator_from_restored_db');
 # 7. Verify TLE in custom schema
 
 $stdout = $node->safe_psql($restored_db, q[SELECT * FROM pgtle.available_extensions() WHERE name = 'my_tle_with_schema']);
-is($stdout, q[my_tle_with_schema|1.0|My TLE with schema]);
+is($stdout, q[my_tle_with_schema|1.0|f|f|f|my_tle_schema|{pg_tle}|My TLE with schema]);
 $stdout = $node->safe_psql($restored_db, q[
     SELECT nspname FROM pg_namespace AS n INNER JOIN pg_extension AS e
     ON e.extnamespace = n.oid

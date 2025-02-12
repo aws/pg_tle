@@ -51,6 +51,10 @@ CREATE EXTENSION my_tle SCHEMA my_tle_schema_1;
 ALTER EXTENSION my_tle SET SCHEMA my_tle_schema_2;
 SELECT my_tle_schema_1.my_tle_func();
 
+-- By specifying the columns explicitly, we can get the same output from
+-- pgtle.available_extensions() in 1.5.0 as in 1.4.1.
+SELECT name, default_version, comment FROM pgtle.available_extensions();
+
 -- Clean up.
 DROP EXTENSION my_tle CASCADE;
 SELECT pgtle.uninstall_extension('my_tle');
