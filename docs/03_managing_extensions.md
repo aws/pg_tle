@@ -173,12 +173,11 @@ The extension control file for the specified extension must already be installed
 #### Example
 
 ```sql
-SELECT pgtle.install_extension(
+SELECT pgtle.install_extension_version_sql(
  'pg_tle_test',
  '0.2',
- 'A new version of my pg_tle extension',
 $_pgtle_$
-  CREATE FUNCTION my_test()
+  CREATE OR REPLACE FUNCTION my_test()
   RETURNS INT
   AS $$
     SELECT 4242;
