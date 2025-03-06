@@ -596,8 +596,7 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 								   port->remote_hostname_errcode,
 								   quote_identifier(port->database_name),
 								   quote_identifier(port->user_name),
-								   quote_identifier(port->application_name)
-								   );
+								   quote_identifier(port->application_name));
 
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
