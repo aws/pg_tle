@@ -163,6 +163,7 @@ typedef struct PortSubset
 
 	char		database_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 	char		user_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+	char		application_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 }			PortSubset;
 
 /* Represents a pending connection */
@@ -587,14 +588,16 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 						 func_name,
 						 quote_identifier(PG_TLE_NSPNAME));
 
-		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
+		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s,%s)",
 								   port->noblock,
 								   quote_identifier(port->remote_host),
 								   quote_identifier(port->remote_hostname),
 								   port->remote_hostname_resolv,
 								   port->remote_hostname_errcode,
 								   quote_identifier(port->database_name),
-								   quote_identifier(port->user_name));
+								   quote_identifier(port->user_name),
+								   quote_identifier(port->application_name)
+								   );
 
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
@@ -718,6 +721,10 @@ clientauth_hook(Port *port, int status)
 			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
 			 "%s",
 			 port->user_name == NULL ? "" : port->user_name);
+	snprintf(clientauth_ss->requests[idx].port_info.application_name,
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->application_name == NULL ? "" : port->application_name);
 	clientauth_ss->requests[idx].port_info.noblock = port->noblock;
 	clientauth_ss->requests[idx].port_info.remote_hostname_resolv = port->remote_hostname_resolv;
 	clientauth_ss->requests[idx].port_info.remote_hostname_errcode = port->remote_hostname_errcode;
