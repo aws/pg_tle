@@ -50,6 +50,7 @@
 #include "commands/extension.h"
 #include "commands/user.h"
 #include "executor/spi.h"
+#include "funcapi.h"
 #include "libpq/auth.h"
 #include "nodes/pg_list.h"
 #include "postmaster/bgworker_internals.h"
@@ -123,6 +124,8 @@ void		clientauth_init(void);
 static bool can_allow_without_executing(void);
 static bool can_reject_without_executing(void);
 
+static bool does_port_subset_contain_application_name_field(void);
+
 /* GUC that determines whether clientauth is enabled */
 static int	enable_clientauth_feature = FEATURE_OFF;
 
@@ -163,6 +166,7 @@ typedef struct PortSubset
 
 	char		database_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 	char		user_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
+	char		application_name[CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN];
 }			PortSubset;
 
 /* Represents a pending connection */
@@ -587,14 +591,25 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 						 func_name,
 						 quote_identifier(PG_TLE_NSPNAME));
 
-		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
-								   port->noblock,
-								   quote_identifier(port->remote_host),
-								   quote_identifier(port->remote_hostname),
-								   port->remote_hostname_resolv,
-								   port->remote_hostname_errcode,
-								   quote_identifier(port->database_name),
-								   quote_identifier(port->user_name));
+		if (does_port_subset_contain_application_name_field())
+			port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s,%s)",
+									   port->noblock,
+									   quote_identifier(port->remote_host),
+									   quote_identifier(port->remote_hostname),
+									   port->remote_hostname_resolv,
+									   port->remote_hostname_errcode,
+									   quote_identifier(port->database_name),
+									   quote_identifier(port->user_name),
+									   quote_identifier(port->application_name));
+		else
+			port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
+									   port->noblock,
+									   quote_identifier(port->remote_host),
+									   quote_identifier(port->remote_hostname),
+									   port->remote_hostname_resolv,
+									   port->remote_hostname_errcode,
+									   quote_identifier(port->database_name),
+									   quote_identifier(port->user_name));
 
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
@@ -718,6 +733,10 @@ clientauth_hook(Port *port, int status)
 			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
 			 "%s",
 			 port->user_name == NULL ? "" : port->user_name);
+	snprintf(clientauth_ss->requests[idx].port_info.application_name,
+			 CLIENT_AUTH_PORT_SUBSET_MAX_STRLEN,
+			 "%s",
+			 port->application_name == NULL ? "" : port->application_name);
 	clientauth_ss->requests[idx].port_info.noblock = port->noblock;
 	clientauth_ss->requests[idx].port_info.remote_hostname_resolv = port->remote_hostname_resolv;
 	clientauth_ss->requests[idx].port_info.remote_hostname_errcode = port->remote_hostname_errcode;
@@ -893,4 +912,30 @@ can_reject_without_executing()
 	}
 
 	return false;
+}
+
+/*
+ * Returns true if the pgtle.clientauth_port_subset composite type contains the
+ * `application_name` field.  This field was introduced in pg_tle 1.5.0.
+ */
+static bool
+does_port_subset_contain_application_name_field()
+{
+	TupleDesc	tupdesc =
+		RelationNameGetTupleDesc(PG_TLE_NSPNAME "."
+								 TLE_CLIENTAUTH_PORT_SUBSET_TYPE);
+
+	if (tupdesc->natts == 7)
+		return false;
+	else if (tupdesc->natts == 8)
+		return true;
+
+	/*
+	 * Should be unreachable.  If we add more fields in the future, we need to
+	 * modify the logic above.
+	 */
+	ereport(ERROR,
+			errmsg("\"%s.clientauth\" feature encountered an unexpected number of fields in the \"%s.%s\" composite type: %d",
+				   PG_TLE_NSPNAME, PG_TLE_NSPNAME,
+				   TLE_CLIENTAUTH_PORT_SUBSET_TYPE, tupdesc->natts));
 }
