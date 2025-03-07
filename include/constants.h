@@ -36,6 +36,8 @@
 #define TLE_INPUT_FUNC_STR       "input"
 #define TLE_OUTPUT_FUNC_STR      "output"
 
+#define TLE_CLIENTAUTH_PORT_SUBSET_TYPE	"clientauth_port_subset"
+
 /*
  * TLE_BASE_TYPE_SIZE_LIMIT is the maximum allowed size of pg_tle type.
  *
