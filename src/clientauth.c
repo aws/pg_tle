@@ -97,53 +97,6 @@
  */
 #define CLIENT_AUTH_USER_ERROR_MAX_STRLEN 256
 
-static const char *clientauth_shmem_name = "pgtle_clientauth";
-static const char *clientauth_feature = "clientauth";
-static const char *clientauth_worker_name = "pg_tle_clientauth worker";
-
-/* Background worker main entry function */
-PGDLLEXPORT void clientauth_launcher_main(Datum arg);
-
-/* Set up our hooks */
-static ClientAuthentication_hook_type prev_clientauth_hook = NULL;
-static void clientauth_hook(Port *port, int status);
-
-static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
-static void clientauth_shmem_startup(void);
-
-#if (PG_VERSION_NUM >= 150000)
-static shmem_request_hook_type prev_shmem_request_hook = NULL;
-static void clientauth_shmem_request(void);
-#endif
-
-/* Helper functions */
-static Size clientauth_shared_memsize(void);
-static void clientauth_sighup(SIGNAL_ARGS);
-
-void		clientauth_init(void);
-static bool can_allow_without_executing(void);
-static bool can_reject_without_executing(void);
-
-static bool does_port_subset_contain_application_name_field(void);
-
-/* GUC that determines whether clientauth is enabled */
-static int	enable_clientauth_feature = FEATURE_OFF;
-
-/* GUC that determines which database SPI_exec runs against */
-static char *clientauth_database_name = "postgres";
-
-/* GUC that determines the number of background workers */
-static int	clientauth_num_parallel_workers = 1;
-
-/* GUC that determines users that clientauth feature skips */
-static char *clientauth_users_to_skip = "";
-
-/* GUC that determines databases that clientauth feature skips */
-static char *clientauth_databases_to_skip = "";
-
-/* Global flags */
-static bool clientauth_reload_config = false;
-
 /*
  * Fixed-length subset of Port, passed to user function. A corresponding SQL
  * base type is defined. Shared memory structs are required to be fixed-size,
@@ -236,6 +189,53 @@ typedef struct ClientAuthBgwShmemSharedState
 	/* Connection queue state */
 	ClientAuthStatusEntry requests[CLIENT_AUTH_MAX_PENDING_ENTRIES];
 }			ClientAuthBgwShmemSharedState;
+
+static const char *clientauth_shmem_name = "pgtle_clientauth";
+static const char *clientauth_feature = "clientauth";
+static const char *clientauth_worker_name = "pg_tle_clientauth worker";
+
+/* Background worker main entry function */
+PGDLLEXPORT void clientauth_launcher_main(Datum arg);
+
+/* Set up our hooks */
+static ClientAuthentication_hook_type prev_clientauth_hook = NULL;
+static void clientauth_hook(Port *port, int status);
+
+static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+static void clientauth_shmem_startup(void);
+
+#if (PG_VERSION_NUM >= 150000)
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+static void clientauth_shmem_request(void);
+#endif
+
+/* Helper functions */
+static Size clientauth_shared_memsize(void);
+static void clientauth_sighup(SIGNAL_ARGS);
+
+void		clientauth_init(void);
+static bool can_allow_without_executing(void);
+static bool can_reject_without_executing(void);
+
+static char *create_port_subset_str(PortSubset * port);
+
+/* GUC that determines whether clientauth is enabled */
+static int	enable_clientauth_feature = FEATURE_OFF;
+
+/* GUC that determines which database SPI_exec runs against */
+static char *clientauth_database_name = "postgres";
+
+/* GUC that determines the number of background workers */
+static int	clientauth_num_parallel_workers = 1;
+
+/* GUC that determines users that clientauth feature skips */
+static char *clientauth_users_to_skip = "";
+
+/* GUC that determines databases that clientauth feature skips */
+static char *clientauth_databases_to_skip = "";
+
+/* Global flags */
+static bool clientauth_reload_config = false;
 
 static ClientAuthBgwShmemSharedState * clientauth_ss = NULL;
 
@@ -591,25 +591,7 @@ clientauth_launcher_run_user_functions(bool *error, char (*error_msg)[CLIENT_AUT
 						 func_name,
 						 quote_identifier(PG_TLE_NSPNAME));
 
-		if (does_port_subset_contain_application_name_field())
-			port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s,%s)",
-									   port->noblock,
-									   quote_identifier(port->remote_host),
-									   quote_identifier(port->remote_hostname),
-									   port->remote_hostname_resolv,
-									   port->remote_hostname_errcode,
-									   quote_identifier(port->database_name),
-									   quote_identifier(port->user_name),
-									   quote_identifier(port->application_name));
-		else
-			port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
-									   port->noblock,
-									   quote_identifier(port->remote_host),
-									   quote_identifier(port->remote_hostname),
-									   port->remote_hostname_resolv,
-									   port->remote_hostname_errcode,
-									   quote_identifier(port->database_name),
-									   quote_identifier(port->user_name));
+		port_subset_str = create_port_subset_str(port);
 
 		hookargs[0] = CStringGetTextDatum(port_subset_str);
 		hookargs[1] = Int32GetDatum(*status);
@@ -915,27 +897,47 @@ can_reject_without_executing()
 }
 
 /*
- * Returns true if the pgtle.clientauth_port_subset composite type contains the
- * `application_name` field.  This field was introduced in pg_tle 1.5.0.
+ * Constructs a string representation of the PortSubset composite type and
+ * returns it in an allocated string.  The signature of the PortSubset type
+ * varies based on the pg_tle version, so check the signature first.
  */
-static bool
-does_port_subset_contain_application_name_field()
+static char *
+create_port_subset_str(PortSubset * port)
 {
 	TupleDesc	tupdesc =
 		RelationNameGetTupleDesc(PG_TLE_NSPNAME "."
 								 TLE_CLIENTAUTH_PORT_SUBSET_TYPE);
+	char	   *port_subset_str;
 
 	if (tupdesc->natts == 7)
-		return false;
+		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s)",
+								   port->noblock,
+								   quote_identifier(port->remote_host),
+								   quote_identifier(port->remote_hostname),
+								   port->remote_hostname_resolv,
+								   port->remote_hostname_errcode,
+								   quote_identifier(port->database_name),
+								   quote_identifier(port->user_name));
 	else if (tupdesc->natts == 8)
-		return true;
+		port_subset_str = psprintf("(%d,%s,%s,%d,%d,%s,%s,%s)",
+								   port->noblock,
+								   quote_identifier(port->remote_host),
+								   quote_identifier(port->remote_hostname),
+								   port->remote_hostname_resolv,
+								   port->remote_hostname_errcode,
+								   quote_identifier(port->database_name),
+								   quote_identifier(port->user_name),
+								   quote_identifier(port->application_name));
+	else
 
-	/*
-	 * Should be unreachable.  If we add more fields in the future, we need to
-	 * modify the logic above.
-	 */
-	ereport(ERROR,
-			errmsg("\"%s.clientauth\" feature encountered an unexpected number of fields in the \"%s.%s\" composite type: %d",
-				   PG_TLE_NSPNAME, PG_TLE_NSPNAME,
-				   TLE_CLIENTAUTH_PORT_SUBSET_TYPE, tupdesc->natts));
+		/*
+		 * Should be unreachable.  If we add more fields in the future, we
+		 * need to modify the logic above.
+		 */
+		ereport(ERROR,
+				errmsg("\"%s.clientauth\" feature encountered an unexpected number of fields in the \"%s.%s\" composite type: %d",
+					   PG_TLE_NSPNAME, PG_TLE_NSPNAME,
+					   TLE_CLIENTAUTH_PORT_SUBSET_TYPE, tupdesc->natts));
+
+	return port_subset_str;
 }
