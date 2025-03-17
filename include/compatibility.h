@@ -101,8 +101,8 @@
 
 #endif							/* 10+ */
 
-#if !defined(PG_VERSION_NUM) || PG_VERSION_NUM < 100000
-#error "This extension only builds with PostgreSQL 9.4 or later"
+#if !defined(PG_VERSION_NUM) || PG_VERSION_NUM < 120000
+#error "This extension only builds with PostgreSQL 12 or later"
 #endif
 
 /* additional compatibility hacks */

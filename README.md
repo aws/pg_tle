@@ -33,6 +33,12 @@ There are examples for writing TLEs in several languages, including:
 * [JavaScript](./docs/07_plv8_examples.md)
 * [Perl](./docs/08_plperl_examples.md)
 
+## Supported PostgreSQL versions
+
+`pg_tle` 1.5.0 supports PostgreSQL major versions 12 to 17.
+
+`pg_tle` 1.4.1 supports PostgreSQL major versions 11 to 17.
+
 ## Help & feedback
 
 Have a question? Have a feature request? We recommend trying the following things (in this order):
