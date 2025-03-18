@@ -4,9 +4,9 @@
  */
 
 /*
- * 1. If an extension is created on pg_tle 1.4.1 and pg_tle is upgraded to
+ * 1. If an extension is created on pg_tle 1.4.0 and pg_tle is upgraded to
  *    1.5.0, the extension behaves like a regular schema-less extension.
- *    pgtle.available_extensions() works on both 1.4.1 and 1.5.0.
+ *    pgtle.available_extensions() works on both 1.4.0 and 1.5.0.
  *
  * 2. If an extension is installed with a specified schema, it cannot be created
  *    in a different schema. The extension objects are automatically created in
@@ -22,14 +22,14 @@
 \pset pager off
 
 /*
- * 1. If an extension is installed on pg_tle 1.4.1 and pg_tle is upgraded to
+ * 1. If an extension is installed on pg_tle 1.4.0 and pg_tle is upgraded to
  *    1.5.0, the extension behaves like a regular schema-less extension.
- *    pgtle.available_extensions() works on both 1.4.1 and 1.5.0.
+ *    pgtle.available_extensions() works on both 1.4.0 and 1.5.0.
  */
 
 CREATE SCHEMA my_tle_schema_1;
 CREATE SCHEMA my_tle_schema_2;
-CREATE EXTENSION pg_tle VERSION '1.4.1';
+CREATE EXTENSION pg_tle VERSION '1.4.0';
 SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
     $_pgtle_$
         CREATE OR REPLACE FUNCTION my_tle_func() RETURNS INT LANGUAGE SQL AS
@@ -52,7 +52,7 @@ ALTER EXTENSION my_tle SET SCHEMA my_tle_schema_2;
 SELECT my_tle_schema_1.my_tle_func();
 
 -- By specifying the columns explicitly, we can get the same output from
--- pgtle.available_extensions() in 1.5.0 as in 1.4.1.
+-- pgtle.available_extensions() in 1.5.0 as in 1.4.0.
 SELECT name, default_version, comment FROM pgtle.available_extensions();
 
 -- Clean up.

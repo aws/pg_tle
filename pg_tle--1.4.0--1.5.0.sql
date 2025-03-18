@@ -17,6 +17,17 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_tle" to load this file. \quit
 
+CREATE OR REPLACE FUNCTION pgtle.extension_update_paths
+(
+  name text,
+  OUT source text,
+  OUT target text,
+  OUT path text
+)
+RETURNS SETOF RECORD
+AS 'MODULE_PATHNAME', 'pg_tle_extension_update_paths'
+LANGUAGE C STABLE STRICT;
+
 DROP FUNCTION pgtle.install_extension
 (
   name text,

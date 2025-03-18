@@ -29,7 +29,7 @@
 ### 15. Rejects connections when no schema qualified function is found
 ### 16. Database does not come up if clientauth workers fail to start
 ### 17. Malformed strings cannot be used for SQL injection
-### 18. pg_tle can be updated from 1.4.1 to 1.5.0 without affecting clientauth functions
+### 18. pg_tle can be updated from 1.4.0 to 1.5.0 without affecting clientauth functions
 ### 19. application_name field works
 
 use strict;
@@ -324,9 +324,9 @@ $node->psql('not_excluded', 'SELECT current_user', extra_params => ['-U', '") /*
 like($psql_out, qr/^"\) \/\*$/,
     "role with injection payload in name can connect");
 
-### 18. pg_tle can be updated from 1.4.1 to 1.5.0 without affecting clientauth functions
+### 18. pg_tle can be updated from 1.4.0 to 1.5.0 without affecting clientauth functions
 $node->safe_psql('postgres', 'DROP EXTENSION pg_tle CASCADE');
-$node->safe_psql('postgres', "CREATE EXTENSION pg_tle VERSION '1.4.1'");
+$node->safe_psql('postgres', "CREATE EXTENSION pg_tle VERSION '1.4.0'");
 $node->safe_psql('postgres', q[
     CREATE FUNCTION reject_testuser(port pgtle.clientauth_port_subset, status integer) RETURNS void AS $$
         BEGIN
@@ -340,7 +340,7 @@ $node->safe_psql('postgres', qq[SELECT pgtle.register_feature('reject_testuser',
 $node->safe_psql('postgres', 'SELECT 1');
 $node->psql('not_excluded', 'select', extra_params => ['-U', 'testuser'], stderr => \$psql_err);
 like($psql_err, qr/FATAL:  testuser is not allowed to connect/,
-    "clientauth function works on pg_tle 1.4.1");
+    "clientauth function works on pg_tle 1.4.0");
 
 $node->safe_psql('postgres', "ALTER EXTENSION pg_tle UPDATE TO '1.5.0'");
 $node->psql('not_excluded', 'select', extra_params => ['-U', 'testuser'], stderr => \$psql_err);
