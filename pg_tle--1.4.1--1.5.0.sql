@@ -81,3 +81,6 @@ CREATE FUNCTION pgtle.available_extensions
 RETURNS SETOF RECORD
 AS 'MODULE_PATHNAME', 'pg_tle_available_extensions'
 LANGUAGE C STABLE STRICT;
+
+ALTER TYPE pgtle.clientauth_port_subset
+ADD ATTRIBUTE application_name text;
