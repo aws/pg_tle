@@ -37,7 +37,7 @@ There are examples for writing TLEs in several languages, including:
 
 `pg_tle` 1.5.0 supports PostgreSQL major versions 12 to 17.
 
-`pg_tle` 1.4.1 supports PostgreSQL major versions 11 to 17.
+`pg_tle` 1.4.0 supports PostgreSQL major versions 11 to 17.
 
 ## Help & feedback
 
