@@ -209,7 +209,7 @@ A `clientauth` hook function takes the following arguments and returns either `t
 
 clientauth_hook(port pgtle.clientauth_port_subset, status integer)
 
-* `port` (`pgtle.clientauth_port_subset`) - an object containing the following fields. These are a subset of the Port object that client authentication hook passes to internal C functions.
+* `port` (`pgtle.clientauth_port_subset`) - an object containing the following fields. These are a subset of the [Port](https://doxygen.postgresql.org/structPort.html) object that client authentication hook passes to internal C functions.
   * `noblock` (`bool`)
   * `remote_host` (`text`)
   * `remote_hostname` (`text`)
@@ -217,6 +217,7 @@ clientauth_hook(port pgtle.clientauth_port_subset, status integer)
   * `remote_hostname_errcode` (`integer`)
   * `database_name` (`text`)
   * `user_name` (`text`)
+  * `application_name` (`text`)
 * `status` (`integer`) - connection status code. This can be one of the following:
   * 0, representing successful connection
   * -1, representing a connection error
