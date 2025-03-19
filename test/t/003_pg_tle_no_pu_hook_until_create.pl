@@ -32,13 +32,13 @@ my $testdb = 'postgres';
 my ($stdout, $stderr);
 
 $node->psql($testdb, "CREATE EXTENSION does_not_exist", stdout => \$stdout, stderr => \$stderr);
-like  ($stderr, qr/[cC]ould not open extension control file/, 'Extension should not be found');
+like  ($stderr, qr/[cC]ould not open extension control file|extension "does_not_exist" is not available/, 'Extension should not be found');
 
 $node->psql($testdb, "CREATE EXTENSION pg_tle", stdout => \$stdout, stderr => \$stderr);
 like  ($stderr, qr//, 'pg_tle creates successfully');
 
 $node->psql($testdb, "CREATE EXTENSION does_not_exist", stdout => \$stdout, stderr => \$stderr);
-like  ($stderr, qr/[cC]ould not open extension control file/, 'Extension should still not be found');
+like  ($stderr, qr/[cC]ould not open extension control file|extension "does_not_exist" is not available/, 'Extension should still not be found');
 
 $node->stop;
 done_testing();
