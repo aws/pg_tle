@@ -369,9 +369,6 @@ clientauth_launcher_main(Datum arg)
 {
 	int			bgw_idx = DatumGetInt32(arg);
 
-	/* Keeps track of which of its entries the worker will look at first. */
-	int			idx_offset = 0;
-
 	/* Establish signal handlers before unblocking signals */
 	pqsignal(SIGHUP, clientauth_sighup);
 	pqsignal(SIGTERM, die);
@@ -414,18 +411,13 @@ clientauth_launcher_main(Datum arg)
 
 			LWLockAcquire(clientauth_ss->lock, LW_SHARED);
 
-			/*
-			 * Check if this worker's assigned entries need processing.
-			 * idx_offset helps the worker pick up each entry more evenly
-			 * rather than always picking the first entry if it's occupied.
-			 */
-			for (int i = bgw_idx + idx_offset; i < CLIENT_AUTH_MAX_PENDING_ENTRIES + idx_offset; i += clientauth_num_parallel_workers)
+			/* Check if this worker's assigned entries need processing. */
+			for (int i = bgw_idx; i < CLIENT_AUTH_MAX_PENDING_ENTRIES; i += clientauth_num_parallel_workers)
 			{
-				idx = i % CLIENT_AUTH_MAX_PENDING_ENTRIES;
+				idx = i;
 				if (!clientauth_ss->requests[idx].done_processing)
 				{
 					need_to_wake = true;
-					idx_offset = (idx_offset + clientauth_num_parallel_workers) % CLIENT_AUTH_MAX_PENDING_ENTRIES;
 					break;
 				}
 			}
