@@ -1,3 +1,5 @@
+Inspired by a sql script authored by Jim Finnerty <jfinnert@amazon.com> and proposed to the PostgreSQL hackers mailing list, https://www.postgresql.org/message-id/1548191628417-0.post%40n3.nabble.com
+
 ## Calculating N-distinct elements
 
 During ```ANALYZE```, the ```n_distinct``` value of a column is calculated as either a fixed value or a ratio of the number of distinct values over the total number of rows. The fixed value is always represented as a positive number, while the ratio will be represented as a negative number. This value is visible in the n_distinct column of the ```pg_stats``` catalog view and used by the PostgreSQL query optimizer for planning. For more, refer to the PostgreSQL [[documentation]](https://www.postgresql.org/docs/current/view-pg-stats.html]).
