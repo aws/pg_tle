@@ -156,7 +156,11 @@ CREATE EXTENSION my_tle_4;
 -- Validate the output of these functions.
 SELECT * FROM pgtle.available_extensions() ORDER BY name;
 SELECT * from pgtle.available_extension_versions() ORDER BY name;
-\dx
+SELECT e.extname, n.nspname, e.extrelocatable, e.extversion
+    FROM pg_extension e
+    INNER JOIN pg_namespace n
+    ON e.extnamespace = n.oid
+    ORDER BY extname ASC;
 
 -- Clean up. Drop the SQL and control functions explicitly to make sure the
 -- drops happen in the expected order and avoid random errors.
