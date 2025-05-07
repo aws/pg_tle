@@ -459,7 +459,37 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 			   typeCollation)
 #endif
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 180000
+#define PROCEDURE_CREATE(procedureName, procNamespace, replace, returnsSet, returnType, proowner, languageObjectId, languageValidator, prosrc, probin, prokind, security_definer, isLeakProof, isStrict, volatility, parallel, parameterTypes, allParameterTypes, parameterModes, parameterNames, parameterDefaults, trftypes, proconfig, procost, prorows) \
+	ProcedureCreate(procedureName, \
+					procNamespace, \
+					replace, \
+					returnsSet, \
+					returnType, \
+					proowner, \
+					languageObjectId, \
+					languageValidator, \
+					prosrc, \
+					probin, \
+					NULL, /* prosqlbody */ \
+					prokind, \
+					security_definer, \
+					isLeakProof, \
+					isStrict, \
+					volatility, \
+					parallel, \
+					parameterTypes, \
+					allParameterTypes, \
+					parameterModes, \
+					parameterNames, \
+					parameterDefaults, \
+					trftypes, \
+					NULL, /* trftypes */ \
+					proconfig, \
+					InvalidOid,	/* prosupport */ \
+					procost, \
+					prorows)
+#elif PG_VERSION_NUM >= 140000
 #define PROCEDURE_CREATE(procedureName, procNamespace, replace, returnsSet, returnType, proowner, languageObjectId, languageValidator, prosrc, probin, prokind, security_definer, isLeakProof, isStrict, volatility, parallel, parameterTypes, allParameterTypes, parameterModes, parameterNames, parameterDefaults, trftypes, proconfig, procost, prorows) \
 	ProcedureCreate(procedureName, \
 					procNamespace, \
