@@ -251,16 +251,19 @@ SELECT * from pgtle.available_extension_versions() ORDER BY name;
  my_tle_4 | 1.0     | f         | f       | f           | my_tle_schema_2 | {my_tle_3,pg_tle} | My TLE
 (4 rows)
 
-\dx
-                                    List of installed extensions
-   Name   | Version | Default version |     Schema      |                Description                 
-----------+---------+-----------------+-----------------+--------------------------------------------
- my_tle_1 | 1.0     |                 | public          | My TLE
- my_tle_2 | 1.0     |                 | public          | My TLE
- my_tle_3 | 1.0     |                 | my_tle_schema_1 | My TLE
- my_tle_4 | 1.0     |                 | my_tle_schema_2 | My TLE
- pg_tle   | 1.5.0   | 1.5.0           | pgtle           | Trusted Language Extensions for PostgreSQL
- plpgsql  | 1.0     | 1.0             | pg_catalog      | PL/pgSQL procedural language
+SELECT e.extname, n.nspname, e.extrelocatable, e.extversion
+    FROM pg_extension e
+    INNER JOIN pg_namespace n
+    ON e.extnamespace = n.oid
+    ORDER BY extname ASC;
+ extname  |     nspname     | extrelocatable | extversion 
+----------+-----------------+----------------+------------
+ my_tle_1 | public          | f              | 1.0
+ my_tle_2 | public          | f              | 1.0
+ my_tle_3 | my_tle_schema_1 | f              | 1.0
+ my_tle_4 | my_tle_schema_2 | f              | 1.0
+ pg_tle   | pgtle           | f              | 1.5.0
+ plpgsql  | pg_catalog      | f              | 1.0
 (6 rows)
 
 -- Clean up. Drop the SQL and control functions explicitly to make sure the
