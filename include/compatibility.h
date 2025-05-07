@@ -484,7 +484,7 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 					parameterNames, \
 					parameterDefaults, \
 					trftypes, \
-					NULL, /* trfoids */ \
+					NIL, /* trfoids */ \
 					proconfig, \
 					InvalidOid,	/* prosupport */ \
 					procost, \
