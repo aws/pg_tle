@@ -1177,9 +1177,6 @@ execute_sql_string(const char *sql)
 				QueryDesc  *qdesc;
 
 				qdesc = CreateQueryDesc(stmt,
-#if PG_VERSION_NUM >= 180000
-										NULL,
-#endif
 										sql,
 										GetActiveSnapshot(), NULL,
 										dest, NULL, NULL, 0);
