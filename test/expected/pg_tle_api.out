@@ -464,6 +464,15 @@ SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clienta
 (1 row)
 
 -- now drop everything
+ALTER SYSTEM RESET pgtle.enable_password_check;
+ALTER SYSTEM RESET pgtle.passcheck_db_name;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+\c
 DROP FUNCTION password_check_length_greater_than_8;
 DROP SCHEMA pass CASCADE;
 NOTICE:  drop cascades to function pass.password_check_length_greater_than_8(text,text,pgtle.password_types,timestamp with time zone,boolean)

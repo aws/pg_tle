@@ -267,6 +267,10 @@ SELECT pg_reload_conf();
 SELECT pgtle.register_feature('password_check_length_greater_than_8', 'clientauth');
 SELECT pgtle.unregister_feature('password_check_length_greater_than_8', 'clientauth');
 -- now drop everything
+ALTER SYSTEM RESET pgtle.enable_password_check;
+ALTER SYSTEM RESET pgtle.passcheck_db_name;
+SELECT pg_reload_conf();
+\c
 DROP FUNCTION password_check_length_greater_than_8;
 DROP SCHEMA pass CASCADE;
 DROP EXTENSION pg_tle;
