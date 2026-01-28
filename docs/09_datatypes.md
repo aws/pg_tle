@@ -108,7 +108,7 @@ SELECT pgtle.create_base_type_if_not_exists('public', 'test_citext', 'test_citex
 
 ### `pgtle.create_operator_func(typenamespace regnamespace, typename name, opfunc regprocedure)`
 
-`create_operator_func` provides a way to create an operator function on the base data type previously defined by `create_base_type`. This function takes an operator function which accepts one or two arguments of type `bytea`, and creates an overloaded version which accpets the base data type as the arguments instead. This is not required to create an operator function, but it can be helpful while working with certain languages such as plrust.
+`create_operator_func` provides a way to create an operator function on the base data type previously defined by `create_base_type`. This function takes an operator function which accepts one or two arguments of type `bytea`, and creates an overloaded version which accepts the base data type as the arguments instead. This is not required to create an operator function, but it can be helpful while working with certain languages such as plrust.
 
 #### Role
 
