@@ -73,6 +73,9 @@
 #include "nodes/plannodes.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
+#if PG_VERSION_NUM >= 190000
+#include "parser/parse_node.h"
+#endif
 #include "storage/fd.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -86,6 +89,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/varlena.h"
+#include "utils/tuplestore.h"
 
 #include "constants.h"
 #include "tleextension.h"
@@ -1332,7 +1336,7 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 									 PGC_USERSET, PGC_S_SESSION,
 									 GetUserId(),
 									 GUC_ACTION_SAVE, true, 0, false);
-	if (log_min_messages < WARNING)
+	if (LOG_MIN_MESSAGES_VALUE < WARNING)
 		(void) set_config_option_ext("log_min_messages", "warning",
 									 PGC_SUSET, PGC_S_SESSION,
 									 BOOTSTRAP_SUPERUSERID,
@@ -2067,14 +2071,25 @@ CreateExtensionInternal(char *extensionName,
 
 		if (!OidIsValid(schemaOid))
 		{
+#if PG_VERSION_NUM >= 190000
+			ParseState *pstate = make_parsestate(NULL);
+#endif
 			CreateSchemaStmt *csstmt = makeNode(CreateSchemaStmt);
+
+#if PG_VERSION_NUM >= 190000
+			pstate->p_sourcetext = "(generated CREATE SCHEMA command)";
+#endif
 
 			csstmt->schemaname = schemaName;
 			csstmt->authrole = NULL;	/* will be created by current user */
 			csstmt->schemaElts = NIL;
 			csstmt->if_not_exists = false;
+#if PG_VERSION_NUM >= 190000
+			CreateSchemaCommand(pstate, csstmt, -1, -1);
+#else
 			CreateSchemaCommand(csstmt, "(generated CREATE SCHEMA command)",
 								-1, -1);
+#endif
 
 			/*
 			 * CreateSchemaCommand includes CommandCounterIncrement, so new

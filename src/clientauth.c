@@ -831,7 +831,7 @@ clientauth_sighup(SIGNAL_ARGS)
  * 3. pgtle.enable_clientauth is ON and no functions are registered with the clientauth feature
  */
 static bool
-can_allow_without_executing()
+can_allow_without_executing(void)
 {
 	List	   *proc_names;
 	Oid			extOid;
@@ -865,7 +865,7 @@ can_allow_without_executing()
  * 2. pgtle.enable_clientauth is REQUIRE and no functions are registered with the clientauth feature
  */
 static bool
-can_reject_without_executing()
+can_reject_without_executing(void)
 {
 	List	   *proc_names;
 	Oid			extOid;

@@ -382,7 +382,11 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 	CastCreate(sourcetypeid, targettypeid, funcid, castcontext, castmethod, behavior)
 #endif
 
-#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 190000
+#define FUNCNAME_GET_CANDIDATES(names, nargs, argnames, expand_variadic, expand_defaults, missing_ok) \
+	({ int _fgc_flags = 0; \
+	   FuncnameGetCandidates(names, nargs, argnames, expand_variadic, expand_defaults, false /* include_out_arguments */, missing_ok, &_fgc_flags); })
+#elif PG_VERSION_NUM >= 140000
 #define FUNCNAME_GET_CANDIDATES(names, nargs, argnames, expand_variadic, expand_defaults, missing_ok) \
 	FuncnameGetCandidates(names, nargs, argnames, expand_variadic, expand_defaults, false /* include_out_arguments */, missing_ok)
 #else
@@ -633,6 +637,24 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #else
 #define EXECUTOR_RUN(queryDesc, direction, count, execute_once) \
     ExecutorRun((queryDesc), (direction), (count), (execute_once))
+#endif
+
+/*
+ * PostgreSQL version 19
+ *
+ * pgstat.h no longer transitively includes utils/wait_event.h
+ * log_min_messages changed from int to int[]
+ * get_database_name moved to utils/lsyscache.h
+ * get_database_oid moved to catalog/pg_database.h
+ * CreateSchemaCommand signature changed to (ParseState*, CreateSchemaStmt*, int, int)
+ */
+#if (PG_VERSION_NUM >= 190000)
+#include "utils/wait_event.h"
+#include "catalog/pg_database.h"
+#include "utils/lsyscache.h"
+#define LOG_MIN_MESSAGES_VALUE log_min_messages[0]
+#else
+#define LOG_MIN_MESSAGES_VALUE log_min_messages
 #endif
 
 #endif							/* SET_USER_COMPAT_H */

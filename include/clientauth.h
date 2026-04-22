@@ -18,4 +18,4 @@
  * contains the changes needed by uni_api to load the functionality for
  * clientauth.
  */
-void		clientauth_init();
+void		clientauth_init(void);
