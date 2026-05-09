@@ -258,6 +258,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+\c -
 DROP FUNCTION test_validuntil;
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
