@@ -228,7 +228,7 @@ pg_tle_create_base_type_internal(Oid typeNamespace,
 	Oid			typeOid;
 	Oid			array_oid;
 	char	   *array_type;
-	ObjectAddress address;
+	ObjectAddress address PG_USED_FOR_ASSERTS_ONLY;
 	Oid			inputFuncParamType;
 	Oid			outputFuncParamType;
 	char	   *namespaceName;
