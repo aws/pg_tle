@@ -155,6 +155,7 @@ DROP SCHEMA testuser_2;
 DROP ROLE testuser_2;
 ALTER SYSTEM RESET pgtle.enable_password_check;
 SELECT pg_reload_conf();
+\c -
 DROP FUNCTION test_validuntil;
 DROP FUNCTION password_check_length_greater_than_8;
 DROP FUNCTION password_check_only_nums;
