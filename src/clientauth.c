@@ -519,7 +519,8 @@ clientauth_launcher_main(Datum arg)
 	}
 }
 
-/* Run the user's functions.
+/*
+ * Run the user's functions.
  *
  * This procedure should not do any transaction management (other than opening an SPI connection)
  * or shared memory accesses.

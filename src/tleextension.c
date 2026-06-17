@@ -1888,11 +1888,11 @@ find_install_path(List *evi_list, ExtensionVersionInfo *evi_target,
 }
 
 /*
-* Figures out which script(s) we need to run to install the desired
-* version of the extension.  If we do not have a script that directly
-* does what is needed, we try to find a sequence of update scripts that
-* will get us there.
-*/
+ * Figures out which script(s) we need to run to install the desired
+ * version of the extension.  If we do not have a script that directly
+ * does what is needed, we try to find a sequence of update scripts that
+ * will get us there.
+ */
 static List *
 find_versions_to_apply(ExtensionControlFile *pcontrol, const char **versionName)
 {
@@ -5207,12 +5207,12 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 }
 
 /*
-* Convert text array to list of strings.
-*
-* Note: the resulting list of strings is pallocated here.
-*
-* This is borrowed from pg_subscription.c
-*/
+ * Convert text array to list of strings.
+ *
+ * Note: the resulting list of strings is pallocated here.
+ *
+ * This is borrowed from pg_subscription.c
+ */
 static List *
 textarray_to_stringlist(ArrayType *textarray)
 {

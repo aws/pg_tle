@@ -131,8 +131,10 @@
 #define GETOBJECTDESCRIPTION(a)		getObjectDescription(a, false)
 #endif
 
-/* if prior to pg13, upgrade to newer macro defs.
- * This also adds support for PG_FINALLY  */
+/*
+ * if prior to pg13, upgrade to newer macro defs.
+ * This also adds support for PG_FINALLY
+ */
 #if PG_VERSION_NUM < 130000
 #ifdef PG_TRY
 #undef PG_TRY
