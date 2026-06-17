@@ -175,6 +175,66 @@ $_pg_tle_$
 $_pg_tle_$
 );
 
+-- @extschema@ and @extowner@ substitutions are filtered through
+-- quote_identifier(). A schema or owner name containing a character that
+-- cannot be consistently quoted inside and outside of string literals (any of
+-- " $ ' \) must be rejected rather than substituted into the script.
+
+-- An extension whose script references @extschema@ cannot be created into a
+-- schema whose name contains a quoting-relevant character.
+SELECT pgtle.install_extension
+(
+ 'ext_schema_subst',
+ '1.0',
+ 'references @extschema@',
+$_pgtle_$
+  CREATE FUNCTION whereami() RETURNS text AS $$ SELECT '@extschema@' $$ LANGUAGE SQL;
+$_pgtle_$
+);
+CREATE SCHEMA "bad""schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad""schema";
+-- the remaining quoting-relevant characters are rejected as well
+CREATE SCHEMA "bad$schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad$schema";
+CREATE SCHEMA "bad\schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad\schema";
+-- a schema with an ordinary name still works
+CREATE SCHEMA good_schema;
+CREATE EXTENSION ext_schema_subst SCHEMA good_schema;
+SELECT good_schema.whereami();
+DROP EXTENSION ext_schema_subst;
+SELECT pgtle.uninstall_extension('ext_schema_subst');
+DROP SCHEMA "bad""schema";
+DROP SCHEMA "bad$schema";
+DROP SCHEMA "bad\schema";
+DROP SCHEMA good_schema;
+
+-- An extension whose script references @extowner@ cannot be created by a role
+-- whose name contains a quoting-relevant character. (The role is created as a
+-- superuser only to avoid unrelated privilege setup; the substitution and its
+-- validation run regardless of the caller's privileges.)
+CREATE ROLE " owner'" SUPERUSER LOGIN;
+SELECT pgtle.install_extension
+(
+ 'ext_owner_subst',
+ '1.0',
+ 'references @extowner@',
+$_pgtle_$
+  CREATE FUNCTION owned_by() RETURNS text AS $$ SELECT '@extowner@' $$ LANGUAGE SQL;
+$_pgtle_$
+);
+SET SESSION AUTHORIZATION " owner'";
+CREATE SCHEMA owner_schema;
+-- this should fail
+CREATE EXTENSION ext_owner_subst SCHEMA owner_schema;
+RESET SESSION AUTHORIZATION;
+SELECT pgtle.uninstall_extension('ext_owner_subst');
+DROP SCHEMA owner_schema;
+DROP ROLE " owner'";
+
 -- cleanup
 DROP EXTENSION pg_tle;
 DROP SCHEMA pgtle;
