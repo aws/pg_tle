@@ -245,6 +245,15 @@ CREATE SCHEMA "bad""schema";
 -- this should fail
 CREATE EXTENSION ext_schema_subst SCHEMA "bad""schema";
 ERROR:  invalid character in extension "ext_schema_subst" schema: must not contain any of ""$'\"
+-- the remaining quoting-relevant characters are rejected as well
+CREATE SCHEMA "bad$schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad$schema";
+ERROR:  invalid character in extension "ext_schema_subst" schema: must not contain any of ""$'\"
+CREATE SCHEMA "bad\schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad\schema";
+ERROR:  invalid character in extension "ext_schema_subst" schema: must not contain any of ""$'\"
 -- a schema with an ordinary name still works
 CREATE SCHEMA good_schema;
 CREATE EXTENSION ext_schema_subst SCHEMA good_schema;
@@ -262,6 +271,8 @@ SELECT pgtle.uninstall_extension('ext_schema_subst');
 (1 row)
 
 DROP SCHEMA "bad""schema";
+DROP SCHEMA "bad$schema";
+DROP SCHEMA "bad\schema";
 DROP SCHEMA good_schema;
 -- An extension whose script references @extowner@ cannot be created by a role
 -- whose name contains a quoting-relevant character. (The role is created as a

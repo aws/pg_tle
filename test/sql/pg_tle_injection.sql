@@ -194,6 +194,13 @@ $_pgtle_$
 CREATE SCHEMA "bad""schema";
 -- this should fail
 CREATE EXTENSION ext_schema_subst SCHEMA "bad""schema";
+-- the remaining quoting-relevant characters are rejected as well
+CREATE SCHEMA "bad$schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad$schema";
+CREATE SCHEMA "bad\schema";
+-- this should fail
+CREATE EXTENSION ext_schema_subst SCHEMA "bad\schema";
 -- a schema with an ordinary name still works
 CREATE SCHEMA good_schema;
 CREATE EXTENSION ext_schema_subst SCHEMA good_schema;
@@ -201,6 +208,8 @@ SELECT good_schema.whereami();
 DROP EXTENSION ext_schema_subst;
 SELECT pgtle.uninstall_extension('ext_schema_subst');
 DROP SCHEMA "bad""schema";
+DROP SCHEMA "bad$schema";
+DROP SCHEMA "bad\schema";
 DROP SCHEMA good_schema;
 
 -- An extension whose script references @extowner@ cannot be created by a role
