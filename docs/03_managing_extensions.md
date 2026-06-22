@@ -278,6 +278,33 @@ This functions returns `true` on success.
 * `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
 * `version`: The version of the extension to set the default.
 
+### `pgtle.set_extension_schema(name text, schema text)`
+
+`set_extension_schema` sets, changes, or clears the schema recorded for an installed extension. The schema is the value that PostgreSQL uses to place the extension's objects when `CREATE EXTENSION` is called. This is helpful for pinning an extension that was installed without a schema, for example before schema support was added in `pg_tle` 1.5.0, to a specific schema without uninstalling and reinstalling it (which would drop any data in its tables).
+
+Pass `NULL` as `schema` to clear the recorded schema, reverting the extension to having no fixed schema.
+
+This only affects future `CREATE EXTENSION` calls (including restoring from a `pg_dump`). It does not move an extension that is already created; use `ALTER EXTENSION ... SET SCHEMA` for that.
+
+If the extension in `name` does not already exist, this returns an error.
+
+This function returns `true` on success.
+
+#### Role
+
+`pgtle_admin`
+
+#### Arguments
+
+* `name`: The name of the extension. This is the value used when calling `CREATE EXTENSION`.
+* `schema`: The schema in which the extension's objects are created, or `NULL` to clear the recorded schema.
+
+#### Example
+
+```sql
+SELECT pgtle.set_extension_schema('pg_tle_test', 'tle_schema');
+```
+
 ### `pgtle.uninstall_extension(extname text)`
 
 `uninstall_extension` removes all versions of an extension from a database. This prevents future calls of `CREATE EXTENSION` from installing the extension. If the extension does not exist in the database, then an error is raised.
