@@ -557,6 +557,25 @@ check_valid_version_name(const char *versionname)
 }
 
 /*
+ * pg_tle represents each extension artifact as a function whose name is
+ * derived from the extension name and version (e.g. "<name>.control" or
+ * "<name>--<version>.sql").  PostgreSQL silently truncates identifiers at
+ * NAMEDATALEN, so a derived name that exceeds that limit would collide with
+ * other artifacts of the same extension once truncated.  Reject such names up
+ * front with a clear message rather than create colliding functions.
+ */
+static void
+check_generated_function_name(const char *funcname)
+{
+	if (strlen(funcname) >= NAMEDATALEN)
+		ereport(ERROR,
+				(errcode(ERRCODE_NAME_TOO_LONG),
+				 errmsg("generated function name \"%s\" is too long", funcname),
+				 errdetail("pg_tle function names must be less than %d bytes.",
+						   NAMEDATALEN)));
+}
+
+/*
  * Utility functions to handle extension-related path names
  */
 static bool
@@ -4641,6 +4660,8 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 	 */
 	sqlname = psprintf("%s--%s.sql", extname, extvers);
 	ctlname = psprintf("%s.control", extname);
+	check_generated_function_name(sqlname);
+	check_generated_function_name(ctlname);
 
 	/*
 	 * Check if PG_TLE_EXTNAME is in the list of requirements. Meanwhile, also
@@ -4859,6 +4880,7 @@ pg_tle_install_extension_version_sql(PG_FUNCTION_ARGS)
 	 * Build appropriate function names based on extension name and version
 	 */
 	sqlname = psprintf("%s--%s.sql", extname, extvers);
+	check_generated_function_name(sqlname);
 
 	/*
 	 * Validate that there are no injections using the dollar-quoted strings
@@ -5012,6 +5034,7 @@ pg_tle_install_update_path(PG_FUNCTION_ARGS)
 				 errhint("This may be an attempt at a SQL injection attack. Please verify your installation file.")));
 
 	sqlname = psprintf("%s--%s--%s.sql", extname, fromvers, tovers);
+	check_generated_function_name(sqlname);
 	sqlsql = psprintf(
 					  "CREATE FUNCTION %s.%s() RETURNS TEXT AS %s"
 					  "SELECT %s%s%s%s LANGUAGE SQL",

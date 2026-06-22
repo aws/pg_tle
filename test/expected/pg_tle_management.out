@@ -860,6 +860,97 @@ SELECT pgtle.uninstall_extension('foo@bar');
  t
 (1 row)
 
+-- pg_tle represents each extension artifact as a function whose name is
+-- derived from the extension name and version (e.g. "<name>.control" or
+-- "<name>--<version>.sql").  PostgreSQL truncates identifiers at NAMEDATALEN
+-- (63 bytes), so a derived name longer than that would collide with the
+-- extension's other artifacts once truncated.  These must be rejected up
+-- front rather than silently create colliding functions.
+-- An extension name that overflows the generated function name is rejected
+-- and nothing is created.
+SELECT pgtle.install_extension
+(
+ 'test9greaterthanNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALEN',
+ '0.1',
+ 'comment',
+ $_pgtle_$ SELECT 1; $_pgtle_$
+);
+ERROR:  generated function name "test9greaterthanNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALENNAMEDATALEN--0.1.sql" is too long
+DETAIL:  pg_tle function names must be less than 64 bytes.
+SELECT count(*) AS leftover_funcs FROM pg_proc
+  WHERE pronamespace = 'pgtle'::regnamespace AND proname LIKE 'test9%';
+ leftover_funcs 
+----------------
+              0
+(1 row)
+
+-- A long version on a short name overflows the "--<version>.sql" form and is
+-- likewise rejected, both via install_extension and install_extension_version.
+SELECT pgtle.install_extension
+(
+ 'shortname',
+ '012345678901234567890123456789012345678901234567890123456789',
+ 'comment',
+ $_pgtle_$ SELECT 1; $_pgtle_$
+);
+ERROR:  generated function name "shortname--012345678901234567890123456789012345678901234567890123456789.sql" is too long
+DETAIL:  pg_tle function names must be less than 64 bytes.
+SELECT pgtle.install_extension('shortname', '1.0', 'comment', $_pgtle_$ SELECT 1; $_pgtle_$);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT pgtle.install_extension_version_sql
+(
+ 'shortname',
+ '012345678901234567890123456789012345678901234567890123456789',
+ $_pgtle_$ SELECT 1; $_pgtle_$
+);
+ERROR:  generated function name "shortname--012345678901234567890123456789012345678901234567890123456789.sql" is too long
+DETAIL:  pg_tle function names must be less than 64 bytes.
+-- ... and the "--<from>--<to>.sql" update-path form too.
+SELECT pgtle.install_update_path
+(
+ 'shortname',
+ '1.0',
+ '012345678901234567890123456789012345678901234567890123456789',
+ $_pgtle_$ SELECT 1; $_pgtle_$
+);
+ERROR:  generated function name "shortname--1.0--012345678901234567890123456789012345678901234567890123456789.sql" is too long
+DETAIL:  pg_tle function names must be less than 64 bytes.
+SELECT pgtle.uninstall_extension('shortname');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+-- A name at the limit (the generated ".sql" name is 63 bytes) still works.
+SELECT pgtle.install_extension
+(
+ 'n5456789012345678901234567890123456789012345678901234',
+ '1.0',
+ 'comment',
+ $_pgtle_$ SELECT 1; $_pgtle_$
+);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT name FROM pgtle.available_extensions()
+  WHERE name = 'n5456789012345678901234567890123456789012345678901234';
+                         name                          
+-------------------------------------------------------
+ n5456789012345678901234567890123456789012345678901234
+(1 row)
+
+SELECT pgtle.uninstall_extension('n5456789012345678901234567890123456789012345678901234');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
 -- Skip TransactionStmts
 BEGIN;
 SELECT pgtle.available_extension_versions();
