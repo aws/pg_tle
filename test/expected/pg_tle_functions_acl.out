@@ -181,18 +181,17 @@ SELECT pgtle.set_default_version('', '');
 ERROR:  invalid extension name: ""
 DETAIL:  Extension names must not be empty.
 SELECT pgtle.uninstall_extension('');
-ERROR:  must be owner of function test_ext.control
-CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
-PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
+ERROR:  Extension  does not exist
+CONTEXT:  PL/pgSQL function uninstall_extension(text) line 23 at RAISE
 SELECT pgtle.uninstall_extension('', '');
 ERROR:  Version  of extension  is not installed and therefore can not be uninstalled
-CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 50 at RAISE
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 61 at RAISE
 SELECT pgtle.uninstall_extension_if_exists('');
-ERROR:  must be owner of function test_ext.control
-CONTEXT:  SQL statement "DROP FUNCTION "test_ext.control"()"
-PL/pgSQL function uninstall_extension(text) line 22 at EXECUTE
-SQL statement "SELECT pgtle.uninstall_extension(extname)"
-PL/pgSQL function uninstall_extension_if_exists(text) line 3 at PERFORM
+ uninstall_extension_if_exists 
+-------------------------------
+ f
+(1 row)
+
 SELECT pgtle.uninstall_update_path('', '', '');
 ERROR:  Extension  does not exist
 CONTEXT:  PL/pgSQL function uninstall_update_path(text,text,text) line 16 at RAISE

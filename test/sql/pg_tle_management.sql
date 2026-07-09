@@ -610,6 +610,35 @@ SELECT name FROM pgtle.available_extensions()
   WHERE name = 'n5456789012345678901234567890123456789012345678901234';
 SELECT pgtle.uninstall_extension('n5456789012345678901234567890123456789012345678901234');
 
+-- uninstall must not remove another extension whose name it is a prefix of, nor treat '_' as a wildcard
+-- set up a prefix target with an update path, a longer-named sibling, and an underscore decoy
+SELECT pgtle.install_extension('col_a', '1.0', 'prefix', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.install_extension_version_sql('col_a', '1.1', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.install_update_path('col_a', '1.0', '1.1', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.install_extension('col_a_b', '1.0', 'longer sibling', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.install_extension('col_axb', '1.0', 'underscore decoy', $_pgtle_$ SELECT 1; $_pgtle_$);
+
+-- prefix uninstall removes only col_a's artifacts; the sibling and decoy survive
+SELECT pgtle.uninstall_extension('col_a');
+SELECT name FROM pgtle.available_extensions()
+  WHERE name IN ('col_a', 'col_a_b', 'col_axb') ORDER BY name;
+
+-- the '_' in col_a_b must not act as a wildcard and sweep up col_axb
+SELECT pgtle.uninstall_extension('col_a_b');
+SELECT name FROM pgtle.available_extensions()
+  WHERE name IN ('col_a', 'col_a_b', 'col_axb') ORDER BY name;
+
+-- the (name, version) form drops the control function by exact name, not by prefix, so pfx_b survives
+SELECT pgtle.install_extension('pfx', '1.0', 'prefix2', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.install_extension('pfx_b', '1.0', 'sibling2', $_pgtle_$ SELECT 1; $_pgtle_$);
+SELECT pgtle.uninstall_extension('pfx', '1.0');
+SELECT name FROM pgtle.available_extensions()
+  WHERE name IN ('pfx', 'pfx_b') ORDER BY name;
+
+-- clean up the remaining collision-test artifacts
+SELECT pgtle.uninstall_extension('col_axb');
+SELECT pgtle.uninstall_extension('pfx_b');
+
 -- Skip TransactionStmts
 BEGIN;
 SELECT pgtle.available_extension_versions();
