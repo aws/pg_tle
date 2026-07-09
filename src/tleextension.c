@@ -139,10 +139,10 @@ typedef struct ExtensionVersionInfo
 } ExtensionVersionInfo;
 
 /* callback to cleanup on abort */
-bool		cb_registered = false;
+static bool cb_registered = false;
 
 /* global indicator we are manipulating pg_tle artifacts */
-bool		tleart = false;
+static bool tleart = false;
 #define SET_TLEART \
 	do { \
 		if (!cb_registered) \
@@ -158,7 +158,7 @@ bool		tleart = false;
 	} while (0)
 
 /* global indicator to use tle strings rather than files */
-bool		tleext = false;
+static bool tleext = false;
 #define SET_TLEEXT \
 	do { \
 		if (!cb_registered) \
