@@ -31,6 +31,9 @@
 ### 17. Malformed strings cannot be used for SQL injection
 ### 18. pg_tle can be updated from 1.4.0 to 1.5.0 without affecting clientauth functions
 ### 19. application_name field works
+### 20. Nonexistent pgtle.clientauth_db_name does not lock users out (enable_clientauth = 'on')
+### 21. Nonexistent pgtle.clientauth_db_name returns a clear error (enable_clientauth = 'require')
+### 22. Workers dying after startup (DROP DATABASE) do not hang new connections
 
 use strict;
 use warnings;
@@ -360,6 +363,60 @@ $node->safe_psql('postgres', q[
 $node->psql('not_excluded', 'select', extra_params => ['-U', 'testuser'], stderr => \$psql_err);
 like($psql_err, qr/FATAL:  004_pg_tle_clientauth.pl/,
     "application_name field works on pg_tle 1.5.0");
+
+### 20-22 use bounded psql timeouts so a regression that reintroduces the
+### hang is caught deterministically instead of stalling the suite.
+
+### 20. Nonexistent clientauth_db_name + 'on' -> accept the connection.
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_users_to_skip = ''));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_databases_to_skip = ''));
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_db_name = 'ghost_clientauth_db_does_not_exist'));
+$node->restart;
+
+my ($missing_out, $missing_err) = ('', '');
+my $missing_rc = $node->psql('postgres', 'SELECT 1',
+    stdout => \$missing_out, stderr => \$missing_err, timeout => 15);
+is($missing_rc, 0, "enable_clientauth=on: nonexistent clientauth_db_name still allows connections");
+like($missing_out, qr/^1$/, "enable_clientauth=on: client backend actually executes the query");
+
+### 21. Nonexistent clientauth_db_name + 'require' -> clear FATAL.
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'require'));
+$node->restart;
+
+my $require_err = '';
+$node->psql('postgres', 'SELECT 1', stderr => \$require_err, timeout => 15);
+like($require_err,
+    qr/FATAL:  pgtle\.enable_clientauth is set to require, but no clientauth background worker is running for this connection/,
+    "enable_clientauth=require: nonexistent clientauth_db_name rejects with actionable error");
+
+### 22. Workers dying after startup (DROP DATABASE clientauth_db_name) must not
+### hang new connections. Turn clientauth off first because we're currently in
+### 'require' with a ghost DB, then create/point-at a real DB, drop it, retry.
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'off'));
+$node->restart;
+$node->safe_psql('postgres', 'CREATE DATABASE clientauth_db');
+$node->append_conf('postgresql.conf', qq(pgtle.enable_clientauth = 'on'));
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_db_name = 'clientauth_db'));
+$node->restart;
+
+is($node->psql('postgres', 'SELECT 1', timeout => 15), 0,
+    "die-after-start: connections succeed while clientauth_db exists");
+
+# Worker is attached to clientauth_db, so FORCE evicts it. bgw_restart_time=1s
+# + attach FATAL is < 3s; 5s of headroom for CI jitter.
+$node->safe_psql('postgres', 'DROP DATABASE clientauth_db WITH (FORCE)');
+sleep 5;
+
+my $post_out = '';
+my $post_rc = $node->psql('postgres', 'SELECT 1',
+    stdout => \$post_out, timeout => 15);
+is($post_rc, 0, "die-after-start: connection does not hang after DROP DATABASE");
+like($post_out, qr/^1$/, "die-after-start: client backend executes the query");
+
+# Restore a valid clientauth_db_name so the trailing $node->stop is clean.
+$node->append_conf('postgresql.conf', qq(pgtle.clientauth_db_name = 'postgres'));
+$node->restart;
 
 $node->stop;
 done_testing();

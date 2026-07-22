@@ -96,6 +96,8 @@
  * user function
  */
 #define CLIENT_AUTH_USER_ERROR_MAX_STRLEN 256
+/* How long clientauth_hook() waits for a worker to attach before falling back. */
+#define CLIENTAUTH_WORKER_READY_TIMEOUT_MS 3000
 
 /*
  * Fixed-length subset of Port, passed to user function. A corresponding SQL
@@ -188,6 +190,21 @@ typedef struct ClientAuthBgwShmemSharedState
 
 	/* Connection queue state */
 	ClientAuthStatusEntry requests[CLIENT_AUTH_MAX_PENDING_ENTRIES];
+
+	/*
+	 * Per-shard liveness. worker_live[i] is set by worker i after its
+	 * BackgroundWorkerInitializeConnection() succeeds and cleared by
+	 * before_shmem_exit on any exit. Requests are sharded (requests[j] is
+	 * owned by worker j % num_parallel_workers), so the hook must verify the
+	 * target shard specifically. The worker publishes liveness because
+	 * clientauth_hook runs before InitPostgres and cannot itself read
+	 * pg_database. Only the first num_parallel_workers entries are used.
+	 *
+	 * worker_live_cv is signalled on the false->true transition; worker exits
+	 * wake queued clients directly via each request's client_cv.
+	 */
+	bool		worker_live[CLIENT_AUTH_MAX_PENDING_ENTRIES];
+	ConditionVariable worker_live_cv;
 }			ClientAuthBgwShmemSharedState;
 
 static const char *clientauth_shmem_name = "pgtle_clientauth";
@@ -212,6 +229,9 @@ static void clientauth_shmem_request(void);
 /* Helper functions */
 static Size clientauth_shared_memsize(void);
 static void clientauth_sighup(SIGNAL_ARGS);
+static bool wait_for_clientauth_worker_live(int bgw_idx);
+static void clientauth_worker_before_shmem_exit(int code, Datum arg);
+static void clientauth_fallback_no_worker(const char *reason);
 
 void		clientauth_init(void);
 static bool can_allow_without_executing(void);
@@ -376,6 +396,16 @@ clientauth_launcher_main(Datum arg)
 
 	/* Initialize connection to the database */
 	BackgroundWorkerInitializeConnection(clientauth_database_name, NULL, 0);
+
+	/*
+	 * Register cleanup before publishing, so any later FATAL still clears the
+	 * flag.
+	 */
+	before_shmem_exit(clientauth_worker_before_shmem_exit, Int32GetDatum(bgw_idx));
+	LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+	clientauth_ss->worker_live[bgw_idx] = true;
+	LWLockRelease(clientauth_ss->lock);
+	ConditionVariableBroadcast(&clientauth_ss->worker_live_cv);
 
 	/* Main worker loop */
 	while (true)
@@ -655,6 +685,16 @@ clientauth_hook(Port *port, int status)
 		return;
 
 	/*
+	 * Don't enqueue if the request's shard has no live worker (bad db,
+	 * exhausted slots).
+	 */
+	if (!wait_for_clientauth_worker_live(idx % clientauth_num_parallel_workers))
+	{
+		clientauth_fallback_no_worker("did not attach within timeout");
+		return;
+	}
+
+	/*
 	 * If the queue entry is not available, wait until another client using it
 	 * has signalled that they are done
 	 */
@@ -721,17 +761,51 @@ clientauth_hook(Port *port, int status)
 	clientauth_ss->requests[idx].done_processing = false;
 	LWLockRelease(clientauth_ss->lock);
 
-	ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
-	while (true)
+	/*
+	 * Wait for the worker to signal done_processing, polling worker liveness
+	 * so a worker that dies mid-request doesn't hang us. On exit the lock is
+	 * still held in LW_SHARED for the trailing "erase" block, unless the
+	 * worker died -- in which case we roll the entry back and fall back.
+	 */
 	{
-		LWLockAcquire(clientauth_ss->lock, LW_SHARED);
-		if (clientauth_ss->requests[idx].done_processing)
-			break;
+		int			shard = idx % clientauth_num_parallel_workers;
+		bool		worker_died = false;
 
-		LWLockRelease(clientauth_ss->lock);
-		ConditionVariableSleep(&clientauth_ss->requests[idx].client_cv, WAIT_EVENT_MESSAGE_QUEUE_RECEIVE);
+		ConditionVariablePrepareToSleep(&clientauth_ss->requests[idx].client_cv);
+		while (true)
+		{
+			LWLockAcquire(clientauth_ss->lock, LW_SHARED);
+			if (clientauth_ss->requests[idx].done_processing)
+				break;			/* keep lock held */
+			if (!clientauth_ss->worker_live[shard])
+			{
+				LWLockRelease(clientauth_ss->lock);
+				worker_died = true;
+				break;
+			}
+			LWLockRelease(clientauth_ss->lock);
+
+			CHECK_FOR_INTERRUPTS();
+			(void) PGTLE_ConditionVariableTimedSleep(&clientauth_ss->requests[idx].client_cv,
+													 1000,
+													 PG_WAIT_EXTENSION);
+		}
+		ConditionVariableCancelSleep();
+
+		if (worker_died)
+		{
+			LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+			clientauth_ss->requests[idx].pid = 0;
+			memset(&clientauth_ss->requests[idx].port_info, 0, sizeof(PortSubset));
+			clientauth_ss->requests[idx].status = 0;
+			clientauth_ss->requests[idx].done_processing = true;
+			clientauth_ss->requests[idx].available_entry = true;
+			LWLockRelease(clientauth_ss->lock);
+			ConditionVariableSignal(clientauth_ss->requests[idx].available_entry_cv_ptr);
+			clientauth_fallback_no_worker("exited before returning");
+			return;
+		}
 	}
-	ConditionVariableCancelSleep();
 
 	/* Copy results of BGW processing from shared memory */
 	snprintf(error_msg, CLIENT_AUTH_USER_ERROR_MAX_STRLEN, "%s", clientauth_ss->requests[idx].error_msg);
@@ -789,6 +863,9 @@ clientauth_shmem_startup(void)
 			clientauth_ss->requests[i].done_processing = true;
 			clientauth_ss->requests[i].available_entry = true;
 		}
+
+		memset(clientauth_ss->worker_live, 0, sizeof(clientauth_ss->worker_live));
+		ConditionVariableInit(&clientauth_ss->worker_live_cv);
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -821,6 +898,79 @@ static void
 clientauth_sighup(SIGNAL_ARGS)
 {
 	clientauth_reload_config = true;
+}
+
+/* Wait (bounded) for worker_live[bgw_idx] to become true. */
+static bool
+wait_for_clientauth_worker_live(int bgw_idx)
+{
+	TimestampTz deadline = TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
+													   CLIENTAUTH_WORKER_READY_TIMEOUT_MS);
+	bool		live = false;
+
+	ConditionVariablePrepareToSleep(&clientauth_ss->worker_live_cv);
+	for (;;)
+	{
+		long		remaining_ms;
+
+		CHECK_FOR_INTERRUPTS();
+
+		LWLockAcquire(clientauth_ss->lock, LW_SHARED);
+		live = clientauth_ss->worker_live[bgw_idx];
+		LWLockRelease(clientauth_ss->lock);
+		if (live)
+			break;
+
+		remaining_ms = TimestampDifferenceMilliseconds(GetCurrentTimestamp(), deadline);
+		if (remaining_ms <= 0)
+			break;
+
+		(void) PGTLE_ConditionVariableTimedSleep(&clientauth_ss->worker_live_cv,
+												 remaining_ms, PG_WAIT_EXTENSION);
+	}
+	ConditionVariableCancelSleep();
+	return live;
+}
+
+/*
+ * Clear this worker's liveness flag on exit and wake any client currently
+ * waiting for this shard, so they observe the worker death promptly instead
+ * of paying up to 1s (per client) for their next poll cycle.
+ */
+static void
+clientauth_worker_before_shmem_exit(int code, Datum arg)
+{
+	int			bgw_idx = DatumGetInt32(arg);
+
+	LWLockAcquire(clientauth_ss->lock, LW_EXCLUSIVE);
+	clientauth_ss->worker_live[bgw_idx] = false;
+	LWLockRelease(clientauth_ss->lock);
+
+	for (int j = bgw_idx; j < CLIENT_AUTH_MAX_PENDING_ENTRIES;
+		 j += clientauth_num_parallel_workers)
+		ConditionVariableBroadcast(&clientauth_ss->requests[j].client_cv);
+}
+
+/*
+ * Fallback when no live worker will service this connection: LOG (with an
+ * actionable hint) and, under FEATURE_REQUIRE, FATAL. Otherwise return so
+ * the hook accepts the connection (matches can_allow_without_executing()).
+ */
+static void
+clientauth_fallback_no_worker(const char *reason)
+{
+	ereport(LOG,
+			errmsg("\"%s.clientauth\" background worker %s",
+				   PG_TLE_NSPNAME, reason),
+			errhint("Check that pgtle.clientauth_db_name (\"%s\") names an existing database and that max_worker_processes is large enough.",
+					clientauth_database_name));
+
+	if (enable_clientauth_feature == FEATURE_REQUIRE)
+		ereport(FATAL,
+				errcode(ERRCODE_CONNECTION_EXCEPTION),
+				errmsg("pgtle.enable_clientauth is set to require, but no clientauth background worker is running for this connection"),
+				errhint("Check that pgtle.clientauth_db_name (\"%s\") names an existing database.",
+						clientauth_database_name));
 }
 
 /*
