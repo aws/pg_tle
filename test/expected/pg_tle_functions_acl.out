@@ -163,7 +163,7 @@ SELECT pgtle.install_extension_version_sql('', '', '');
 ERROR:  invalid extension name: ""
 DETAIL:  Extension names must not be empty.
 SELECT pgtle.register_feature('op(bytea)'::regprocedure, 'passcheck');
-NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+WARNING:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
  register_feature 
 ------------------
  
@@ -171,7 +171,7 @@ NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgt
 
 SELECT pgtle.register_feature_if_not_exists('op(bytea)'::regprocedure,
     'passcheck');
-NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+WARNING:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
  register_feature_if_not_exists 
 --------------------------------
  f
