@@ -182,10 +182,10 @@ ERROR:  invalid extension name: ""
 DETAIL:  Extension names must not be empty.
 SELECT pgtle.uninstall_extension('');
 ERROR:  Extension  does not exist
-CONTEXT:  PL/pgSQL function uninstall_extension(text) line 23 at RAISE
+CONTEXT:  PL/pgSQL function uninstall_extension(text) line 29 at RAISE
 SELECT pgtle.uninstall_extension('', '');
 ERROR:  Version  of extension  is not installed and therefore can not be uninstalled
-CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 61 at RAISE
+CONTEXT:  PL/pgSQL function uninstall_extension(text,text) line 66 at RAISE
 SELECT pgtle.uninstall_extension_if_exists('');
  uninstall_extension_if_exists 
 -------------------------------

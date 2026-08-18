@@ -17,6 +17,9 @@
  *
  * 4. pgtle.available_extensions() and pgtle.available_extension_versions()
  *    print the correct output for a variety of extensions.
+ *
+ * 5. pgtle.set_extension_schema() sets, changes, or clears the schema recorded
+ *    for an already-installed extension.
  */
 
 \pset pager off
@@ -172,7 +175,67 @@ DROP FUNCTION pgtle."my_tle_2--1.0.sql" CASCADE;
 DROP FUNCTION pgtle."my_tle_2.control" CASCADE;
 DROP FUNCTION pgtle."my_tle_1--1.0.sql" CASCADE;
 DROP FUNCTION pgtle."my_tle_1.control" CASCADE;
-DROP EXTENSION pg_tle CASCADE;
-DROP SCHEMA pgtle;
+
+/*
+ * 5. pgtle.set_extension_schema() sets, changes, or clears the schema recorded
+ *    for an already-installed extension.  This lets an extension installed
+ *    without a schema (e.g. before pg_tle 1.5) adopt one without being
+ *    uninstalled and reinstalled.
+ */
+
+-- set_extension_schema was added in pg_tle 1.5.3; the earlier sections leave
+-- pg_tle at 1.5.0, so update to the latest version first.
+ALTER EXTENSION pg_tle UPDATE;
+
+-- Reset the schemas used here (earlier sections may have left them behind).
+DROP SCHEMA IF EXISTS my_tle_schema_1 CASCADE;
+DROP SCHEMA IF EXISTS my_tle_schema_2 CASCADE;
+CREATE SCHEMA my_tle_schema_1;
+CREATE SCHEMA my_tle_schema_2;
+
+-- Install an extension without a schema, as pg_tle did before 1.5.
+SELECT pgtle.install_extension('my_tle', '1.0', 'My TLE',
+    $_pgtle_$
+        CREATE OR REPLACE FUNCTION my_tle_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT 1';
+    $_pgtle_$);
+SELECT name, schema FROM pgtle.available_extensions() WHERE name = 'my_tle';
+
+-- Adopt a schema after the fact.
+SELECT pgtle.set_extension_schema('my_tle', 'my_tle_schema_1');
+SELECT name, schema FROM pgtle.available_extensions() WHERE name = 'my_tle';
+
+-- A newly created extension honors the adopted schema and is pinned to it.
+CREATE EXTENSION my_tle;
+SELECT n.nspname FROM pg_extension e
+    INNER JOIN pg_namespace n ON e.extnamespace = n.oid
+    WHERE e.extname = 'my_tle';
+SELECT my_tle_schema_1.my_tle_func();
+DROP EXTENSION my_tle;
+-- Cannot be created in a different schema.
+CREATE EXTENSION my_tle SCHEMA my_tle_schema_2;
+
+-- Changing the schema is allowed.
+SELECT pgtle.set_extension_schema('my_tle', 'my_tle_schema_2');
+SELECT name, schema FROM pgtle.available_extensions() WHERE name = 'my_tle';
+
+-- Passing NULL clears the recorded schema.
+SELECT pgtle.set_extension_schema('my_tle', NULL);
+SELECT name, schema FROM pgtle.available_extensions() WHERE name = 'my_tle';
+
+-- Negative cases.
+-- The extension must exist.
+SELECT pgtle.set_extension_schema('does_not_exist', 'my_tle_schema_1');
+-- The schema name must not contain characters that cannot be quoted safely.
+SELECT pgtle.set_extension_schema('my_tle', 'bad"schema');
+-- The empty string is rejected; NULL is the way to clear the schema.
+SELECT pgtle.set_extension_schema('my_tle', '');
+-- "name" is required.
+SELECT pgtle.set_extension_schema(NULL, 'my_tle_schema_1');
+
+SELECT pgtle.uninstall_extension('my_tle');
 DROP SCHEMA my_tle_schema_1;
 DROP SCHEMA my_tle_schema_2;
+
+DROP EXTENSION pg_tle CASCADE;
+DROP SCHEMA pgtle;

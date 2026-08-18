@@ -1,3 +1,5 @@
+Inspired by a patch authored by Andrey Borodin <amborodin86@gmail.com> and proposed to the PostgreSQL hackers mailing list, https://www.postgresql.org/message-id/CAAhFRxitJv%3DyoGnXUgeLB_O%2BM7J2BJAmb5jqAT9gZ3bij3uLDA%40mail.gmail.com.
+
 ## Generating a UUID v7
 
 [Universally unique identifiers](https://en.wikipedia.org/wiki/Universally_unique_identifier) (UUIDs) are a data type frequently used as primary keys due to their uniqueness property. Historically, one of the most popular methods of generating UUIDs was UUID v4, which randomly generated the UUID. However, this often caused poor index locality, as compared to a monotonically increasing integer, and can impact how quickly users can retrieve rows from a database. To improve this experience, [UUID v7](https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format-04#name-uuid-version-7) was proposed, which stores a portion of a UNIX timestamp in the first 48-bits before allowing for the generation of random data.

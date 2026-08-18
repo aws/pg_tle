@@ -26,6 +26,14 @@
 #define PG_TLE_ADMIN				"pgtle_admin"
 
 /*
+ * Characters that cannot be quoted consistently both inside and outside of
+ * string literals.  Identifiers substituted into extension scripts, or stored
+ * where they will be substituted later, are rejected if they contain any of
+ * these.
+ */
+#define PG_TLE_QUOTING_RELEVANT_CHARS	"\"$'\\"
+
+/*
  * creating_extension is only true while running a CREATE EXTENSION or ALTER
  * EXTENSION UPDATE command.  It instructs recordDependencyOnCurrentExtension()
  * to register a dependency on the current pg_extension object for each SQL

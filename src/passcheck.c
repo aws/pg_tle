@@ -81,7 +81,7 @@ static const char *passcheck_shmem_name = "pgtle_passcheck";
 
 
 /*  This should match crypt.h */
-char	   *pass_types[3] = {"PASSWORD_TYPE_PLAINTEXT", "PASSWORD_TYPE_MD5", "PASSWORD_TYPE_SCRAM_SHA_256"};
+static char *pass_types[3] = {"PASSWORD_TYPE_PLAINTEXT", "PASSWORD_TYPE_MD5", "PASSWORD_TYPE_SCRAM_SHA_256"};
 
 /* Represents password_check_hook parameters. */
 typedef struct PasswordCheckHookData
