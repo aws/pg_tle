@@ -5,6 +5,7 @@
 */
 \pset pager off
 CREATE EXTENSION pg_tle;
+WARNING:  Role "pgtle_admin" already exists. Skipping.
 -- create semi-privileged role to manipulate pg_tle artifacts
 CREATE ROLE dbadmin;
 GRANT pgtle_admin TO dbadmin;

@@ -12,6 +12,7 @@ SELECT rolsuper FROM pg_roles WHERE rolname = CURRENT_USER;
 (1 row)
 
 CREATE EXTENSION pg_tle;
+WARNING:  Role "pgtle_admin" already exists. Skipping.
 -- create an unprivileged role that is attempting to elevate privileges
 CREATE ROLE bad_actor NOSUPERUSER;
 -- this would be a trojan attack through the comment argument. this should fail.
