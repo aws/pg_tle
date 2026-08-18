@@ -1411,16 +1411,6 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 		char	   *c_sql = read_extension_script_file(control, filename);
 		Datum		t_sql;
 
-		/*
-		 * We filter each substitution through quote_identifier().  When the
-		 * arg contains one of the following characters, no one collection of
-		 * quoting can work inside $$dollar-quoted string literals$$,
-		 * 'single-quoted string literals', and outside of any literal.  To
-		 * avoid a security snare for extension authors, error on substitution
-		 * for arguments containing these.
-		 */
-		const char *quoting_relevant_chars = "\"$'\\";
-
 		/* We use various functions that want to operate on text datums */
 		t_sql = CStringGetTextDatum(c_sql);
 
@@ -1450,11 +1440,20 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 											t_sql,
 											CStringGetTextDatum("@extowner@"),
 											CStringGetTextDatum(qUserName));
-			if (strpbrk(userName, quoting_relevant_chars))
+
+			/*
+			 * We filter each substitution through quote_identifier().  When
+			 * the arg contains one of these characters, no one collection of
+			 * quoting can work inside $$dollar-quoted string literals$$,
+			 * 'single-quoted string literals', and outside of any literal. To
+			 * avoid a security snare for extension authors, error on
+			 * substitution for arguments containing these.
+			 */
+			if (strpbrk(userName, PG_TLE_QUOTING_RELEVANT_CHARS))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("invalid character in extension owner: must not contain any of \"%s\"",
-								quoting_relevant_chars)));
+								PG_TLE_QUOTING_RELEVANT_CHARS)));
 		}
 
 		/*
@@ -1474,11 +1473,11 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 											t_sql,
 											CStringGetTextDatum("@extschema@"),
 											CStringGetTextDatum(qSchemaName));
-			if (t_sql != old && strpbrk(schemaName, quoting_relevant_chars))
+			if (t_sql != old && strpbrk(schemaName, PG_TLE_QUOTING_RELEVANT_CHARS))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("invalid character in extension \"%s\" schema: must not contain any of \"%s\"",
-								control->name, quoting_relevant_chars)));
+								control->name, PG_TLE_QUOTING_RELEVANT_CHARS)));
 		}
 
 		/*
@@ -5222,6 +5221,139 @@ pg_tle_set_default_version(PG_FUNCTION_ARGS)
 		UNSET_TLEEXT;
 		record_sql_function_dependencies(extname, defaultVersion, updateVersions, extAddress);
 	}
+
+	/* flag that we are done manipulating pg_tle artifacts */
+	UNSET_TLEART;
+
+	PG_RETURN_BOOL(true);
+}
+
+Datum		pg_tle_set_extension_schema(PG_FUNCTION_ARGS);
+
+/*
+ * Set (or clear) the target schema recorded in an extension's control
+ * function.  This rewrites just the control function in place, so future
+ * CREATE EXTENSION (or a fresh database restored from pg_dump) honors the new
+ * schema while an already-created extension is left untouched.  A NULL schema
+ * clears it, leaving the extension with no fixed schema.
+ */
+PG_FUNCTION_INFO_V1(pg_tle_set_extension_schema);
+Datum
+pg_tle_set_extension_schema(PG_FUNCTION_ARGS)
+{
+	int			spi_rc;
+	char	   *extname;
+	char	   *schemaName = NULL;
+	char	   *ctlname;
+	Oid			ctlfuncid;
+	StringInfo	ctlstr;
+	char	   *ctlsql;
+	ExtensionControlFile *control;
+	char	   *filename;
+
+	if (PG_ARGISNULL(0))
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("\"name\" is a required argument.")));
+
+	extname = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	check_valid_extension_name(extname);
+
+	/*
+	 * Verify that extname does not already exist as a standard file-based
+	 * extension.
+	 */
+	filename = get_extension_control_filename(extname);
+	if (filestat(filename))
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("control file already exists for the %s extension", extname)));
+
+	/*
+	 * A NULL schema clears the recorded schema; otherwise validate it.  The
+	 * schema name is embedded verbatim into the control function and later
+	 * substituted for @extschema@, so reject characters that cannot be quoted
+	 * consistently both inside and outside of string literals.
+	 */
+	if (!PG_ARGISNULL(1))
+	{
+		schemaName = text_to_cstring(PG_GETARG_TEXT_PP(1));
+
+		/*
+		 * Reject the empty string rather than record schema = '', which would
+		 * pin the extension to an unusable zero-length schema.  Use a NULL
+		 * argument to clear the schema instead.
+		 */
+		if (schemaName[0] == '\0')
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("extension schema must not be empty"),
+					 errhint("Pass NULL as the schema to clear it.")));
+
+		if (strpbrk(schemaName, PG_TLE_QUOTING_RELEVANT_CHARS))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+					 errmsg("invalid character in extension schema: must not contain any of \"%s\"",
+							PG_TLE_QUOTING_RELEVANT_CHARS)));
+	}
+
+	/*
+	 * Verify that the extension exists as a TLE extension by looking up its
+	 * control function.
+	 */
+	ctlname = psprintf("%s.control", extname);
+	ctlfuncid = get_tlefunc_oid_if_exists(ctlname);
+	if (ctlfuncid == InvalidOid)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension \"%s\" does not exist", extname),
+				 errhint("Try installing the extension with \"%s.install_extension\".", PG_TLE_NSPNAME)));
+
+	/*
+	 * Load the current control state, then replace the schema.
+	 */
+	control = build_default_extension_control_file(extname);
+
+	SET_TLEEXT;
+	parse_extension_control_file(control, NULL);
+	UNSET_TLEEXT;
+
+	control->schema = schemaName;
+
+	ctlstr = build_extension_control_file_string(control);
+
+	/*
+	 * Validate that there are no injections using the dollar-quoted strings
+	 */
+	if (!(validate_tle_sql(ctlstr->data)))
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid character in extension definition"),
+				 errdetail("Use of string delimiters %s and %s are forbidden in extension definitions.",
+						   PG_TLE_OUTER_STR, PG_TLE_INNER_STR)));
+
+	ctlsql = psprintf(
+					  "CREATE OR REPLACE FUNCTION %s.%s() RETURNS TEXT AS %s"
+					  "SELECT %s%s%s%s LANGUAGE SQL",
+					  quote_identifier(PG_TLE_NSPNAME), quote_identifier(ctlname),
+					  PG_TLE_OUTER_STR, PG_TLE_INNER_STR,
+					  ctlstr->data,
+					  PG_TLE_INNER_STR, PG_TLE_OUTER_STR);
+
+	/* flag that we are manipulating pg_tle artifacts */
+	SET_TLEART;
+
+	if (SPI_connect() != SPI_OK_CONNECT)
+		elog(ERROR, "SPI_connect failed");
+
+	spi_rc = SPI_exec(ctlsql, 0);
+	if (spi_rc != SPI_OK_UTILITY)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("failed to update schema for \"%s\"", extname)));
+
+	if (SPI_finish() != SPI_OK_FINISH)
+		elog(ERROR, "SPI_finish failed");
 
 	/* flag that we are done manipulating pg_tle artifacts */
 	UNSET_TLEART;
