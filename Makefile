@@ -22,6 +22,13 @@ PROVE_TESTS = test/t/*.pl
 
 PG_CPPFLAGS += -I./include
 
+# Full RELRO + immediate binding: keep the GOT read-only after load and
+# resolve all symbols at load time. GNU-ld/lld only, so guard to ELF/Linux
+# (Apple ld rejects -z ...).
+ifeq ($(shell uname -s),Linux)
+PG_LDFLAGS += -Wl,-z,relro,-z,now
+endif
+
 PG_CONFIG ?= pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
