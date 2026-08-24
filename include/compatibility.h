@@ -615,6 +615,37 @@ CastCreate(Oid sourcetypeid, Oid targettypeid, Oid funcid, char castcontext,
 #endif
 
 /*
+ * PostgreSQL 13 introduced ConditionVariableTimedSleep(). On PG 12 we
+ * emulate it with WaitLatch(); the wait-loop protocol (PrepareToSleep +
+ * CancelSleep) is otherwise identical, and returns true iff the timeout
+ * elapsed.
+ */
+#include "storage/condition_variable.h"
+#include "storage/ipc.h"
+#include "storage/latch.h"
+#include "miscadmin.h"
+#if PG_VERSION_NUM < 130000
+static inline bool
+PGTLE_ConditionVariableTimedSleep(ConditionVariable *cv, long timeout_ms,
+								  uint32 wait_event_info)
+{
+	int			rc;
+
+	(void) cv;
+	rc = WaitLatch(MyLatch,
+				   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+				   timeout_ms, wait_event_info);
+	ResetLatch(MyLatch);
+	if (rc & WL_POSTMASTER_DEATH)
+		proc_exit(1);
+	return (rc & WL_TIMEOUT) != 0;
+}
+#else
+#define PGTLE_ConditionVariableTimedSleep(cv, t, w) \
+	ConditionVariableTimedSleep((cv), (t), (w))
+#endif
+
+/*
  * PostgreSQL version 18+
  *
  * b43100f changes BackgroundWorkerList from an slist to a dlist
