@@ -345,7 +345,7 @@ BEGIN
       SELECT FROM pg_catalog.pg_roles
       WHERE  rolname = 'pgtle_admin') THEN
 
-      RAISE NOTICE 'Role "pgtle_admin" already exists. Skipping.';
+      RAISE WARNING 'Role "pgtle_admin" already exists. Skipping.';
    ELSE
       CREATE ROLE pgtle_admin NOLOGIN;
    END IF;
