@@ -4647,7 +4647,12 @@ pg_tle_install_extension(PG_FUNCTION_ARGS)
 		check_requires_list(reqlist);
 	}
 
-	if (PG_ARGISNULL(5) || !PG_GETARG_DATUM(5))
+	/*
+	 * The schema argument was added in 1.5.0. When the SQL objects of pg_tle
+	 * are still at an older version, the function is called with only five
+	 * arguments, and the sixth one must not be looked at.
+	 */
+	if (PG_NARGS() < 6 || PG_ARGISNULL(5) || !PG_GETARG_DATUM(5))
 		extschema = NULL;
 	else
 	{
