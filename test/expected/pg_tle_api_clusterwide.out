@@ -65,6 +65,7 @@ ALTER ROLE testuser with password 'pass';
 ERROR:  "pgtle.enable_password_check" feature is set to require but extension "pg_tle" is not installed in the passcheck database "contrib_regression"
 -- Expect an error for require if no entries are present
 CREATE EXTENSION pg_tle;
+WARNING:  Role "pgtle_admin" already exists. Skipping.
 ALTER ROLE testuser with password 'pass';
 ERROR:  "pgtle.enable_password_check" feature is set to require, however no entries exist in "pgtle.feature_info" with the feature "passcheck" in the passcheck database "contrib_regression"
 -- Test validuntil_null and validuntil_time
@@ -276,7 +277,7 @@ END;
 $$
 LANGUAGE PLPGSQL;
 SELECT pgtle.register_feature('pass.password_check_length_greater_than_8', 'passcheck');
-NOTICE:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
+WARNING:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
  register_feature 
 ------------------
  
@@ -334,6 +335,7 @@ $_pgtle_$
 (1 row)
 
 CREATE EXTENSION test_unregister_feature;
+WARNING:  pgtle.enable_password_check is set to off. To enable passcheck, set pgtle.enable_password_check = on
 -- the feature should be in the table
 SELECT EXISTS(
   SELECT 1 FROM pgtle.feature_info
