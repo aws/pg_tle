@@ -19,6 +19,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/xact.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_language.h"
@@ -104,6 +105,18 @@ create_shell_type(Oid typeNamespace, const char *typeName, bool if_not_exists)
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   get_namespace_name(typeNamespace));
+
+	/*
+	 * Like core's DefineDomain/DefineEnum/DefineRange (CVE-2026-116316),
+	 * refuse to create a type in a temporary schema within a
+	 * security-restricted operation.  Core can skip this for base and shell
+	 * types because it requires superuser to create them; pg_tle allows
+	 * pgtle_admin (a non-superuser) to, so the guard is needed here.
+	 */
+	if (InSecurityRestrictedOperation() && isAnyTempNamespace(typeNamespace))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("cannot create a type in a temporary schema within security-restricted operation")));
 
 	/*
 	 * Look to see if type already exists
@@ -267,6 +280,18 @@ pg_tle_create_base_type_internal(Oid typeNamespace,
 	namespaceName = get_namespace_name(typeNamespace);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA, namespaceName);
+
+	/*
+	 * Like core's DefineDomain/DefineEnum/DefineRange (CVE-2026-116316),
+	 * refuse to create a type in a temporary schema within a
+	 * security-restricted operation.  Core can skip this for base and shell
+	 * types because it requires superuser to create them; pg_tle allows
+	 * pgtle_admin (a non-superuser) to, so the guard is needed here.
+	 */
+	if (InSecurityRestrictedOperation() && isAnyTempNamespace(typeNamespace))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("cannot create a type in a temporary schema within security-restricted operation")));
 
 	/*
 	 * Look to see if type already exists
