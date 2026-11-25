@@ -1,0 +1,239 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * Tests every definition of pgtle.install_extension():
+ *
+ * 1. pg_tle 1.4.0: install_extension(name, version, description, ext,
+ *    requires). The "requires" argument is optional.
+ *
+ * 2. pg_tle 1.5.0 and later: install_extension(name, version, description,
+ *    ext, requires, schema). The "requires" and "schema" arguments are
+ *    optional.
+ */
+\pset pager off
+CREATE SCHEMA ie_schema;
+/*
+ * 1. pg_tle 1.4.0 definition (five arguments).
+ */
+CREATE EXTENSION pg_tle VERSION '1.4.0';
+SELECT pronargs, pronargdefaults,
+       pg_get_function_identity_arguments(oid) AS identity_args
+FROM pg_proc
+WHERE proname = 'install_extension' AND pronamespace = 'pgtle'::regnamespace;
+ pronargs | pronargdefaults |                            identity_args                             
+----------+-----------------+----------------------------------------------------------------------
+        5 |               1 | name text, version text, description text, ext text, requires text[]
+(1 row)
+
+-- Without the optional "requires" argument.
+SELECT pgtle.install_extension('ie_base', '1.0', 'Base extension',
+    $_pgtle_$
+        CREATE FUNCTION ie_base_func() RETURNS INT LANGUAGE SQL AS 'SELECT 1';
+    $_pgtle_$);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With "requires" passed as NULL.
+SELECT pgtle.install_extension('ie_null_requires', '1.0', 'NULL requires',
+    $_pgtle_$
+        CREATE FUNCTION ie_null_requires_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT 2';
+    $_pgtle_$, NULL);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With all five arguments.
+SELECT pgtle.install_extension('ie_requires', '1.0', 'Requires ie_base',
+    $_pgtle_$
+        CREATE FUNCTION ie_requires_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT ie_base_func() + 1';
+    $_pgtle_$, ARRAY['ie_base']);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT name, version, schema, requires
+FROM pgtle.available_extension_versions()
+WHERE name LIKE 'ie\_%'
+ORDER BY name;
+       name       | version | schema |     requires     
+------------------+---------+--------+------------------
+ ie_base          | 1.0     |        | {pg_tle}
+ ie_null_requires | 1.0     |        | {pg_tle}
+ ie_requires      | 1.0     |        | {ie_base,pg_tle}
+(3 rows)
+
+CREATE EXTENSION ie_requires CASCADE;
+NOTICE:  installing required extension "ie_base"
+SELECT ie_requires_func();
+ ie_requires_func 
+------------------
+                2
+(1 row)
+
+-- A fourth positional argument that is not text[] is not accepted.
+SELECT pgtle.install_extension('ie_bad', '1.0', 'Bad', 'SELECT 1', 'ie_base');
+ERROR:  malformed array literal: "ie_base"
+LINE 1: ...all_extension('ie_bad', '1.0', 'Bad', 'SELECT 1', 'ie_base')...
+                                                             ^
+DETAIL:  Array value must start with "{" or dimension information.
+-- The "schema" argument does not exist in 1.4.0.
+SELECT pgtle.install_extension('ie_bad', '1.0', 'Bad', 'SELECT 1', '{}',
+    'ie_schema');
+ERROR:  function pgtle.install_extension(unknown, unknown, unknown, unknown, unknown, unknown) does not exist
+LINE 1: SELECT pgtle.install_extension('ie_bad', '1.0', 'Bad', 'SELE...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+DROP EXTENSION ie_requires, ie_base CASCADE;
+SELECT pgtle.uninstall_extension('ie_requires');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_null_requires');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_base');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+/*
+ * 2. pg_tle 1.5.0 definition (six arguments).
+ */
+ALTER EXTENSION pg_tle UPDATE TO '1.5.0';
+SELECT pronargs, pronargdefaults,
+       pg_get_function_identity_arguments(oid) AS identity_args
+FROM pg_proc
+WHERE proname = 'install_extension' AND pronamespace = 'pgtle'::regnamespace;
+ pronargs | pronargdefaults |                                   identity_args                                   
+----------+-----------------+-----------------------------------------------------------------------------------
+        6 |               2 | name text, version text, description text, ext text, requires text[], schema text
+(1 row)
+
+-- Without the optional arguments.
+SELECT pgtle.install_extension('ie_base', '1.0', 'Base extension',
+    $_pgtle_$
+        CREATE FUNCTION ie_base_func() RETURNS INT LANGUAGE SQL AS 'SELECT 1';
+    $_pgtle_$);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With "requires" only.
+SELECT pgtle.install_extension('ie_requires', '1.0', 'Requires ie_base',
+    $_pgtle_$
+        CREATE FUNCTION ie_requires_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT ie_base_func() + 1';
+    $_pgtle_$, ARRAY['ie_base']);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With "requires" and "schema" both NULL.
+SELECT pgtle.install_extension('ie_null_args', '1.0', 'NULL arguments',
+    $_pgtle_$
+        CREATE FUNCTION ie_null_args_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT 3';
+    $_pgtle_$, NULL, NULL);
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With "requires" and "schema".
+SELECT pgtle.install_extension('ie_schema_ext', '1.0', 'With schema',
+    $_pgtle_$
+        CREATE FUNCTION ie_schema_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT 4';
+    $_pgtle_$, '{}', 'ie_schema');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- With "schema" given by name and "requires" left at its default.
+SELECT pgtle.install_extension(name => 'ie_named', version => '1.0',
+    description => 'Named arguments',
+    ext => $_pgtle_$
+        CREATE FUNCTION ie_named_func() RETURNS INT LANGUAGE SQL AS
+            'SELECT 5';
+    $_pgtle_$, schema => 'ie_schema');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT name, version, schema, requires
+FROM pgtle.available_extension_versions()
+WHERE name LIKE 'ie\_%'
+ORDER BY name;
+     name      | version |  schema   |     requires     
+---------------+---------+-----------+------------------
+ ie_base       | 1.0     |           | {pg_tle}
+ ie_named      | 1.0     | ie_schema | {pg_tle}
+ ie_null_args  | 1.0     |           | {pg_tle}
+ ie_requires   | 1.0     |           | {ie_base,pg_tle}
+ ie_schema_ext | 1.0     | ie_schema | {pg_tle}
+(5 rows)
+
+CREATE EXTENSION ie_requires CASCADE;
+NOTICE:  installing required extension "ie_base"
+CREATE EXTENSION ie_null_args;
+CREATE EXTENSION ie_schema_ext;
+CREATE EXTENSION ie_named;
+SELECT ie_requires_func(), ie_null_args_func(), ie_schema.ie_schema_func(),
+       ie_schema.ie_named_func();
+ ie_requires_func | ie_null_args_func | ie_schema_func | ie_named_func 
+------------------+-------------------+----------------+---------------
+                2 |                 3 |              4 |             5
+(1 row)
+
+-- Clean up.
+DROP EXTENSION ie_requires, ie_base, ie_null_args, ie_schema_ext, ie_named;
+SELECT pgtle.uninstall_extension('ie_requires');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_null_args');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_schema_ext');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_named');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+SELECT pgtle.uninstall_extension('ie_base');
+ uninstall_extension 
+---------------------
+ t
+(1 row)
+
+DROP SCHEMA ie_schema CASCADE;
+DROP EXTENSION pg_tle;
